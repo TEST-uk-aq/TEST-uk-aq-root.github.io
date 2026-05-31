@@ -15,19 +15,19 @@
       label: 'UK-AQ',
       children: [
         { label: 'Hex Map',     iconImg: 'uk-aq-hex-map-icon.svg', href: '/uk-aq/hex_map.html' },
-        { label: 'Sensors',     iconImg: 'uk-aq-sensors-icon.svg',  href: '/uk-aq/sensors_chart.html', pending: true },
-        { label: 'Sensors Map', iconImg: 'uk-aq-map-icon.svg',       href: '/uk-aq/sensors_map.html', pending: true },
+        { label: 'Sensors',     iconImg: 'uk-aq-sensors-icon.svg',  href: '/uk-aq/sensors_chart.html' },
+        { label: 'Sensors Map', iconImg: 'uk-aq-map-icon.svg',       href: '/uk-aq/sensors_map.html' },
       ],
     },
     {
       id: 'data-explorer',
       label: 'Data Explorer',
       children: [
-        { label: 'Bubble Chart',       iconImg: 'Bubble-Chart-Icon.svg', href: '/data-explorer/?page=bubblechart', pending: true },
-        { label: 'Line Chart',         iconImg: 'Line-Chart-Icon.svg', href: '/data-explorer/?page=linechart', pending: true },
-        { label: 'Ecodesign Replaces', iconImg: 'Stove Ecodesign 430x683.svg', href: '/data-explorer/?page=eco-replaces-all', className: 'cic-nav-item--eco-replaces', pending: true },
-        { label: 'Category Info',      iconImg: 'Category Info - Icon.svg', href: '/data-explorer/category-info/', pending: true },
-        { label: 'User Guide',         iconImg: 'user-guide.svg', href: '/data-explorer/user-guide/', pending: true },
+        { label: 'Bubble Chart',       iconImg: 'Bubble-Chart-Icon.svg', href: '/data-explorer/?page=bubblechart' },
+        { label: 'Line Chart',         iconImg: 'Line-Chart-Icon.svg', href: '/data-explorer/?page=linechart' },
+        { label: 'Ecodesign Replaces', iconImg: 'Stove Ecodesign 430x683.svg', href: '/data-explorer/?page=eco-replaces-all', className: 'cic-nav-item--eco-replaces' },
+        { label: 'Category Info',      iconImg: 'Category Info - Icon.svg', href: '/data-explorer/category-info/' },
+        { label: 'User Guide',         iconImg: 'user-guide.svg', href: '/data-explorer/user-guide/' },
       ],
     },
     {
@@ -41,10 +41,9 @@
           labelImg: 'youtube-logo-Word.svg',
           href: 'https://youtube.com/@chronicillnesschannel',
           external: true,
-          pending: true,
         },
-        { label: 'Resources', iconImg: 'chain-link-icon-grey.svg', href: '/resources/', pending: true },
-        { label: 'Contact', iconImg: 'Contacts-Email-icon-cic-web.svg', href: '/contact.html', pending: true },
+        { label: 'Resources', iconImg: 'chain-link-icon-grey.svg', href: '/resources/' },
+        { label: 'Contact', iconImg: 'Contacts-Email-icon-cic-web.svg', href: '/contact.html' },
       ],
     },
   ];
@@ -53,11 +52,9 @@
     iconImg: 'CIC-Home-Alpha.svg',
     href: '/',
     className: 'cic-home-nav-item',
-    pending: true,
   };
   const SIDEBAR_ICON_OFF = '/sidebar-images/CIC-Sidebar-Button-off.svg';
   const SIDEBAR_ICON_ON = '/sidebar-images/CIC-Sidebar-Button-on.svg';
-  const PENDING_ICON = '/sidebar-images/Pending75.svg';
 
   // ─── Preload default sidebar button image; lazy-warm the alternate icon ─────
   const sidebarIconOffHref = location.origin + SIDEBAR_ICON_OFF;
@@ -301,7 +298,7 @@
       text-decoration: none;
       border: 1px solid transparent;
       white-space: nowrap;
-      overflow: visible;
+      overflow: hidden;
     }
     .cic-nav-item:hover {
       background: var(--cic-surface-2);
@@ -313,32 +310,6 @@
       color: var(--cic-accent-deep);
       border-color: #d6d0c8;
     }
-    .cic-nav-item.pending {
-      cursor: default;
-    }
-    .cic-nav-item.pending:focus-visible {
-      outline: 2px solid #9aa7b3;
-      outline-offset: 2px;
-    }
-    .cic-nav-item.pending .cic-nav-icon-wrap {
-      position: relative;
-      display: inline-flex;
-      align-items: center;
-      justify-content: center;
-      width: 40px;
-      height: 40px;
-      flex-shrink: 0;
-    }
-	.cic-nav-item.pending .cic-pending-overlay {
-	  position: absolute;
-	  right: -11px;
-	  bottom: -4px;
-	  width: 60px;
-	  height: auto;
-	  pointer-events: none;
-	  transform-origin: center;
-	  z-index: 2;
-	}
     .cic-nav-icon {
       width: 20px; flex-shrink: 0;
       display: inline-flex; align-items: center; justify-content: center;
@@ -416,32 +387,21 @@
     const path = location.pathname;
     const pathWithSearch = location.pathname + location.search;
     const href = resolveHref(item.href);
-    const isPending = item.pending === true;
-    const isActive = !isPending && href !== '#' && (
+    const isActive = href !== '#' && (
       href === '/' || href === '/index.html'
         ? isHomePage()
         : (href.includes('?') ? pathWithSearch.includes(href) : path.includes(href))
     );
     const className = item.className ? ` ${item.className}` : '';
-    const iconInnerHtml = item.iconImg
+    const iconHtml = item.iconImg
       ? `<img class="cic-nav-icon-img" src="${location.origin}/sidebar-images/${item.iconImg}" alt="">`
       : item.iconPlaceholder
         ? `<span class="cic-nav-icon-placeholder" aria-hidden="true"></span>`
         : `<i class="cic-nav-icon">${item.icon}</i>`;
-    const iconHtml = isPending
-      ? `<span class="cic-nav-icon-wrap">${iconInnerHtml}<img class="cic-pending-overlay" src="${location.origin}${PENDING_ICON}" alt="" aria-hidden="true"></span>`
-      : iconInnerHtml;
     const labelHtml = item.labelImg
       ? `<img class="cic-nav-label-img" src="${location.origin}/sidebar-images/${item.labelImg}" alt="${item.label}">`
       : item.label;
-    const targetAttrs = item.external && !isPending ? ' target="_blank" rel="noopener noreferrer"' : '';
-    if (isPending) {
-      return `
-      <span class="cic-nav-item pending${className}" role="link" aria-disabled="true" tabindex="-1" title="Available later">
-        ${iconHtml}
-        <span class="cic-nav-label">${labelHtml}</span>
-      </span>`;
-    }
+    const targetAttrs = item.external ? ' target="_blank" rel="noopener noreferrer"' : '';
     return `
       <a class="cic-nav-item${className}${isActive ? ' active' : ''}" href="${href}"${targetAttrs}>
         ${iconHtml}
@@ -470,7 +430,7 @@
         ${NAV.map(buildSection).join('')}
       </nav>
       <div id="cic-sidebar-footer">
-        UK-AQ· v0.1.0
+        cic-test.chronicillnesschannel.co.uk · v2026.04
       </div>`;
   }
 

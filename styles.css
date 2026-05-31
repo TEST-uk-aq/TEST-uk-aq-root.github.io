@@ -1,0 +1,141 @@
+body {
+  font-family: Arial, sans-serif;
+  margin: 0;
+  padding: 0;
+  background: #fff;
+  color: #222;
+  /* sidebar.js sets padding-left via data-sidebar-state */
+}
+header {
+  background: #fff;
+  color: #222;
+  padding: 0 0 1rem 0;
+  text-align: center;
+}
+.header-top {
+  position: relative;
+  margin-bottom: 1rem;
+}
+.content-wrapper {
+  position: relative;
+  max-width: 1200px;
+  margin: 0 auto;
+  padding-right: 0;
+}
+.sidebar-socials {
+  position: fixed;
+  top: 280px;
+  right: 20px;
+  width: 110px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  z-index: 100;
+}
+#cicLogo {
+  width: 110px;
+  height: auto;
+  display: block;
+  margin-bottom: 8px;
+}
+.sidebar-icons {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 8px;
+  align-items: center;
+}
+.sidebar-link {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  width: 40px;
+  height: 40px;
+}
+.sidebar-link img {
+  display: block;
+  height: 40px;
+  width: 40px;
+  object-fit: contain;
+}
+a[href*="facebook.com"] img {
+  width: 36px;
+  height: 36px;
+}
+.kofi-wrapper {
+  margin-top: 8px;
+  width: 100%;
+  display: flex;
+  justify-content: center;
+}
+.kofi-button {
+  display: flex;
+  align-items: center;
+  text-decoration: none;
+  background: #fff;
+  color: #000;
+  font-weight: bold;
+  padding: 6px 10px;
+  border-radius: 6px;
+  transition: all 0.3s ease;
+  white-space: nowrap;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+}
+.kofi-button:hover {
+  transform: scale(1.05);
+  box-shadow: 0 4px 8px rgba(0,0,0,0.2);
+}
+.kofi-icon-svg {
+  display: flex;
+  align-items: center;
+  margin-right: 6px;
+}
+.kofi-text {
+  font-size: 12px;
+}
+nav ul {
+  list-style: none;
+  padding: 0;
+  margin: 1rem 0 0 0;
+  display: flex;
+  justify-content: center;
+  gap: 2rem;
+}
+nav a {
+  color: #222;
+  text-decoration: none;
+  font-weight: bold;
+}
+nav a:hover {
+  text-decoration: underline;
+}
+main {
+  max-width: 800px;
+  margin: 2rem auto;
+  padding: 1rem;
+  background: #fff;
+  border-radius: 8px;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+}
+section {
+  margin-bottom: 2rem;
+}
+footer {
+  text-align: center;
+  padding: 1rem 0;
+  background: #fff;
+  color: #666;
+  position: fixed;
+  width: 100%;
+  bottom: 0;
+}
+@media (max-width: 600px) {
+  main {
+    margin: 1rem;
+    padding: 0.5rem;
+  }
+  nav ul {
+    flex-direction: column;
+    gap: 1rem;
+  }
+}

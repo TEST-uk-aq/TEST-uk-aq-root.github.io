@@ -1,0 +1,508 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Contact | Chronic Illness Channel</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="Contact Chronic Illness Channel. Email us or find us on social media.">
+  <meta property="og:type" content="website">
+  <meta property="og:title" content="Contact | Chronic Illness Channel">
+  <meta property="og:description" content="Contact Chronic Illness Channel. Email us or find us on social media.">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="Contact | Chronic Illness Channel">
+  <meta name="twitter:description" content="Contact Chronic Illness Channel. Email us or find us on social media.">
+  <link rel="icon" href="images/favicon.png" type="image/png">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <style>
+    body {
+      font-family: 'Inter', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      background: #FBFAF7;
+      color: #101822;
+      margin: 0;
+    }
+
+    /* ── Outer shell — class names preserved for height postMessage script ── */
+    .chart-shell {
+      width: 100%;
+      max-width: none;
+      margin: 0;
+    }
+
+    .resources-shell {
+      padding: 28px;
+      margin: 0;
+      background: #FBFAF7;
+    }
+
+    .resources-frame {
+      width: 100%;
+      margin: 0;
+      padding: 0 104px 0 0;
+      background: #FBFAF7;
+      box-sizing: border-box;
+    }
+
+    /* ── Content width constraint ── */
+    .contact-content {
+      max-width: 980px;
+      margin: 0 auto;
+    }
+
+    /* ── Title row ── */
+    .contact-title-row {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin-bottom: 1.25rem;
+    }
+
+    .contact-title-icon {
+      height: 34px;
+      width: auto;
+      flex-shrink: 0;
+    }
+
+    .contact-page-title {
+      height: 42px;
+      width: auto;
+      display: block;
+      max-width: 100%;
+    }
+
+    /* ── Intro ── */
+    .contact-intro {
+      margin: 0 0 1.75rem 0;
+      color: #374151;
+      line-height: 1.6;
+      font-size: 1rem;
+    }
+
+    /* ── Featured email card ── */
+    .contact-card--featured {
+      display: flex;
+      align-items: center;
+      gap: 1rem;
+      padding: 14px 28px 30px;
+      border: 2px solid rgba(255, 140, 26, 0.35);
+      border-radius: 22px;
+      background: #fff;
+      text-decoration: none;
+      color: #101822;
+      box-sizing: border-box;
+      max-width: 640px;
+      margin: 0 auto 0;
+      transition: transform 0.18s ease, box-shadow 0.18s ease, border-color 0.18s ease;
+    }
+
+    .contact-card--featured:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 8px 20px rgba(255, 140, 26, 0.12);
+      border-color: rgba(255, 140, 26, 0.6);
+    }
+
+    .contact-card--featured:focus-visible {
+      outline: 3px solid rgba(255, 140, 26, 0.45);
+      outline-offset: 4px;
+    }
+
+    .contact-card--featured .contact-card-icon-box {
+      width: 52px;
+      height: 52px;
+      flex: 0 0 52px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .contact-card--featured .contact-card-icon {
+      width: 44px;
+      height: 44px;
+      object-fit: contain;
+      display: block;
+    }
+
+    .contact-card--featured .contact-card-body {
+      display: flex;
+      flex-direction: column;
+      min-width: 0;
+    }
+
+    .contact-card--featured .contact-card-title {
+      display: block;
+      font-weight: 800;
+      font-size: 1.25rem;
+      color: #ff8c1a;
+      margin: 0 0 4px 0;
+      line-height: 1.2;
+    }
+
+    .contact-card--featured .contact-card-desc {
+      display: block;
+      font-size: 0.95rem;
+      color: #374151;
+      line-height: 1.45;
+    }
+
+    /* ── Section headings ── */
+    .contact-section {
+      margin-top: 2rem;
+    }
+
+    .contact-section-heading {
+      font-size: 1.05rem;
+      font-weight: 700;
+      color: #0f172a;
+      margin: 0 0 0.875rem 0;
+    }
+
+    /* ── Card grid ── */
+    .contact-card-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 1rem;
+    }
+
+    .contact-card-grid--solo {
+      display: flex;
+      justify-content: center;
+    }
+
+    .contact-card-grid--solo .contact-card {
+      flex: 0 0 calc(50% - 0.5rem);
+      max-width: calc(50% - 0.5rem);
+    }
+
+    /* ── Standard contact card ── */
+    .contact-card {
+      display: flex;
+      flex-direction: column;
+      box-sizing: border-box;
+      padding: 10px 20px 22px;
+      border: 2px solid rgba(255, 140, 26, 0.35);
+      border-radius: 22px;
+      background: #fff;
+      text-decoration: none;
+      color: #101822;
+      transition: transform 0.18s ease, box-shadow 0.18s ease, border-color 0.18s ease;
+    }
+
+    .contact-card:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 8px 20px rgba(255, 140, 26, 0.12);
+      border-color: rgba(255, 140, 26, 0.6);
+    }
+
+    .contact-card:focus-visible {
+      outline: 3px solid rgba(255, 140, 26, 0.45);
+      outline-offset: 4px;
+    }
+
+    .contact-card-header {
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+      min-height: 52px;
+      margin-bottom: 0.25rem;
+      min-width: 0;
+    }
+
+    .contact-card-icon-box {
+      width: 52px;
+      height: 52px;
+      flex: 0 0 52px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .contact-card-icon {
+      width: 42px;
+      height: 42px;
+      object-fit: contain;
+      display: block;
+    }
+
+    .contact-card-icon--youtube {
+      width: 60px;
+      height: 30px;
+    }
+
+    .contact-card-title {
+      display: block;
+      font-weight: 800;
+      font-size: 1.15rem;
+      color: #ff8c1a;
+      line-height: 1.2;
+      min-width: 0;
+      word-break: break-word;
+    }
+
+    .contact-card-desc {
+      display: block;
+      font-size: 0.88rem;
+      color: #374151;
+      line-height: 1.4;
+      margin-top: 0.25rem;
+    }
+
+    /* ── Responsive ── */
+    @media (max-width: 900px) {
+      .resources-frame {
+        padding-right: 0;
+      }
+    }
+
+    @media (max-width: 620px) {
+      .resources-shell {
+        padding: 18px;
+      }
+
+      .contact-card-grid {
+        grid-template-columns: 1fr;
+      }
+
+      .contact-card-grid--solo .contact-card {
+        flex: 1 1 auto;
+        max-width: none;
+      }
+
+      .contact-card--featured {
+        padding: 12px 20px 24px;
+      }
+    }
+
+    @media (max-width: 480px) {
+      .contact-title-icon {
+        height: 28px;
+      }
+
+      .contact-page-title {
+        height: 36px;
+      }
+    }
+  </style>
+</head>
+<body data-page-slug="contact">
+  <div id="cic-sidebar-mount"></div>
+  <main class="chart-shell resources-shell">
+    <div class="resources-frame" id="mainContent">
+
+      <div class="contact-title-row">
+        <img
+          class="contact-title-icon"
+          src="./sidebar-images/Contacts-Email-icon-cic-web.svg"
+          alt=""
+          aria-hidden="true"
+        >
+        <img
+          class="contact-page-title"
+          src="./images/CIC -Page-Titles-contact.svg"
+          alt="Contact"
+        >
+      </div>
+
+      <p class="contact-intro">Questions, feedback, corrections, or ideas? Email us or find Chronic Illness Channel on social media.</p>
+
+      <div class="contact-content">
+
+        <a
+          class="contact-card contact-card--featured"
+          href="mailto:info@chronicillnesschannel.co.uk"
+          aria-label="Email Chronic Illness Channel at info@chronicillnesschannel.co.uk"
+        >
+          <span class="contact-card-icon-box">
+            <img
+              class="contact-card-icon"
+              src="./sidebar-images/Contacts-Email-icon-cic-web.svg"
+              alt=""
+            >
+          </span>
+          <span class="contact-card-body">
+            <span class="contact-card-title">Email Chronic Illness Channel</span>
+            <span class="contact-card-desc">info@chronicillnesschannel.co.uk</span>
+          </span>
+        </a>
+
+        <section class="contact-section" aria-label="Connect on social media">
+          <div class="contact-card-grid">
+
+            <a
+              class="contact-card"
+              href="https://youtube.com/@ChronicIllnessChannel"
+              target="_blank"
+              rel="noopener"
+              aria-label="Visit Chronic Illness Channel on YouTube"
+            >
+              <div class="contact-card-header">
+                <span class="contact-card-icon-box">
+                  <img class="contact-card-icon contact-card-icon--youtube" src="./sidebar-images/youtube-logo.svg" alt="">
+                </span>
+                <span class="contact-card-title">YouTube</span>
+              </div>
+              <span class="contact-card-desc">Watch videos from Chronic Illness Channel.</span>
+            </a>
+
+            <a
+              class="contact-card"
+              href="https://bsky.app/profile/chronicchannel.bsky.social"
+              target="_blank"
+              rel="noopener"
+              aria-label="Visit Chronic Illness Channel on Bluesky"
+            >
+              <div class="contact-card-header">
+                <span class="contact-card-icon-box">
+                  <img class="contact-card-icon" src="./images/Bluesky_Logo.svg" alt="">
+                </span>
+                <span class="contact-card-title">Bluesky</span>
+              </div>
+              <span class="contact-card-desc">Follow Chronic Illness Channel on Bluesky.</span>
+            </a>
+
+            <a
+              class="contact-card"
+              href="https://twitter.com/@Chronic_Channel"
+              target="_blank"
+              rel="noopener"
+              aria-label="Visit Chronic Illness Channel on Twitter/X"
+            >
+              <div class="contact-card-header">
+                <span class="contact-card-icon-box">
+                  <img class="contact-card-icon" src="./images/Twitter dead bird with X.svg" alt="">
+                </span>
+                <span class="contact-card-title">Twitter/X</span>
+              </div>
+              <span class="contact-card-desc">Follow Chronic Illness Channel on Twitter/X.</span>
+            </a>
+
+            <a
+              class="contact-card"
+              href="https://facebook.com/ChronicIllnessChannel"
+              target="_blank"
+              rel="noopener"
+              aria-label="Visit Chronic Illness Channel on Facebook"
+            >
+              <div class="contact-card-header">
+                <span class="contact-card-icon-box">
+                  <img class="contact-card-icon" src="./images/facebook.svg" alt="">
+                </span>
+                <span class="contact-card-title">Facebook</span>
+              </div>
+              <span class="contact-card-desc">Find Chronic Illness Channel on Facebook.</span>
+            </a>
+
+          </div>
+        </section>
+
+        <section class="contact-section" aria-label="Support Chronic Illness Channel">
+          <div class="contact-card-grid contact-card-grid--solo">
+
+            <a
+              class="contact-card"
+              href="https://ko-fi.com/F2F21NGXA3"
+              target="_blank"
+              rel="noopener"
+              aria-label="Support Chronic Illness Channel on Ko-fi"
+            >
+              <div class="contact-card-header">
+                <span class="contact-card-icon-box">
+                  <img class="contact-card-icon" src="./images/kofi_symbol.svg" alt="">
+                </span>
+                <span class="contact-card-title">Support Chronic Illness Channel</span>
+              </div>
+              <span class="contact-card-desc">Help support the channel via Ko-fi.</span>
+            </a>
+
+          </div>
+        </section>
+
+      </div>
+
+    </div>
+  </main>
+
+  <script>
+    (function() {
+      const MIN_HEIGHT_DELTA = 8;
+      let lastReportedHeight = 0;
+      let heightUpdateTimer = null;
+
+      function measureHeight() {
+        const shell = document.querySelector('.resources-shell');
+        const frame = document.querySelector('.resources-frame');
+        const frameRect = frame ? frame.getBoundingClientRect() : null;
+        const frameHeight = frameRect?.height || frame?.offsetHeight || frame?.scrollHeight || 0;
+        const shellStyles = shell ? window.getComputedStyle(shell) : null;
+        const paddingTop = shellStyles ? parseFloat(shellStyles.paddingTop) || 0 : 0;
+        const paddingBottom = shellStyles ? parseFloat(shellStyles.paddingBottom) || 0 : 0;
+        let measured = frameHeight + paddingTop + paddingBottom;
+
+        if (!Number.isFinite(measured) || measured <= 0) {
+          const body = document.body;
+          measured = Math.max(body?.scrollHeight || 0, 320);
+        }
+
+        return Math.max(Math.ceil(measured), 320);
+      }
+
+      function sendHeightToParent(force = false) {
+        try {
+          if (!(window.parent && window.parent !== window)) {
+            return;
+          }
+          const height = measureHeight();
+          if (!force && lastReportedHeight && Math.abs(height - lastReportedHeight) < MIN_HEIGHT_DELTA) {
+            return;
+          }
+          lastReportedHeight = height;
+          window.parent.postMessage({
+            type: 'contentHeight',
+            chart: 'contact',
+            height
+          }, '*');
+        } catch (error) {
+          console.warn('Unable to send contact height to parent:', error);
+        }
+      }
+
+      function scheduleHeightUpdate(delay = 50, force = false) {
+        if (heightUpdateTimer) {
+          clearTimeout(heightUpdateTimer);
+        }
+        heightUpdateTimer = setTimeout(() => {
+          heightUpdateTimer = null;
+          requestAnimationFrame(() => sendHeightToParent(force));
+        }, delay);
+      }
+
+      document.addEventListener('DOMContentLoaded', () => {
+        scheduleHeightUpdate(30, true);
+
+        if (window.ResizeObserver) {
+          const frame = document.querySelector('.resources-frame') || document.body;
+          const resizeObserver = new ResizeObserver(() => scheduleHeightUpdate(20));
+          if (frame) resizeObserver.observe(frame);
+        } else {
+          window.addEventListener('resize', () => scheduleHeightUpdate(20));
+        }
+      });
+
+      window.addEventListener('load', () => {
+        sendHeightToParent(true);
+        scheduleHeightUpdate(40);
+      });
+
+      window.addEventListener('message', event => {
+        const payload = event?.data;
+        if (!payload) return;
+        if (payload.type === 'requestHeight') {
+          scheduleHeightUpdate(20, true);
+        }
+      });
+    })();
+  </script>
+
+  <script src="sidebar.js"></script>
+</body>
+</html>

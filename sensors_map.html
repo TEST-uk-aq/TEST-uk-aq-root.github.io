@@ -1,0 +1,1298 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta
+      http-equiv="Content-Security-Policy"
+      content="default-src 'self' https: data: blob:; script-src 'self' 'unsafe-inline' https://unpkg.com https://challenges.cloudflare.com; script-src-elem 'self' 'unsafe-inline' https://unpkg.com https://challenges.cloudflare.com; style-src 'self' 'unsafe-inline' https://unpkg.com; img-src 'self' data: blob: https:; connect-src 'self' https: blob:; frame-src https://challenges.cloudflare.com;"
+    />
+    <title>UK AQ sensor map</title>
+    <link rel="preload" as="image" href="/sidebar-images/CIC-hamburger-button.svg" />
+    <link rel="preload" as="image" href="/sidebar-images/CIC%20Hamburger%20Button-SidebarOn.svg" />
+    <link rel="preload" as="image" href="/sidebar-images/CIC-Square-Border-Words-Alpha.svg" />
+    <link rel="preload" as="image" href="/sidebar-images/CIC-Home-Alpha.svg" />
+    <link rel="preload" as="image" href="/sidebar-images/uk-aq-hex-map-icon.svg" />
+    <link rel="preload" as="image" href="/sidebar-images/uk-aq-sensors-icon.svg" />
+    <link rel="preload" as="image" href="/sidebar-images/uk-aq-map-icon.svg" />
+    <link rel="preload" as="image" href="/sidebar-images/Bubble-Chart-Icon.svg" />
+    <link rel="preload" as="image" href="/sidebar-images/Line-Chart-Icon.svg" />
+    <link rel="preload" as="image" href="/sidebar-images/Stove%20Ecodesign%20430x683.svg" />
+    <link rel="preload" as="image" href="/sidebar-images/Category%20Info%20-%20Icon.svg" />
+    <link rel="preload" as="image" href="/sidebar-images/user-guide.svg" />
+    <link rel="preload" as="image" href="/sidebar-images/youtube-logo.svg" />
+    <link rel="preload" as="image" href="/sidebar-images/youtube-logo-Word.svg" />
+    <link rel="preload" as="image" href="/sidebar-images/chain-link-icon-grey.svg" />
+    <link rel="preload" as="image" href="/sidebar-images/Contacts-Email-icon-cic-web.svg" />
+    <link rel="preload" as="image" href="images/UK-AQ-Logov2-1Line.svg" />
+    <link rel="preload" as="image" href="images/UK-AQ-sensors-map-1line.svg" />
+    <link
+      rel="stylesheet"
+      href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+      crossorigin="anonymous"
+    />
+    <style>
+      :root {
+        --ukaq-sidebar-offset: 0px;
+        --ukaq-header-h: 122px;
+      }
+
+      html,
+      body {
+        height: 100%;
+        margin: 0;
+        font-family: "Space Grotesk", system-ui, -apple-system, sans-serif;
+        color: #142225;
+      }
+
+      body[data-sidebar-state="expanded"] {
+        --ukaq-sidebar-offset: var(--cic-w, 232px);
+      }
+      body[data-sidebar-state="mini"] {
+        --ukaq-sidebar-offset: var(--cic-mini-w, 64px);
+      }
+      body[data-sidebar-state="collapsed"],
+      body[data-sidebar-state="drawer"] {
+        --ukaq-sidebar-offset: 0px;
+      }
+
+      #uk-aq-header {
+        position: fixed;
+        top: 0; left: var(--ukaq-sidebar-offset); right: 0;
+        height: var(--ukaq-header-h);
+        z-index: 250;
+        background: #ffffff;
+        border-bottom: 1px solid #e4e6ea;
+        box-sizing: border-box;
+        display: flex;
+        align-items: center;
+        gap: 24px;
+        padding: 0 12px;
+      }
+      #uk-aq-header .logo {
+        height: 54px;
+        width: auto;
+        flex-shrink: 0;
+        margin-top: 3px;
+      }
+      #uk-aq-header .page-title {
+        height: 42px;
+        width: auto;
+        flex-shrink: 0;
+        margin-top: 0;
+      }
+
+      #map {
+        position: absolute;
+        top: var(--ukaq-header-h); left: var(--ukaq-sidebar-offset); right: 0; bottom: 0;
+        background: #f4f7f8;
+      }
+
+      .control-bar {
+        position: fixed;
+        top: calc(var(--ukaq-header-h) + 12px);
+        left: calc(var(--ukaq-sidebar-offset) + 12px);
+        right: 12px;
+        z-index: 1000;
+        max-width: 920px;
+        background: rgba(255, 255, 255, 0.96);
+        border: 1px solid rgba(20, 34, 37, 0.14);
+        border-radius: 12px;
+        padding: 10px 12px;
+        box-shadow: 0 10px 24px rgba(20, 34, 37, 0.15);
+        display: grid;
+        gap: 8px;
+      }
+
+      .bar-top,
+      .bar-bottom {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 10px;
+      }
+
+      #status {
+        font-size: 0.9rem;
+      }
+
+      #status.is-error {
+        color: #8b1e3f;
+      }
+
+      #last-updated,
+      #endpoint-hint {
+        font-size: 0.8rem;
+        color: #334449;
+      }
+
+      #endpoint-hint {
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+        max-width: 100%;
+      }
+
+      .spacer {
+        flex: 1;
+      }
+
+      label {
+        font-size: 0.85rem;
+        font-weight: 600;
+        color: #334449;
+      }
+
+      select,
+      button {
+        border: 1px solid rgba(20, 34, 37, 0.2);
+        border-radius: 999px;
+        padding: 5px 10px;
+        font-size: 0.85rem;
+        background: #fff;
+        color: #142225;
+      }
+
+      button {
+        cursor: pointer;
+        font-weight: 600;
+      }
+
+      button:hover {
+        border-color: #0f8b8d;
+      }
+
+      #error {
+        min-height: 1.1em;
+        font-size: 0.85rem;
+        color: #8b1e3f;
+      }
+
+      .leaflet-popup-content {
+        margin: 10px 12px;
+      }
+
+      .popup-title {
+        font-weight: 700;
+        margin-bottom: 4px;
+      }
+
+      .popup-meta {
+        margin: 2px 0;
+        font-size: 0.84rem;
+      }
+
+      .reading-table {
+        width: 100%;
+        margin-top: 8px;
+        border-collapse: collapse;
+        font-size: 0.82rem;
+      }
+
+      .reading-table th,
+      .reading-table td {
+        padding: 4px 6px;
+        border-bottom: 1px solid rgba(20, 34, 37, 0.1);
+        text-align: left;
+        vertical-align: top;
+      }
+
+      .reading-table th {
+        font-size: 0.74rem;
+        text-transform: uppercase;
+        color: #334449;
+        letter-spacing: 0.04em;
+      }
+
+      .popup-empty {
+        margin-top: 8px;
+        font-size: 0.84rem;
+        color: #334449;
+      }
+
+      @media (max-width: 720px) {
+        .control-bar {
+          top: calc(var(--ukaq-header-h) + 8px);
+          left: calc(var(--ukaq-sidebar-offset) + 8px);
+          right: 8px;
+          padding: 8px 10px;
+        }
+
+        #endpoint-hint {
+          white-space: normal;
+          overflow: visible;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <div id="cic-sidebar-mount"></div>
+    <script src="sidebar.js"></script>
+    <header id="uk-aq-header">
+      <img src="images/UK-AQ-Logov2-1Line.svg" alt="UK AQ Logo" class="logo" />
+      <img src="images/UK-AQ-sensors-map-1line.svg" alt="Sensors Map" class="page-title" />
+    </header>
+    <div id="map" role="application" aria-label="UK AQ sensor map"></div>
+    <div class="control-bar" role="region" aria-label="Map controls">
+      <div class="bar-top">
+        <span class="spacer"></span>
+        <label for="reading-scope">Readings</label>
+        <select id="reading-scope">
+          <option value="all">PM2.5 + PM10 + NO2</option>
+          <option value="pm2.5">PM2.5 only</option>
+          <option value="pm10">PM10 only</option>
+          <option value="no2">NO2 only</option>
+        </select>
+        <label for="updated-within">Updated within</label>
+        <select id="updated-within">
+          <option value="all">Any time</option>
+          <option value="3h">Last 3h</option>
+          <option value="6h">Last 6h</option>
+          <option value="1d">Last 1d</option>
+          <option value="7d">Last 7d</option>
+        </select>
+        <button id="refresh" type="button">Refresh</button>
+      </div>
+      <div class="bar-bottom">
+        <span id="status">Loading…</span>
+        <span class="spacer"></span>
+        <span id="last-updated">Last updated: -</span>
+      </div>
+      <div id="endpoint-hint"></div>
+      <div id="error"></div>
+    </div>
+
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" crossorigin="anonymous"></script>
+    <script>
+      (() => {
+        const PROJECT_REF_PLACEHOLDER = "__SUPABASE_PROJECT_REF__";
+        const ANON_KEY_PLACEHOLDER = "__SB_PUBLISHABLE_DEFAULT_KEY__";
+        const FALLBACK_CACHE_BASE_URL = "https://cic-test.chronicillnesschannel.co.uk/api/aq";
+        const TURNSTILE_SITE_KEY_PLACEHOLDER = "__UK_AQ_TURNSTILE_SITE_KEY__";
+        const UPDATED_WITHIN_MS = {
+          "3h": 3 * 60 * 60 * 1000,
+          "6h": 6 * 60 * 60 * 1000,
+          "1d": 24 * 60 * 60 * 1000,
+          "7d": 7 * 24 * 60 * 60 * 1000,
+        };
+
+        const params = new URLSearchParams(window.location.search);
+        const cacheBaseParam = params.get("cache_base");
+        const cacheBaseUrl = resolveCacheBaseUrl(cacheBaseParam);
+        const cacheOrigin = getUrlOrigin(cacheBaseUrl);
+        const cacheSessionParam = params.get("cache_session_url");
+        const defaultCacheSessionUrl = cacheOrigin ? `${cacheOrigin}/api/aq/session/start` : "";
+        const cacheSessionUrl = (cacheSessionParam || defaultCacheSessionUrl || "").trim();
+        const turnstileSiteKeyParam = params.get("turnstile_site_key");
+        const turnstileSiteKey = TURNSTILE_SITE_KEY_PLACEHOLDER.includes("__UK_AQ_TURNSTILE_SITE_KEY__")
+          ? (turnstileSiteKeyParam || "")
+          : (turnstileSiteKeyParam || TURNSTILE_SITE_KEY_PLACEHOLDER);
+        const limitParam = parsePositiveInt(params.get("limit"));
+        const rowLimit = limitParam || 50000;
+        const readingLimit = Math.max(1, Math.min(10000, rowLimit));
+        const connectorProbeMaxParam = parsePositiveInt(params.get("connector_probe_max"));
+        const connectorProbeMax = Math.max(1, Math.min(40, connectorProbeMaxParam || 12));
+        const readingScopeParam = normalizeReadingScope(params.get("reading_scope"));
+        let currentReadingScope = readingScopeParam || "all";
+        const updatedWithinParam = normalizeUpdatedWithin(params.get("updated_within"));
+        let currentUpdatedWithin = updatedWithinParam || "all";
+
+        const READINGS_URL = cacheBaseUrl ? `${cacheBaseUrl}/latest` : "";
+        const READING_POLLUTANTS = ["pm2.5", "pm10", "no2"];
+        const STATIONS_URL = cacheBaseUrl ? `${cacheBaseUrl}/stations` : "";
+        const STATIONS_MAP_FALLBACK_URL = cacheBaseUrl ? `${cacheBaseUrl}/stations-map` : "";
+
+        const refreshBtn = document.getElementById("refresh");
+        const statusEl = document.getElementById("status");
+        const lastUpdatedEl = document.getElementById("last-updated");
+        const endpointHintEl = document.getElementById("endpoint-hint");
+        const errorEl = document.getElementById("error");
+        const readingScopeSelect = document.getElementById("reading-scope");
+        const updatedWithinSelect = document.getElementById("updated-within");
+
+        const map = L.map("map", { preferCanvas: true, zoomControl: true }).setView([54.5, -2.5], 6);
+        L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+          maxZoom: 19,
+          attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
+        }).addTo(map);
+
+        const markerLayer = L.layerGroup().addTo(map);
+        const markerRenderer = L.canvas({ padding: 0.25 });
+
+        let groupedStationsCache = [];
+        let stationGeometryRowsPromise = null;
+        let hasAutoFit = false;
+
+        let cacheSessionReadyUntil = 0;
+        let cacheSessionInflight = null;
+        let turnstileScriptInflight = null;
+        let turnstileTokenInflight = null;
+        let turnstileWidgetId = null;
+        let turnstileTokenResolver = null;
+        let turnstileTokenRejecter = null;
+        let turnstileTokenTimeoutId = null;
+
+        if (endpointHintEl) {
+          endpointHintEl.textContent = READINGS_URL
+            ? `Readings: ${READINGS_URL} · Geometry: ${STATIONS_URL || STATIONS_MAP_FALLBACK_URL}`
+            : "Missing cache endpoint base URL. Add ?cache_base=... to the URL.";
+        }
+        if (updatedWithinSelect) {
+          updatedWithinSelect.value = currentUpdatedWithin;
+        }
+        if (readingScopeSelect) {
+          readingScopeSelect.value = currentReadingScope;
+        }
+
+        function resolveCacheBaseUrl(rawValue) {
+          const explicit = typeof rawValue === "string" ? rawValue.trim() : "";
+          if (explicit) {
+            return explicit.replace(/\/+$/, "");
+          }
+          if (window.location.protocol === "http:" || window.location.protocol === "https:") {
+            return `${window.location.origin.replace(/\/$/, "")}/api/aq`;
+          }
+          return FALLBACK_CACHE_BASE_URL;
+        }
+
+        function getUrlOrigin(value) {
+          if (!value) {
+            return "";
+          }
+          try {
+            return new URL(value).origin;
+          } catch (_error) {
+            return "";
+          }
+        }
+
+        function normalizeText(value) {
+          if (!value) {
+            return "";
+          }
+          return String(value).trim();
+        }
+
+        function parsePositiveInt(value) {
+          if (!value) {
+            return null;
+          }
+          const parsed = Number(value);
+          if (!Number.isFinite(parsed) || parsed <= 0) {
+            return null;
+          }
+          return Math.floor(parsed);
+        }
+
+        function normalizeUpdatedWithin(value) {
+          const normalized = normalizeText(value).toLowerCase();
+          if (normalized === "3h" || normalized === "6h" || normalized === "1d" || normalized === "7d") {
+            return normalized;
+          }
+          return "all";
+        }
+
+        function normalizeReadingScope(value) {
+          const normalized = normalizeText(value).toLowerCase();
+          if (normalized === "pm2.5" || normalized === "pm10" || normalized === "no2") {
+            return normalized;
+          }
+          return "all";
+        }
+
+        function formatPollutantKey(value) {
+          if (value === "pm2.5") {
+            return "PM2.5";
+          }
+          if (value === "pm10") {
+            return "PM10";
+          }
+          if (value === "no2") {
+            return "NO2";
+          }
+          return value || "readings";
+        }
+
+        function getActiveReadingPollutants() {
+          if (currentReadingScope === "all") {
+            return READING_POLLUTANTS;
+          }
+          return [currentReadingScope];
+        }
+
+        function setStatus(message, isError = false) {
+          if (!statusEl) {
+            return;
+          }
+          statusEl.textContent = message;
+          statusEl.classList.toggle("is-error", Boolean(isError));
+        }
+
+        function setError(message) {
+          if (errorEl) {
+            errorEl.textContent = message || "";
+          }
+        }
+
+        function waitMs(ms) {
+          return new Promise((resolve) => setTimeout(resolve, ms));
+        }
+
+        function hasFreshCacheSession() {
+          return Date.now() < (cacheSessionReadyUntil - 10000);
+        }
+
+        function ensureTurnstileContainer() {
+          let container = document.getElementById("uk-aq-turnstile-widget");
+          if (!container) {
+            container = document.createElement("div");
+            container.id = "uk-aq-turnstile-widget";
+            container.style.display = "none";
+            document.body.appendChild(container);
+          }
+          return container;
+        }
+
+        function clearTurnstilePendingState() {
+          if (turnstileTokenTimeoutId) {
+            clearTimeout(turnstileTokenTimeoutId);
+            turnstileTokenTimeoutId = null;
+          }
+          turnstileTokenResolver = null;
+          turnstileTokenRejecter = null;
+        }
+
+        async function ensureTurnstileScript() {
+          if (window.turnstile && typeof window.turnstile.render === "function") {
+            return;
+          }
+          if (!turnstileScriptInflight) {
+            turnstileScriptInflight = new Promise((resolve, reject) => {
+              const existing = document.getElementById("uk-aq-turnstile-script");
+              if (existing) {
+                existing.addEventListener("load", () => resolve(), { once: true });
+                existing.addEventListener("error", () => reject(new Error("Failed to load Turnstile script.")), {
+                  once: true,
+                });
+                return;
+              }
+              const script = document.createElement("script");
+              script.id = "uk-aq-turnstile-script";
+              script.src = "https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit";
+              script.async = true;
+              script.defer = true;
+              script.onload = () => resolve();
+              script.onerror = () => reject(new Error("Failed to load Turnstile script."));
+              document.head.appendChild(script);
+            });
+          }
+          await turnstileScriptInflight;
+        }
+
+        async function ensureTurnstileWidget() {
+          if (!turnstileSiteKey) {
+            throw new Error("Missing Turnstile site key. Add ?turnstile_site_key=... to the URL.");
+          }
+          await ensureTurnstileScript();
+          if (turnstileWidgetId !== null) {
+            return;
+          }
+          const turnstileApi = window.turnstile;
+          if (!turnstileApi || typeof turnstileApi.render !== "function") {
+            throw new Error("Turnstile SDK unavailable.");
+          }
+          const container = ensureTurnstileContainer();
+          turnstileWidgetId = turnstileApi.render(container, {
+            sitekey: turnstileSiteKey,
+            appearance: "execute",
+            execution: "execute",
+            callback: (token) => {
+              if (turnstileTokenResolver) {
+                turnstileTokenResolver(token);
+                clearTurnstilePendingState();
+              }
+            },
+            "error-callback": () => {
+              const _api = window.turnstile;
+              if (_api && typeof _api.remove === "function" && turnstileWidgetId !== null) {
+                _api.remove(turnstileWidgetId);
+              }
+              turnstileWidgetId = null;
+              if (turnstileTokenRejecter) {
+                turnstileTokenRejecter(new Error("Turnstile verification failed."));
+                clearTurnstilePendingState();
+              }
+            },
+            "expired-callback": () => {
+              const _api = window.turnstile;
+              if (_api && typeof _api.remove === "function" && turnstileWidgetId !== null) {
+                _api.remove(turnstileWidgetId);
+              }
+              turnstileWidgetId = null;
+              if (turnstileTokenRejecter) {
+                turnstileTokenRejecter(new Error("Turnstile token expired."));
+                clearTurnstilePendingState();
+              }
+            },
+          });
+        }
+
+        async function getTurnstileToken() {
+          await ensureTurnstileWidget();
+          if (!turnstileTokenInflight) {
+            turnstileTokenInflight = (async () => {
+              const turnstileApi = window.turnstile;
+              if (!turnstileApi || typeof turnstileApi.execute !== "function") {
+                throw new Error("Turnstile execute unavailable.");
+              }
+              return new Promise((resolve, reject) => {
+                turnstileTokenResolver = resolve;
+                turnstileTokenRejecter = reject;
+                turnstileTokenTimeoutId = setTimeout(() => {
+                  if (turnstileTokenRejecter) {
+                    turnstileTokenRejecter(new Error("Turnstile token timed out."));
+                  }
+                  clearTurnstilePendingState();
+                }, 30000);
+                turnstileApi.execute(turnstileWidgetId);
+              });
+            })().finally(() => {
+              turnstileTokenInflight = null;
+            });
+          }
+          return turnstileTokenInflight;
+        }
+
+        async function ensureCacheSession(forceRefresh = false) {
+          if (!forceRefresh && hasFreshCacheSession()) {
+            return;
+          }
+          if (!cacheSessionUrl) {
+            throw new Error("Missing cache session URL. Add ?cache_session_url=... if needed.");
+          }
+          if (!cacheSessionInflight) {
+            cacheSessionInflight = (async () => {
+              const token = await getTurnstileToken();
+              const response = await fetch(cacheSessionUrl, {
+                method: "POST",
+                headers: {
+                  Accept: "application/json",
+                  "X-UK-AQ-Session-Init": "1",
+                  "CF-Turnstile-Token": token,
+                },
+                credentials: "include",
+              });
+              if (!response.ok) {
+                throw new Error(`Session start failed: ${response.status}`);
+              }
+              const payload = await response.json().catch(() => ({}));
+              const expiresIn = Number(payload?.session_expires_in);
+              const ttlMs = Math.max(
+                30000,
+                Math.floor((Number.isFinite(expiresIn) && expiresIn > 0 ? expiresIn : 300) * 1000),
+              );
+              cacheSessionReadyUntil = Date.now() + ttlMs;
+            })().finally(() => {
+              cacheSessionInflight = null;
+            });
+          }
+          await cacheSessionInflight;
+        }
+
+        async function fetchCacheApi(input, init = {}, retryOnAuthFailure = true) {
+          const requestMethod = String(init?.method || "GET").toUpperCase();
+          let response;
+          try {
+            response = await fetch(input, { ...init, credentials: "include" });
+          } catch (error) {
+            if (requestMethod !== "GET" && requestMethod !== "HEAD") {
+              throw error;
+            }
+            await waitMs(300);
+            return fetch(input, { ...init, credentials: "include" });
+          }
+
+          if (response.status === 401 && retryOnAuthFailure) {
+            cacheSessionReadyUntil = 0;
+            await ensureCacheSession(false);
+            response = await fetch(input, { ...init, credentials: "include" });
+            if (response.status !== 401) {
+              return response;
+            }
+            cacheSessionReadyUntil = 0;
+            await ensureCacheSession(true);
+            return fetch(input, { ...init, credentials: "include" });
+          }
+
+          if ((requestMethod === "GET" || requestMethod === "HEAD") && [502, 503, 504].includes(response.status)) {
+            await waitMs(300);
+            return fetch(input, { ...init, credentials: "include" });
+          }
+
+          return response;
+        }
+
+        function buildLatestEndpoint(pollutantKey) {
+          if (!READINGS_URL) {
+            return "";
+          }
+          const url = new URL(READINGS_URL);
+          url.searchParams.set("scope", "all");
+          url.searchParams.set("window", "all");
+          url.searchParams.set("limit", String(readingLimit));
+          url.searchParams.set("caller", "sensors_map");
+          if (pollutantKey) {
+            url.searchParams.set("pollutant", pollutantKey);
+          }
+          return url.toString();
+        }
+
+        function buildStationsEndpoint(baseEndpoint, connectorId = null) {
+          if (!baseEndpoint) {
+            return "";
+          }
+          const url = new URL(baseEndpoint);
+          if (!url.searchParams.has("limit")) {
+            url.searchParams.set("limit", "20000");
+          }
+          if (connectorId !== null && connectorId !== undefined) {
+            url.searchParams.set("connector_id", String(connectorId));
+          }
+          return url.toString();
+        }
+
+        function parseDate(value) {
+          if (!value) {
+            return null;
+          }
+          const date = new Date(value);
+          return Number.isNaN(date.getTime()) ? null : date;
+        }
+
+        function formatTime(value) {
+          const date = parseDate(value);
+          if (!date) {
+            return "-";
+          }
+          return date.toLocaleString();
+        }
+
+        function formatValue(value) {
+          if (value === null || value === undefined || value === "") {
+            return "-";
+          }
+          const numeric = Number(value);
+          if (!Number.isFinite(numeric)) {
+            return String(value);
+          }
+          if (Number.isInteger(numeric)) {
+            return String(numeric);
+          }
+          return numeric.toFixed(2).replace(/\.?0+$/, "");
+        }
+
+        function normalizeStationId(value) {
+          if (value === null || value === undefined || value === "") {
+            return "";
+          }
+          return String(value);
+        }
+
+        function normalizeLabelKey(value) {
+          return normalizeText(value).toLowerCase().replace(/\s+/g, " ");
+        }
+
+        function normalizeCoordinatePair(latRaw, lonRaw) {
+          const lat = Number(latRaw);
+          const lon = Number(lonRaw);
+          if (!Number.isFinite(lat) || !Number.isFinite(lon)) {
+            return null;
+          }
+          if (lat < -90 || lat > 90 || lon < -180 || lon > 180) {
+            return null;
+          }
+          return { lat, lon };
+        }
+
+        function parseGeometryPoint(geometryValue) {
+          if (!geometryValue) {
+            return null;
+          }
+          let geometry = geometryValue;
+          if (typeof geometry === "string") {
+            try {
+              geometry = JSON.parse(geometry);
+            } catch (_error) {
+              return null;
+            }
+          }
+          if (geometry && geometry.type === "Point" && Array.isArray(geometry.coordinates)) {
+            return normalizeCoordinatePair(geometry.coordinates[1], geometry.coordinates[0]);
+          }
+          return null;
+        }
+
+        function extractCoordinatesFromRow(row) {
+          const candidates = [
+            [row?.latitude, row?.longitude],
+            [row?.lat, row?.lon],
+            [row?.lat, row?.lng],
+            [row?.station?.latitude, row?.station?.longitude],
+            [row?.station?.lat, row?.station?.lon],
+            [row?.station?.lat, row?.station?.lng],
+          ];
+          for (const [lat, lon] of candidates) {
+            const pair = normalizeCoordinatePair(lat, lon);
+            if (pair) {
+              return pair;
+            }
+          }
+          const geometryCandidates = [
+            row?.geometry,
+            row?.station_geometry,
+            row?.station?.geometry,
+          ];
+          for (const geometry of geometryCandidates) {
+            const point = parseGeometryPoint(geometry);
+            if (point) {
+              return point;
+            }
+          }
+          return null;
+        }
+
+        function getPollutantLabel(row) {
+          const raw = normalizeText(
+            row?.pollutant_label
+              || row?.phenomenon_label
+              || row?.observed_property_code
+              || row?.phenomenon?.pollutant_label
+              || row?.phenomenon?.label,
+          );
+          if (!raw) {
+            return "Unknown";
+          }
+          const compact = raw.toLowerCase().replace(/[^a-z0-9]/g, "");
+          if (compact === "pm25") {
+            return "PM2.5";
+          }
+          if (compact === "pm10") {
+            return "PM10";
+          }
+          if (compact === "no2" || compact === "nitrogendioxide") {
+            return "NO2";
+          }
+          return raw;
+        }
+
+        function getNetworkLabel(row) {
+          const direct = normalizeText(row?.network_name);
+          if (direct) {
+            return direct;
+          }
+          const memberships = Array.isArray(row?.station_network_memberships)
+            ? row.station_network_memberships
+            : (Array.isArray(row?.network_memberships) ? row.network_memberships : []);
+          const normalizedMemberships = memberships.map((entry) => ({
+            network_label: entry?.network_label ?? entry?.label ?? null,
+            network_code: entry?.network_code ?? entry?.connector_code ?? null,
+            is_primary: Boolean(entry?.is_primary),
+          }));
+          const primary = normalizedMemberships.find((entry) => Boolean(entry?.is_primary));
+          const primaryLabel = normalizeText(primary?.network_label || primary?.network_code);
+          if (primaryLabel) {
+            return primaryLabel;
+          }
+          const first = normalizedMemberships[0];
+          const firstLabel = normalizeText(first?.network_label || first?.network_code);
+          if (firstLabel) {
+            return firstLabel;
+          }
+          return normalizeText(row?.connector_label || row?.connector_code) || "Unknown";
+        }
+
+        function getStationName(row) {
+          return normalizeText(
+            row?.display_name
+              || row?.station_name
+              || row?.station_label
+              || row?.station?.display_name
+              || row?.station?.station_name
+              || row?.station?.label,
+          ) || "Unknown station";
+        }
+
+        function getStationLabel(row) {
+          return normalizeText(
+            row?.station_label
+              || row?.label
+              || row?.station?.label
+              || row?.display_name
+              || row?.station_name
+              || row?.station?.station_name,
+          ) || "Unknown station";
+        }
+
+        function getStationSummary(row, allowTopLevelId = false) {
+          const fallbackId = allowTopLevelId ? row?.id : null;
+          const stationLabel = getStationLabel(row);
+          const stationName = getStationName(row);
+          return {
+            stationId: normalizeStationId(row?.station_id ?? row?.station?.id ?? fallbackId),
+            stationName: stationName === "Unknown station" ? stationLabel : stationName,
+            stationLabel,
+            network: getNetworkLabel(row),
+          };
+        }
+
+        function rowObservedAt(row) {
+          return normalizeText(row?.last_value_at || row?.observed_at || row?.latest_value_at);
+        }
+
+        function hasCoordinates(station) {
+          return Number.isFinite(station?.lat) && Number.isFinite(station?.lon);
+        }
+
+        function makeStationRecord(summary, coords, keyPrefix) {
+          return {
+            key: `${keyPrefix}:${summary.stationId || normalizeLabelKey(summary.stationLabel) || summary.stationName}`,
+            stationId: summary.stationId,
+            stationName: summary.stationName,
+            stationLabel: summary.stationLabel,
+            network: summary.network,
+            lat: coords ? coords.lat : null,
+            lon: coords ? coords.lon : null,
+            latestReadings: new Map(),
+            latestObservedAt: "",
+            latestObservedMs: null,
+          };
+        }
+
+        function mergeReadingIntoStation(targetStation, sourceStation) {
+          if (targetStation.stationName === "Unknown station" && sourceStation.stationName !== "Unknown station") {
+            targetStation.stationName = sourceStation.stationName;
+          }
+          if (!targetStation.stationLabel || targetStation.stationLabel === "Unknown station") {
+            targetStation.stationLabel = sourceStation.stationLabel;
+          }
+          if (targetStation.network === "Unknown" && sourceStation.network !== "Unknown") {
+            targetStation.network = sourceStation.network;
+          }
+          sourceStation.latestReadings.forEach((reading, pollutant) => {
+            const existing = targetStation.latestReadings.get(pollutant);
+            const existingMs = existing?.observed_ms ?? null;
+            if (!existing || (reading.observed_ms !== null && (existingMs === null || reading.observed_ms > existingMs))) {
+              targetStation.latestReadings.set(pollutant, reading);
+            }
+          });
+          if (
+            sourceStation.latestObservedMs !== null
+            && (targetStation.latestObservedMs === null || sourceStation.latestObservedMs > targetStation.latestObservedMs)
+          ) {
+            targetStation.latestObservedMs = sourceStation.latestObservedMs;
+            targetStation.latestObservedAt = sourceStation.latestObservedAt;
+          }
+        }
+
+        function groupStationRows(rows) {
+          const grouped = new Map();
+          const safeRows = Array.isArray(rows) ? rows : [];
+
+          safeRows.forEach((row) => {
+            const summary = getStationSummary(row, false);
+            const coords = extractCoordinatesFromRow(row);
+            const fallbackKey = `${summary.network}::${summary.stationLabel}::${coords ? `${coords.lat.toFixed(5)},${coords.lon.toFixed(5)}` : "no-coords"}`;
+            const key = summary.stationId ? `id:${summary.stationId}` : fallbackKey;
+
+            if (!grouped.has(key)) {
+              grouped.set(key, makeStationRecord(summary, coords, "reading"));
+            }
+
+            const station = grouped.get(key);
+            if (!hasCoordinates(station) && coords) {
+              station.lat = coords.lat;
+              station.lon = coords.lon;
+            }
+
+            const pollutant = getPollutantLabel(row);
+            const observedAt = rowObservedAt(row);
+            const observedDate = parseDate(observedAt);
+            const observedMs = observedDate ? observedDate.getTime() : null;
+            const reading = {
+              pollutant,
+              value: row?.last_value ?? row?.value ?? row?.latest_value ?? null,
+              unit: normalizeText(row?.uom_display || row?.uom),
+              observed_at: observedAt,
+              observed_ms: observedMs,
+            };
+
+            const existing = station.latestReadings.get(pollutant);
+            const existingMs = existing?.observed_ms ?? null;
+            if (!existing || (observedMs !== null && (existingMs === null || observedMs > existingMs))) {
+              station.latestReadings.set(pollutant, reading);
+            }
+
+            if (observedMs !== null && (station.latestObservedMs === null || observedMs > station.latestObservedMs)) {
+              station.latestObservedMs = observedMs;
+              station.latestObservedAt = observedAt;
+            }
+          });
+
+          return Array.from(grouped.values()).sort((a, b) => a.stationName.localeCompare(b.stationName));
+        }
+
+        function buildGeometryStationBundle(rows) {
+          const stations = [];
+          const byId = new Map();
+          const byLabel = new Map();
+          (Array.isArray(rows) ? rows : []).forEach((row) => {
+            const summary = getStationSummary(row, true);
+            const coords = extractCoordinatesFromRow(row);
+            if (!coords) {
+              return;
+            }
+            const station = makeStationRecord(summary, coords, "geometry");
+            stations.push(station);
+            if (station.stationId && !byId.has(station.stationId)) {
+              byId.set(station.stationId, station);
+            }
+            const labelKey = normalizeLabelKey(station.stationLabel || station.stationName);
+            if (labelKey && !byLabel.has(labelKey)) {
+              byLabel.set(labelKey, station);
+            }
+          });
+          return { stations, byId, byLabel };
+        }
+
+        function mergeStations(geometryBundle, readingStations) {
+          const mergedStations = [...geometryBundle.stations];
+          const matchedReadingKeys = new Set();
+
+          readingStations.forEach((readingStation) => {
+            let target = null;
+            if (readingStation.stationId) {
+              target = geometryBundle.byId.get(readingStation.stationId) || null;
+            }
+            if (!target) {
+              const labelKey = normalizeLabelKey(readingStation.stationLabel || readingStation.stationName);
+              if (labelKey) {
+                target = geometryBundle.byLabel.get(labelKey) || null;
+              }
+            }
+            if (!target) {
+              return;
+            }
+            matchedReadingKeys.add(readingStation.key);
+            mergeReadingIntoStation(target, readingStation);
+          });
+
+          readingStations.forEach((readingStation) => {
+            if (matchedReadingKeys.has(readingStation.key)) {
+              return;
+            }
+            if (!hasCoordinates(readingStation)) {
+              return;
+            }
+            mergedStations.push(readingStation);
+          });
+
+          return mergedStations.sort((a, b) => a.stationName.localeCompare(b.stationName));
+        }
+
+        async function fetchRowsFromEndpoint(endpoint, errorPrefix) {
+          const response = await fetchCacheApi(endpoint);
+          if (!response.ok) {
+            throw new Error(`${errorPrefix}: ${response.status}`);
+          }
+          const payload = await response.json();
+          if (Array.isArray(payload)) {
+            return payload;
+          }
+          return Array.isArray(payload?.data) ? payload.data : [];
+        }
+
+        async function fetchGeometryRowsForEndpoint(baseEndpoint) {
+          const allRows = await fetchRowsFromEndpoint(
+            buildStationsEndpoint(baseEndpoint),
+            "Station geometry request failed",
+          );
+          const shardPromises = [];
+          for (let connectorId = 1; connectorId <= connectorProbeMax; connectorId += 1) {
+            shardPromises.push(
+              fetchRowsFromEndpoint(
+                buildStationsEndpoint(baseEndpoint, connectorId),
+                `Station geometry request failed (connector ${connectorId})`,
+              ).catch((error) => {
+                console.warn("Station geometry connector shard failed", { connectorId, error });
+                return [];
+              }),
+            );
+          }
+          const shardResults = await Promise.all(shardPromises);
+          const byId = new Map();
+          [...allRows, ...shardResults.flat()].forEach((row) => {
+            const id = normalizeStationId(row?.id);
+            if (!id) {
+              return;
+            }
+            byId.set(id, row);
+          });
+          return Array.from(byId.values());
+        }
+
+        async function getStationGeometryRows() {
+          if (stationGeometryRowsPromise) {
+            return stationGeometryRowsPromise;
+          }
+          stationGeometryRowsPromise = (async () => {
+            const candidates = [STATIONS_URL, STATIONS_MAP_FALLBACK_URL].filter(Boolean);
+            let lastError = null;
+            for (const endpoint of candidates) {
+              try {
+                const rows = await fetchGeometryRowsForEndpoint(endpoint);
+                if (rows.length > 0) {
+                  return rows;
+                }
+              } catch (error) {
+                lastError = error;
+                console.warn("Station geometry endpoint failed", { endpoint, error });
+              }
+            }
+            if (lastError) {
+              throw lastError;
+            }
+            return [];
+          })();
+          return stationGeometryRowsPromise;
+        }
+
+        function applyUpdatedWithinFilter(stations) {
+          if (currentUpdatedWithin === "all") {
+            return stations;
+          }
+          const maxAgeMs = UPDATED_WITHIN_MS[currentUpdatedWithin];
+          if (!maxAgeMs) {
+            return stations;
+          }
+          const cutoffMs = Date.now() - maxAgeMs;
+          return stations.filter((station) => station.latestObservedMs !== null && station.latestObservedMs >= cutoffMs);
+        }
+
+        function escapeHtml(value) {
+          return String(value ?? "")
+            .replaceAll("&", "&amp;")
+            .replaceAll("<", "&lt;")
+            .replaceAll(">", "&gt;")
+            .replaceAll('"', "&quot;")
+            .replaceAll("'", "&#39;");
+        }
+
+        function pollutantSort(a, b) {
+          const priority = ["PM2.5", "PM10", "NO2"];
+          const aIndex = priority.indexOf(a);
+          const bIndex = priority.indexOf(b);
+          if (aIndex !== -1 || bIndex !== -1) {
+            if (aIndex === -1) {
+              return 1;
+            }
+            if (bIndex === -1) {
+              return -1;
+            }
+            return aIndex - bIndex;
+          }
+          return a.localeCompare(b);
+        }
+
+        function buildPopupHtml(station) {
+          const readings = Array.from(station.latestReadings.values())
+            .sort((a, b) => pollutantSort(a.pollutant, b.pollutant));
+
+          let readingsHtml = "<div class=\"popup-empty\">No recent readings</div>";
+          if (readings.length) {
+            const body = readings.map((reading) => {
+              const unitPart = reading.unit ? ` ${escapeHtml(reading.unit)}` : "";
+              return `
+                <tr>
+                  <td>${escapeHtml(reading.pollutant)}</td>
+                  <td>${escapeHtml(formatValue(reading.value))}${unitPart}</td>
+                  <td>${escapeHtml(formatTime(reading.observed_at))}</td>
+                </tr>
+              `;
+            }).join("");
+            readingsHtml = `
+              <table class="reading-table">
+                <thead>
+                  <tr>
+                    <th>Pollutant</th>
+                    <th>Value</th>
+                    <th>Observed</th>
+                  </tr>
+                </thead>
+                <tbody>${body}</tbody>
+              </table>
+            `;
+          }
+
+          return `
+            <div class="popup-title">${escapeHtml(station.stationName)}</div>
+            <div class="popup-meta">Network: ${escapeHtml(station.network)}</div>
+            <div class="popup-meta">Latest observed: ${escapeHtml(formatTime(station.latestObservedAt))}</div>
+            ${readingsHtml}
+          `;
+        }
+
+        function renderStations() {
+          markerLayer.clearLayers();
+
+          const filtered = applyUpdatedWithinFilter(groupedStationsCache);
+          const bounds = [];
+          let plotted = 0;
+          let missingCoords = 0;
+
+          filtered.forEach((station) => {
+            if (!hasCoordinates(station)) {
+              missingCoords += 1;
+              return;
+            }
+            const marker = L.circleMarker([station.lat, station.lon], {
+              renderer: markerRenderer,
+              radius: 4,
+              color: "#0f8b8d",
+              weight: 1,
+              fillColor: "#0f8b8d",
+              fillOpacity: 0.78,
+            });
+            marker.bindTooltip(`${station.stationName} • ${station.network}`, {
+              direction: "top",
+              sticky: true,
+              opacity: 0.9,
+            });
+            marker.bindPopup(buildPopupHtml(station), { maxWidth: 380 });
+            marker.addTo(markerLayer);
+            bounds.push([station.lat, station.lon]);
+            plotted += 1;
+          });
+
+          if (!hasAutoFit && bounds.length > 0) {
+            map.fitBounds(bounds, { padding: [20, 20], maxZoom: 12 });
+            hasAutoFit = true;
+          }
+
+          if (filtered.length === 0) {
+            if (currentUpdatedWithin === "all") {
+              setStatus("No sensors to display.");
+            } else {
+              setStatus(`No sensors in ${currentUpdatedWithin} window.`);
+            }
+            return;
+          }
+
+          let message = `Loaded ${plotted} sensors`;
+          const withReadings = filtered.filter((station) => station.latestReadings.size > 0).length;
+          if (currentReadingScope === "all") {
+            message += ` · ${withReadings} with readings (PM2.5/PM10/NO2)`;
+          } else {
+            message += ` · ${withReadings} with ${formatPollutantKey(currentReadingScope)}`;
+          }
+          if (currentUpdatedWithin !== "all") {
+            message += ` (${currentUpdatedWithin})`;
+          }
+          if (missingCoords > 0) {
+            message += ` · ${missingCoords} missing coordinates`;
+          }
+          setStatus(message);
+        }
+
+        async function loadData() {
+          setStatus("Loading…");
+          setError("");
+
+          const readingEndpoints = getActiveReadingPollutants()
+            .map((pollutantKey) => ({
+              pollutantKey,
+              endpoint: buildLatestEndpoint(pollutantKey),
+            }))
+            .filter((entry) => Boolean(entry.endpoint));
+          if (!readingEndpoints.length) {
+            setError("Missing cache endpoint base URL. Add ?cache_base=... to the URL.");
+            setStatus("Error", true);
+            return;
+          }
+
+          if (!cacheSessionUrl) {
+            setError("Missing cache session URL. Add ?cache_session_url=... if needed.");
+            setStatus("Error", true);
+            return;
+          }
+
+          try {
+            const geometryRowsPromise = getStationGeometryRows();
+            const readingRowsPromises = readingEndpoints.map((entry) =>
+              fetchRowsFromEndpoint(entry.endpoint, `Readings request failed (${entry.pollutantKey})`)
+            );
+            const [geometryRows, ...readingPayloads] = await Promise.all([geometryRowsPromise, ...readingRowsPromises]);
+            const readingsRows = readingPayloads.flat();
+            const groupedReadings = groupStationRows(readingsRows);
+
+            if (Array.isArray(geometryRows) && geometryRows.length > 0) {
+              const geometryBundle = buildGeometryStationBundle(geometryRows);
+              groupedStationsCache = mergeStations(geometryBundle, groupedReadings);
+            } else {
+              groupedStationsCache = groupedReadings;
+            }
+            renderStations();
+            if (lastUpdatedEl) {
+              lastUpdatedEl.textContent = `Last updated: ${new Date().toLocaleString()}`;
+            }
+          } catch (error) {
+            const message = error instanceof Error ? error.message : String(error);
+            setError(message);
+            setStatus("Error", true);
+          }
+        }
+
+        function updateControlUrlParams() {
+          const nextParams = new URLSearchParams(window.location.search);
+          if (currentUpdatedWithin === "all") {
+            nextParams.delete("updated_within");
+          } else {
+            nextParams.set("updated_within", currentUpdatedWithin);
+          }
+          if (currentReadingScope === "all") {
+            nextParams.delete("reading_scope");
+          } else {
+            nextParams.set("reading_scope", currentReadingScope);
+          }
+          const query = nextParams.toString();
+          const nextUrl = `${window.location.pathname}${query ? `?${query}` : ""}`;
+          window.history.replaceState(null, "", nextUrl);
+        }
+
+        if (refreshBtn) {
+          refreshBtn.addEventListener("click", () => {
+            stationGeometryRowsPromise = null;
+            loadData();
+          });
+        }
+
+        if (updatedWithinSelect) {
+          updatedWithinSelect.addEventListener("change", () => {
+            currentUpdatedWithin = normalizeUpdatedWithin(updatedWithinSelect.value);
+            updateControlUrlParams();
+            renderStations();
+          });
+        }
+
+        if (readingScopeSelect) {
+          readingScopeSelect.addEventListener("change", () => {
+            currentReadingScope = normalizeReadingScope(readingScopeSelect.value);
+            updateControlUrlParams();
+            loadData();
+          });
+        }
+
+        loadData();
+      })();
+    </script>
+  </body>
+</html>

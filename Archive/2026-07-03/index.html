@@ -12,37 +12,25 @@
       min-height: 100vh;
       font-family: "Inter", "Segoe UI", Roboto, Arial, sans-serif;
       color: #101822;
-      background: #f8f2ea;
+      background: #FBFAF7;
     }
 
     .home-header {
       margin: 0 auto;
-      padding: 32px 28px 24px;
-      background: #fff7ed;
+      padding: 12px 28px 0;
+      background: transparent;
       text-align: left;
       box-sizing: border-box;
-      border-bottom: 1px solid #eadfd2;
+      display: flex;
+      justify-content: center;
     }
 
-    .home-header-inner {
-      width: min(100%, 1220px);
+    .home-banner {
+      width: min(100%, 1460px);
+      max-width: 100%;
+      height: auto;
+      display: block;
       margin: 0 auto;
-    }
-
-    .home-title {
-      margin: 0;
-      color: #175283;
-      font-size: clamp(2.6rem, 7vw, 5rem);
-      font-weight: 900;
-      line-height: 0.95;
-      letter-spacing: -0.04em;
-    }
-
-    .home-subtitle {
-      margin: 0.75rem 0 0;
-      color: #364657;
-      font-size: clamp(1rem, 2vw, 1.25rem);
-      line-height: 1.45;
     }
 
     .home-main {
@@ -54,199 +42,12 @@
       border-radius: 0;
       box-shadow: none;
       display: grid;
-      gap: 48px;
+      gap: 58px;
     }
 
     .home-section {
       display: grid;
       gap: 16px;
-    }
-
-    .readings-dashboard {
-      padding: clamp(1.25rem, 3vw, 2rem);
-      border: 1px solid #eadfd2;
-      border-radius: 30px;
-      background: #fff7ed;
-      box-shadow: 0 12px 32px rgba(67, 48, 29, 0.08);
-    }
-
-    .readings-header {
-      display: grid;
-      grid-template-columns: minmax(0, 1fr) auto;
-      gap: 1.5rem 2rem;
-      align-items: start;
-    }
-
-    .readings-title {
-      margin: 0;
-      color: #172535;
-      font-size: clamp(1.8rem, 4vw, 2.6rem);
-      line-height: 1.1;
-    }
-
-    .readings-subtitle {
-      margin: 0.5rem 0 0;
-      color: #586573;
-      font-size: 1rem;
-      line-height: 1.45;
-    }
-
-    .readings-meta {
-      display: flex;
-      flex-wrap: wrap;
-      justify-content: flex-end;
-      align-items: end;
-      gap: 0.75rem 1rem;
-    }
-
-    .readings-updated {
-      margin: 0 0 0.6rem;
-      color: #65717d;
-      font-size: 0.88rem;
-      white-space: nowrap;
-    }
-
-    .network-control {
-      display: grid;
-      gap: 0.3rem;
-      color: #344250;
-      font-size: 0.82rem;
-      font-weight: 700;
-    }
-
-    .network-control select {
-      max-width: 100%;
-      padding: 0.65rem 2.4rem 0.65rem 0.8rem;
-      border: 1px solid #adb5bd;
-      border-radius: 10px;
-      background: #fff;
-      color: #172535;
-      font: inherit;
-      font-weight: 500;
-    }
-
-    .network-control select:focus-visible {
-      outline: 3px solid rgba(23, 82, 131, 0.25);
-      outline-offset: 2px;
-    }
-
-    .pollutant-grid {
-      display: grid;
-      grid-template-columns: repeat(3, minmax(0, 1fr));
-      gap: clamp(1.5rem, 3vw, 2.5rem);
-      margin-top: 2rem;
-    }
-
-    .pollutant-item {
-      display: grid;
-      grid-template-rows: auto auto;
-      justify-items: center;
-      gap: 1rem;
-      min-width: 0;
-    }
-
-    .pollutant-circle {
-      width: min(100%, 310px);
-      aspect-ratio: 1;
-      box-sizing: border-box;
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      justify-content: center;
-      padding: 2rem 2.1rem;
-      border-radius: 50%;
-      color: #fff;
-      text-align: center;
-      box-shadow: 0 15px 28px rgba(56, 42, 30, 0.2);
-      -webkit-text-stroke: 0.6px #666;
-      paint-order: stroke fill;
-    }
-
-    .pollutant-circle--pm25 {
-      background: #d7262e;
-    }
-
-    .pollutant-circle--pm10 {
-      background: #ed6c02;
-    }
-
-    .pollutant-circle--no2 {
-      background: #f2c500;
-    }
-
-    .pollutant-name {
-      margin: 0;
-      font-size: clamp(1.35rem, 2.4vw, 1.75rem);
-      font-weight: 850;
-      line-height: 1;
-    }
-
-    .pollutant-name sub {
-      font-size: 0.65em;
-      vertical-align: sub;
-    }
-
-    .pollutant-value {
-      margin-top: 0.5rem;
-      font-size: clamp(3.6rem, 7vw, 5.1rem);
-      font-weight: 900;
-      line-height: 0.9;
-    }
-
-    .pollutant-unit {
-      margin-top: 0.35rem;
-      font-size: 1rem;
-      font-weight: 750;
-    }
-
-    .pollutant-unit sup {
-      font-size: 0.65em;
-    }
-
-    .pollutant-station {
-      width: 100%;
-      margin: 0.75rem 0 0;
-      font-size: clamp(0.92rem, 1.7vw, 1.08rem);
-      font-weight: 800;
-      line-height: 1.15;
-      overflow-wrap: anywhere;
-    }
-
-    .pollutant-network {
-      width: 100%;
-      margin: 0.35rem 0 0;
-      font-size: 0.82rem;
-      font-weight: 650;
-      line-height: 1.15;
-      overflow-wrap: anywhere;
-    }
-
-    .scale-legend {
-      width: min(100%, 310px);
-    }
-
-    .scale-label {
-      display: block;
-      margin-bottom: 0.45rem;
-      color: #465462;
-      font-size: 0.82rem;
-      font-weight: 700;
-      text-align: center;
-    }
-
-    .scale-stripe {
-      height: 12px;
-      overflow: hidden;
-      border: 1px solid rgba(30, 42, 51, 0.2);
-      border-radius: 999px;
-      background: linear-gradient(
-        90deg,
-        #4caf50 0 20%,
-        #f2d13d 20% 40%,
-        #f39c34 40% 60%,
-        #d7262e 60% 80%,
-        #781c81 80% 100%
-      );
     }
 
     .section-logo {
@@ -437,7 +238,7 @@
     .home-footer {
       text-align: center;
       padding: 1rem 0 1.4rem;
-      background: #fff7ed;
+      background: transparent;
       color: #666;
       position: static;
       width: auto;
@@ -457,10 +258,6 @@
     }
 
     @media (max-width: 980px) {
-      .pollutant-grid {
-        grid-template-columns: repeat(2, minmax(0, 1fr));
-      }
-
       .tool-grid {
         grid-template-columns: repeat(2, minmax(0, 1fr));
       }
@@ -478,41 +275,12 @@
 
     @media (max-width: 640px) {
       .home-header {
-        padding: 26px 18px 22px;
+        padding: 10px 18px 0;
       }
 
       .home-main {
         padding: 22px 16px 84px;
         gap: 42px;
-      }
-
-      .readings-dashboard {
-        padding: 1.1rem;
-        border-radius: 22px;
-      }
-
-      .readings-header {
-        grid-template-columns: 1fr;
-        gap: 1rem;
-      }
-
-      .readings-meta {
-        justify-content: flex-start;
-        align-items: end;
-      }
-
-      .readings-updated {
-        width: 100%;
-        margin: 0;
-      }
-
-      .pollutant-grid {
-        grid-template-columns: minmax(0, 1fr);
-      }
-
-      .pollutant-circle {
-        width: min(100%, 300px);
-        padding: 1.8rem 2rem;
       }
 
       .tool-grid {
@@ -527,86 +295,14 @@
   </style>
 </head>
 <body class="home-page">
+  <div id="cic-sidebar-mount"></div>
   <header class="home-header">
-    <div class="home-header-inner">
-      <h1 class="home-title">UK AQ</h1>
-      <p class="home-subtitle">Live and historical air quality readings across the UK.</p>
-    </div>
+    <img class="home-banner" src="images/CIC-banner-v2.svg" alt="Chronic Illness Channel Banner">
   </header>
 
   <main class="home-main">
-    <section class="readings-dashboard" aria-labelledby="highest-readings-heading">
-      <div class="readings-header">
-        <div>
-          <h2 id="highest-readings-heading" class="readings-title">Highest sensor readings</h2>
-          <p class="readings-subtitle">Latest available readings from reporting sensors.</p>
-        </div>
-
-        <div class="readings-meta">
-          <p class="readings-updated">
-            <time datetime="2026-07-03T10:00:00+01:00">Updated 03/07/2026 10:00</time>
-          </p>
-          <label class="network-control" for="network-filter">
-            <span>Network</span>
-            <select id="network-filter" name="network" aria-describedby="network-filter-note">
-              <option selected>All networks</option>
-              <option>GOV.UK AURN</option>
-              <option>Breathe London</option>
-              <option>Sensor.Community</option>
-              <option>OpenAQ</option>
-            </select>
-          </label>
-          <span id="network-filter-note" class="sr-only">Static preview control; filtering is not enabled yet.</span>
-        </div>
-      </div>
-
-      <div class="pollutant-grid" aria-label="Example highest pollutant readings">
-        <article class="pollutant-item" aria-label="PM2.5: 20 micrograms per cubic metre at Bristol Temple Way, GOV.UK AURN">
-          <div class="pollutant-circle pollutant-circle--pm25">
-            <h3 class="pollutant-name">PM2.5</h3>
-            <strong class="pollutant-value">20</strong>
-            <span class="pollutant-unit">&micro;g/m<sup>3</sup></span>
-            <p class="pollutant-station">Bristol Temple Way</p>
-            <p class="pollutant-network">GOV.UK AURN</p>
-          </div>
-          <div class="scale-legend" aria-label="Placeholder PM2.5 reading scale">
-            <span class="scale-label">PM2.5 reading scale</span>
-            <div class="scale-stripe" aria-hidden="true"></div>
-          </div>
-        </article>
-
-        <article class="pollutant-item" aria-label="PM10: 30 micrograms per cubic metre at London Marylebone Road, GOV.UK AURN">
-          <div class="pollutant-circle pollutant-circle--pm10">
-            <h3 class="pollutant-name">PM10</h3>
-            <strong class="pollutant-value">30</strong>
-            <span class="pollutant-unit">&micro;g/m<sup>3</sup></span>
-            <p class="pollutant-station">London Marylebone Road</p>
-            <p class="pollutant-network">GOV.UK AURN</p>
-          </div>
-          <div class="scale-legend" aria-label="Placeholder PM10 reading scale">
-            <span class="scale-label">PM10 reading scale</span>
-            <div class="scale-stripe" aria-hidden="true"></div>
-          </div>
-        </article>
-
-        <article class="pollutant-item" aria-label="NO2: 11 micrograms per cubic metre at South Gloucestershire Yate Station Road, Sensor.Community">
-          <div class="pollutant-circle pollutant-circle--no2">
-            <h3 class="pollutant-name">NO<sub>2</sub></h3>
-            <strong class="pollutant-value">11</strong>
-            <span class="pollutant-unit">&micro;g/m<sup>3</sup></span>
-            <p class="pollutant-station">South Gloucestershire Yate Station Road</p>
-            <p class="pollutant-network">Sensor.Community</p>
-          </div>
-          <div class="scale-legend" aria-label="Placeholder NO2 reading scale">
-            <span class="scale-label">NO<sub>2</sub> reading scale</span>
-            <div class="scale-stripe" aria-hidden="true"></div>
-          </div>
-        </article>
-      </div>
-    </section>
-
     <section class="home-section" aria-labelledby="home-ukaq-heading">
-      <h2 id="home-ukaq-heading" class="sr-only">UK AQ tools</h2>
+      <h1 id="home-ukaq-heading" class="sr-only">UK-AQ</h1>
       <img class="section-logo section-logo--ukaq" src="images/UK-AQ-Logov2-1Line.svg" alt="UK-AQ">
       <p class="section-description">
         Live and historical air quality data from multiple sensor networks in the UK.
@@ -708,7 +404,7 @@
   </main>
 
   <footer class="home-footer">
-    <p>&copy; 2026 UK AQ. All rights reserved.</p>
+    <p>&copy; 2023 Chronic Illness Channel. All rights reserved.</p>
   </footer>
   <script>
     (() => {
@@ -754,5 +450,6 @@
       updateAll();
     })();
   </script>
+  <script src="sidebar.js"></script>
 </body>
 </html>

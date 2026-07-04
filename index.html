@@ -798,6 +798,15 @@
     <p>&copy; 2026 UK AQ. All rights reserved.</p>
   </footer>
   <script>
+    // Populated during GitHub Pages deployment by scripts/uk_aq_inject_project_ref.mjs.
+    // Currently unused by the static dashboard preview.
+    const PROJECT_REF_PLACEHOLDER = "__SUPABASE_PROJECT_REF__";
+    const ANON_KEY_PLACEHOLDER = "__SB_PUBLISHABLE_DEFAULT_KEY__";
+    const TURNSTILE_SITE_KEY_PLACEHOLDER = "__UK_AQ_TURNSTILE_SITE_KEY__";
+    const AQI_HISTORY_BASE_PLACEHOLDER = "__UK_AQ_AQI_HISTORY_BASE_URL__";
+    const WEBSITE_DEBUG_LOG_ENABLED_PLACEHOLDER = "__UK_AQ_WEBSITE_DEBUG_LOG_ENABLED__";
+  </script>
+  <script>
     (() => {
       const switches = Array.from(document.querySelectorAll(".tool-card-title-graphic-switch"));
       if (!switches.length) return;

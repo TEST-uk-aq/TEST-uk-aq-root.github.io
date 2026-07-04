@@ -1,0 +1,71 @@
+<!DOCTYPE qgis PUBLIC 'http://mrcc.com/qgis.dtd' 'SYSTEM'>
+<qgis version="3.44.6-Solothurn">
+  <identifier>SG_IntermediateZoneCent_2022</identifier>
+  <parentidentifier></parentidentifier>
+  <language>ENG</language>
+  <type>dataset</type>
+  <title>Intermediate Zone Centroids 2022</title>
+  <abstract>Intermediate Zone centroids are point features that represent the population weighted centre of Intermediate Zones – the geography used for the dissemination of small area statistics in Scotland when results are unsuitable for release at Data Zone level. These centroids can be used to link Intermediate Zones to other higher level geographies and produce a 'best-fit' match. Intermediate Zones also represent a relatively stable geography that can be used to analyse change over time, with changes only occurring after a Census. Following the update to Intermediate Zones using 2022 Census data, there are now 1,334 Intermediate Zones covering the whole of Scotland.
+
+Intermediate Zone centroids are point features that represent the population weighted centre of Intermediate Zones – the geography used for the dissemination of small area statistics in Scotland when results are unsuitable for release at Data Zone level. </abstract>
+  <keywords vocabulary="Search keys">
+    <keyword>Statistical units</keyword>
+    <keyword>Statistical analysis</keyword>
+    <keyword>population distribution</keyword>
+    <keyword>statistical data</keyword>
+  </keywords>
+  <keywords vocabulary="gmd:topicCategory">
+    <keyword>Statistical units</keyword>
+    <keyword>population distribution</keyword>
+    <keyword> statistical data</keyword>
+    <keyword>Statistical analysis</keyword>
+  </keywords>
+  <contact>
+    <contactAddress>
+      <type></type>
+      <address>Victoria Quay</address>
+      <city>Edinburgh</city>
+      <administrativearea></administrativearea>
+      <postalcode>EH6 6QQ</postalcode>
+      <country>GB</country>
+    </contactAddress>
+    <name>GIS Analyst</name>
+    <organization>Scottish Government</organization>
+    <position>Geospatial Team</position>
+    <voice></voice>
+    <fax></fax>
+    <email>GIS@gov.scot</email>
+    <role>Point of contact</role>
+  </contact>
+  <links/>
+  <history>Centroids for Intermediate Zone boundaries have been created by the Scottish Government's Geographic Information Science and Analysis Team (GI-SAT) in order to provide a way to link Intermediate Zones to other higher level geographic boundaries. Intermediate Zone centroids do not represent the geometric centre of the feature, but rather the population weighted centre. For 2001, Intermediate Zone centroids were calculated as the mean centre of all 2001 Data Zone centroids contained within an Intermediate Zone. In 2011, a small change was implemented following consultation with local authorities to use the median of locations of Data Zone centroids contained within an Intermediate Zone. The median has also been used for calculating the 2022 centroids, and is based on the household residents population (as opposed to the total population) to match 2011. Note that, in 2022, the centroids were calculated using data which had not had statistical disclosure control measures applied (which follows the method used by NRS to calculate Census 2022 Output Area centroids), so may not be replicable using published data which has had cell key perturbation applied. The process for creating 2022 Intermediate Zone centroids was automated, but the general method is as follows. The median easting and northing coordinate pair for all 2022 Data Zones within the Intermediate Zone is calculated, giving a notional centroid of the Intermediate Zone. The distance from each of the Data Zone centroids to the notional (or median) centroid is calculated using Pythagoras' Theorem. The Data Zone coordinate pair with the shortest distance to the median was then chosen to represent the centroid of the Intermediate Zone. Each 2022 Intermediate Zone has been given a new unique code, following the Scottish Government’s standard naming and coding convention. The new S-codes for Intermediate Zones were applied in batches per local authority, which were ordered alphabetically by name, and then sorted to match as closely as possible to the 2011 Intermediate Zone order. The Intermediate Zone 2022 codes range from S02002515 to S02003848 (the previous 2011 codes ranged from S02001236 to S02002514). All Intermediate Zones have been assigned names by the local authorities. Census 2022 total population, household resident population, and household counts have been supplied by NRS for each Intermediate Zone and are included in the attribute table. All census data outputs have privacy protection applied (known as cell key perturbation) to keep the data of individuals safe. In the case of 'nested' geography hierarchies, the impact of these Statistical Disclosure Controls (SDC) means the sum of the population within Data Zones does not always match the corresponding Intermediate Zones population totals. The same applies when summing totals at a local authority level, i.e. the sum of the populations of all Output Areas, Data Zones, and Intermediate Zones within a local authority may not match the published local authority total.</history>
+  <dates>
+    <date value="2024-12-16T00:00:00" type="Published"/>
+  </dates>
+  <fees></fees>
+  <constraints type="Limitations of use">Available under the terms of the Open Government Licence. The following attribution statement must be used to acknowledge the source of the information: Copyright Scottish Government, contains Ordnance Survey data © Crown copyright and database right (insert year).</constraints>
+  <rights>Scottish Government 2024</rights>
+  <encoding></encoding>
+  <crs>
+    <spatialrefsys nativeFormat="Wkt">
+      <wkt></wkt>
+      <proj4></proj4>
+      <srsid>0</srsid>
+      <srid>0</srid>
+      <authid></authid>
+      <description></description>
+      <projectionacronym></projectionacronym>
+      <ellipsoidacronym></ellipsoidacronym>
+      <geographicflag>false</geographicflag>
+    </spatialrefsys>
+  </crs>
+  <extent>
+    <spatial minx="-8.80000000000000071" maxx="-0.70999999999999996" miny="54.63000000000000256" maxy="60.86999999999999744" minz="0" maxz="0" crs="EPSG:4326" dimensions="2"/>
+    <temporal>
+      <period>
+        <start>2024-12-16T00:00:00Z</start>
+        <end></end>
+      </period>
+    </temporal>
+  </extent>
+</qgis>

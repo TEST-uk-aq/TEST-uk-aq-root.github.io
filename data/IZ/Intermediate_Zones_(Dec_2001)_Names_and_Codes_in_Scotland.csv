@@ -1,0 +1,1236 @@
+﻿FID,IZ05CD,IZ05NM
+1,S02000301,IZ Fourteen
+2,S02000101,Fraserburgh Smiddyhill
+3,S02000151,"Mull, Iona, Coll and Tiree"
+4,S02000001,Cove South
+5,S02000201,City Centre
+6,S02000051,Stonehaven South
+7,S02000251,New Farm Loch South
+8,S02000351,Craiglockhart
+9,S02000302,IZ Fifteen
+10,S02000303,IZ Sixteen
+11,S02000304,IZ Seventeen
+12,S02000305,IZ Eighteen
+13,S02000306,IZ Nineteen
+14,S02000307,IZ Twenty
+15,S02000308,IZ Twenty One
+16,S02000309,IZ Twenty Two
+17,S02000310,Eaglesham and Waterfoot
+18,S02000311,Mearnskirk and South Kirkhill
+19,S02000312,North Kirkhill
+20,S02000313,"Mearns Village, Westacres and Greenfarm"
+21,S02000314,West Neilston and Uplawmoor
+22,S02000315,Busby
+23,S02000316,Whitecraigs and Broom
+24,S02000317,Clarkston and Sheddens
+25,S02000318,Crookfur and Fruin
+26,S02000319,Williamwood
+27,S02000320,Stamperland
+28,S02000321,West Arthurlie and North Neilston
+29,S02000322,Auchenback
+30,S02000323,Lower Whitecraigs and South Giffnock
+31,S02000324,South Thornliebank and Woodfarm
+32,S02000325,Netherlee
+33,S02000326,Merrylee and Braidbar
+34,S02000102,Fraserburgh Lochpots
+35,S02000103,Fraserburgh Central-Academy
+36,S02000327,North Giffnock and North Thornliebank
+37,S02000252,"Altonhill South, Longpark and Hillhead"
+38,S02000352,Craighouse and South Morningside
+39,S02000152,"Clackmannan, Kennet and Forestmill"
+40,S02000002,"Kincorth, Leggart and Nigg South"
+41,S02000202,Logie and Blackness
+42,S02000052,Stonehaven North
+43,S02000104,Fraserburgh Harbour and Broadsea
+44,S02000203,Docks and Wellgate
+45,S02000003,Culter
+46,S02000153,Alloa South and East
+47,S02000353,Parkhead
+48,S02000253,Dean and New Farm Loch North
+49,S02000328,"Dunterlie, East Arthurlie and Dovecothall"
+50,S02000053,"Fetteresso, Netherley and Catter"
+51,S02000105,Monifieth West
+52,S02000254,Altonhill North and Onthank
+53,S02000354,Greendykes and Niddrie Mains
+54,S02000154,Alloa West
+55,S02000004,"Cults, Bieldside and Milltimber East"
+56,S02000204,Balgay
+57,S02000329,Cross Stobbs
+58,S02000005,Cove North
+59,S02000155,Sauchie
+60,S02000054,Aboyne and South Deeside
+61,S02000106,Monifieth East
+62,S02000355,Blackford
+63,S02000255,Southcraig and Beansburn
+64,S02000205,Menzieshill
+65,S02000356,Longstone and Saughton Mains
+66,S02000330,Balerno
+67,S02000107,Carnoustie West
+68,S02000055,Newtonhill
+69,S02000156,Tullibody South
+70,S02000006,"Kincorth, Leggart and Nigg North"
+71,S02000256,Kilmaurs Rural
+72,S02000157,Alloa North
+73,S02000056,East Cairngorms
+74,S02000206,Broughty Ferry Wes
+75,S02000108,Carnoustie East
+76,S02000331,Bonaly and Pentlands
+77,S02000357,Morningside
+78,S02000007,"Cults, Bieldside and Milltimber West"
+79,S02000257,Northern and Irvine Valley Rural
+80,S02000109,Monikie
+81,S02000332,South East Bypass
+82,S02000207,Craigie and  Craigiebank
+83,S02000057,Banchory
+84,S02000158,"Fishcross, Devon Village and Coalsnaughton"
+85,S02000358,Broomhouse and Sighthill
+86,S02000058,Portlethen
+87,S02000208,Stobswell
+88,S02000008,Garthdee
+89,S02000110,South Angus
+90,S02000333,"Gracemount, Southouse and Burdiehouse"
+91,S02000258,Stewarton West
+92,S02000159,Tullibody North and Glenochil
+93,S02000359,Hutchison and Moat
+94,S02000111,Arbroath Keptie
+95,S02000334,Mortonhall
+96,S02000009,"Braeside, Mannofield, Broomhill and Seafield South"
+97,S02000209,Law
+98,S02000059,Banchory-Devenick and Findon
+99,S02000259,Stewarton East
+100,S02000335,Fairmilehead
+101,S02000112,Arbroath Harbour
+102,S02000160,Menstrie
+103,S02000010,Ferryhill South
+104,S02000210,West Ferry
+105,S02000011,"Braeside, Mannofield, Broomhill and Seafield East"
+106,S02000161,Dollar and Muckhart
+107,S02000113,Arbroath Kirkton
+108,S02000336,Comiston and Swanston
+109,S02000260,Auchinairn
+110,S02000360,Merchiston and Greenhill
+111,S02000337,Currie East
+112,S02000114,Arbroath Cliffburn
+113,S02000261,Woodhill East
+114,S02000162,Alva
+115,S02000012,Torry West
+116,S02000211,Hilltown
+117,S02000060,Crathes and Torphins
+118,S02000338,Hyvots and Gilmerton Dykes
+119,S02000061,"Dunecht, Durris and Drumoak"
+120,S02000212,Barnhill
+121,S02000115,Arbroath Warddykes
+122,S02000013,"Braeside, Mannofield, Broomhill and Seafield North"
+123,S02000163,Tillicoultry
+124,S02000339,Currie West
+125,S02000062,Garlogie and Elrick
+126,S02000213,Broughty Ferry East
+127,S02000116,Letham and Glamis
+128,S02000262,Woodhill West
+129,S02000361,Grange
+130,S02000014,Hazlehead
+131,S02000164,Machars South
+132,S02000340,Baberton and Juniper Green
+133,S02000063,Westhill Central
+134,S02000214,Lochee
+135,S02000117,Kirriemuir Landward
+136,S02000263,Westerton East
+137,S02000362,Niddrie
+138,S02000015,Torry East
+139,S02000165,Kirkmaiden
+140,S02000341,Oxgangs and Firrhill
+141,S02000064,Westhill North and South
+142,S02000215,Baxter Park
+143,S02000118,Forfar West
+144,S02000264,Bishopbriggs West and Cadder
+145,S02000363,South Gyle
+146,S02000016,Ferryhill North
+147,S02000017,West End South
+148,S02000018,City Centre
+149,S02000019,West End North
+150,S02000020,Summerhill
+151,S02000021,Rosemount
+152,S02000022,Hanover
+153,S02000023,Midstocket
+154,S02000024,George Street
+155,S02000025,Mastrick
+156,S02000026,Ashgrove
+157,S02000027,Sheddocksley
+158,S02000028,Stockethill
+159,S02000029,"Froghall, Powis and Sunnybank"
+160,S02000030,Cummings Park
+161,S02000031,Northfield
+162,S02000032,Seaton
+163,S02000033,Hilton
+164,S02000034,Heathryfold and Middlefield
+165,S02000035,Kingswells
+166,S02000036,Tillydrone
+167,S02000037,Old Aberdeen
+168,S02000038,Woodside
+169,S02000039,Bucksburn South
+170,S02000040,Danestone
+171,S02000041,Balgownie and Donmouth West
+172,S02000042,Balgownie and Donmouth East
+173,S02000043,Bucksburn North
+174,S02000044,Oldmachar East
+175,S02000045,Oldmachar West
+176,S02000046,Denmore
+177,S02000047,Dyce
+178,S02000048,Mearns South and Benholm
+179,S02000049,Mearns and Laurencekirk
+180,S02000050,Mearns North and Inverbervie
+181,S02000119,Forfar Central
+182,S02000342,Liberton East
+183,S02000120,Forfar East
+184,S02000343,"Ferniehill,  South Moredun and Craigour"
+185,S02000121,Lunan
+186,S02000344,Colinton and Kingsknowe
+187,S02000122,Friockheim
+188,S02000345,Moredun
+189,S02000123,Kirriemuir
+190,S02000346,Liberton West
+191,S02000124,Montrose South
+192,S02000347,Braids
+193,S02000125,Montrose North
+194,S02000166,Kirkcudbright
+195,S02000065,Cromar and Kildrummy
+196,S02000216,Charleston
+197,S02000348,Clovenstone and Drumbryden
+198,S02000126,Brechin East
+199,S02000265,Westerton West
+200,S02000364,Prestonfield
+201,S02000167,Dalbeattie
+202,S02000066,Kintore and Blackburn
+203,S02000217,The Glens
+204,S02000349,The Inch
+205,S02000127,Brechin West
+206,S02000266,Kessington East
+207,S02000365,Shandon
+208,S02000168,Castle Douglas
+209,S02000067,Kemnay
+210,S02000218,Douglas East
+211,S02000350,Calders
+212,S02000128,Hillside
+213,S02000267,Lenzie South
+214,S02000366,Forrester Park and Broomhall
+215,S02000169,Stranraer Central
+216,S02000068,Howe of Alford
+217,S02000219,Fairmuir
+218,S02000129,Angus Glens
+219,S02000268,Bishopbriggs North and Kenmure
+220,S02000367,Stenhouse
+221,S02000170,Stranraer West
+222,S02000069,Balmedie and Potterton
+223,S02000220,Western Edge
+224,S02000130,Campbeltown
+225,S02000269,Kessington West
+226,S02000368,"Jewel, Brunstane and Newcraighall"
+227,S02000171,Moors
+228,S02000070,Newmachar and Fintray
+229,S02000221,Linlathen and Midcraigie
+230,S02000131,Kintyre Trail
+231,S02000270,Lenzie North
+232,S02000369,"Ratho, Gogarburn and Airport"
+233,S02000172,Portpatrick
+234,S02000071,Inverurie South
+235,S02000222,Douglas West
+236,S02000132,Bute
+237,S02000271,South Castlehill and Thorn
+238,S02000370,Dalkeith Rd
+239,S02000173,Fleet
+240,S02000072,Inverurie North
+241,S02000223,Caird Park
+242,S02000133,Rothesay Town
+243,S02000272,Kilmardinny West
+244,S02000371,Marchmont West
+245,S02000174,Annan South
+246,S02000073,Durno-Chapel of Garioch
+247,S02000074,Barrahill
+248,S02000075,Ythsie
+249,S02000076,Ellon East
+250,S02000077,Ellon West
+251,S02000078,Ythanside
+252,S02000079,"Insch, Oyne and Ythanwells"
+253,S02000080,Clashindarroch
+254,S02000081,Fyvie-Rothie
+255,S02000082,Cruden
+256,S02000083,Huntly
+257,S02000084,Auchnagatt
+258,S02000085,Peterhead Links
+259,S02000086,Peterhead Bay
+260,S02000087,Auchterless and Monquhitter
+261,S02000088,Peterhead Harbour
+262,S02000089,Peterhead Ugieside
+263,S02000090,Mintlaw
+264,S02000091,Turriff
+265,S02000092,Longside and Rattray
+266,S02000093,Deer and Mormond
+267,S02000094,New Pitsligo
+268,S02000095,Aberchirder and Whitehills
+269,S02000096,Gardenstown and King Edward
+270,S02000097,"Portsoy, Fordyce and Cornhill"
+271,S02000098,Rosehearty and Strathbeg
+272,S02000099,Banff
+273,S02000100,Macduff
+274,S02000134,Whiskey Isles
+275,S02000135,Dunoon
+276,S02000136,Hunter's Quay
+277,S02000137,Cowal South
+278,S02000138,Helensburgh East
+279,S02000139,Helensburgh Centre
+280,S02000140,Helensburgh North
+281,S02000141,Helensburgh West and Rhu
+282,S02000142,Greater Lochgilphead
+283,S02000143,Garelochhead
+284,S02000144,Lomond Shore
+285,S02000145,Mid Argyll
+286,S02000146,Cowal North
+287,S02000147,Loch Awe
+288,S02000148,Oban South
+289,S02000149,Oban North
+290,S02000150,Benderloch Trail
+291,S02000224,West Pitkerro
+292,S02000225,Ardler and St Marys
+293,S02000226,Whitfield
+294,S02000227,Downfield
+295,S02000228,Kirkton
+296,S02000229,Fintry
+297,S02000230,Doon Valley South
+298,S02000231,Doon Valley North
+299,S02000232,New Cumnock
+300,S02000233,Drongan
+301,S02000234,Cumnock South and Craigens
+302,S02000235,Mauchline Rural
+303,S02000236,Cumnock North
+304,S02000237,Cumnock Rural
+305,S02000238,Auchinleck
+306,S02000239,Mauchline
+307,S02000240,Shortlees
+308,S02000241,Bellfield and Kirkstyle
+309,S02000242,Galston
+310,S02000243,Kilmarnock South Central and Caprington
+311,S02000244,Earlston and Hurlford Rural
+312,S02000245,"Grange, Howard and Gargieston"
+313,S02000246,Newmilns
+314,S02000247,Darvel
+315,S02000248,Piersland
+316,S02000249,Crosshouse and Gatehead Rural
+317,S02000250,Bonnyton and Town Centre
+318,S02000175,New Abbey
+319,S02000176,Gretna and Eastriggs
+320,S02000177,Annan North
+321,S02000178,Lower Annandale and South East Dumfries
+322,S02000179,Cree Valley
+323,S02000180,Dumfries South
+324,S02000181,Georgetown
+325,S02000182,Rotchell and Rosefield
+326,S02000183,Dumfries West
+327,S02000184,Dumfries East
+328,S02000185,Summerville
+329,S02000186,Nithside and Nunholm
+330,S02000187,Lincluden and Lochside
+331,S02000188,Locharbriggs
+332,S02000189,Catherinefield
+333,S02000190,Boreland and Ecclefechan
+334,S02000191,Lower Nithsdale
+335,S02000192,Lochmaben and Parkgate
+336,S02000193,Crocketford and Carsphairn
+337,S02000194,Lockerbie and Mid Annandale
+338,S02000195,Langholm and Canonbie
+339,S02000196,Mid Nithsdale
+340,S02000197,Moffat and Eskdalemuir
+341,S02000198,Upper Nithsdale
+342,S02000199,Perth Road
+343,S02000200,Westend
+344,S02000372,Carrick Knowe
+345,S02000373,Gorgie West
+346,S02000374,Marchmont East and Sciennes
+347,S02000375,Polwarth
+348,S02000376,Bruntsfield
+349,S02000377,Gorgie East
+350,S02000378,"Bingham, Magdalene and the Christians"
+351,S02000379,Meadows
+352,S02000380,Balgreen and Roseburn
+353,S02000381,Dalry and Fountainbridge
+354,S02000382,Willowbrae and Duddingston Village
+355,S02000383,Corstorphine
+356,S02000384,Duddingston
+357,S02000385,Tollcross
+358,S02000386,Joppa
+359,S02000387,Southside and Canongate
+360,S02000388,East Craigs
+361,S02000389,"Dean, West End and West Coates"
+362,S02000390,Murrayfield and Ravelston
+363,S02000391,Kirkliston
+364,S02000392,Northfield
+365,S02000393,Old Town and Leith Street
+366,S02000394,Clerwood and Corstorphine (Hillview)
+367,S02000395,Mountcastle
+368,S02000396,Portobello
+369,S02000397,Blackhall
+370,S02000398,New Town West
+371,S02000399,Bughtlin and Parkgrove
+372,S02000400,Clermiston
+373,S02000273,Kilmardinny East
+374,S02000274,Rosebank and Waterside
+375,S02000275,Kirkintilloch South
+376,S02000276,North Castlehill and Thorn
+377,S02000277,Hillhead
+378,S02000278,Torrance and Balmore
+379,S02000279,Keystone and Dougalston
+380,S02000280,Harestanes
+381,S02000281,Kirkintilloch West
+382,S02000282,Barloch
+383,S02000283,Twechar and Harestanes East
+384,S02000284,East Clober and Mains Estate
+385,S02000285,West Clober and Mains Estate
+386,S02000286,Milton of Campsie
+387,S02000287,Lennoxtown
+388,S02000288,IZ One
+389,S02000289,IZ Two
+390,S02000290,IZ Three
+391,S02000291,IZ Four
+392,S02000292,IZ Five
+393,S02000293,IZ Six
+394,S02000294,IZ Seven
+395,S02000295,IZ Eight
+396,S02000296,IZ Nine
+397,S02000297,IZ Ten
+398,S02000298,IZ Eleven
+399,S02000299,IZ Twelve
+400,S02000300,IZ Thirteen
+401,S02000751,Ross and Cromarty South West
+402,S02000752,Dingwall
+403,S02000753,Black Isle North
+404,S02000754,Ross and Cromarty Central
+405,S02000755,Alness
+406,S02000756,Invergordon
+407,S02000757,Ross and Cromarty East
+408,S02000758,Seaboard
+409,S02000759,Tain
+410,S02000760,Ross and Cromarty North West
+411,S02000761,Sutherland South
+412,S02000762,Sutherland East
+413,S02000763,Caithness South
+414,S02000764,Sutherland North and West
+415,S02000765,Wick South
+416,S02000766,Wick North
+417,S02000767,Caithness North West
+418,S02000768,Caithness North East
+419,S02000769,Thurso East
+420,S02000770,Thurso West
+421,S02000771,Kilmacolm Central
+422,S02000772,"Kilmacolm, Quarriers, Greenock Upper East/Central"
+423,S02000773,Inverkip and Wemyss Bay
+424,S02000774,Port Glasgow Upper East
+425,S02000775,"Port Glasgow Mid, East and Central"
+426,S02000776,"Port Glasgow Upper, West and Central"
+427,S02000777,"West Braeside, East Inverkip and West Gourock"
+428,S02000778,Greenock East
+429,S02000779,"Bow Farm, Barrs Cottage, Cowdenknowes and Overton"
+430,S02000780,Greenock Upper Central
+431,S02000781,Greenock Town Centre and East Central
+432,S02000782,"Braeside, Branchton, Lower Larkfield and Ravenscraig"
+433,S02000783,"Lower Bow & Larkfield, Fancy Farm, Mallard Bowl"
+434,S02000784,Greenock West and Central
+435,S02000785,"Gourock Central, Upper East and IRH"
+436,S02000786,Gourock Upper and West Central & Upper Larkfield
+437,S02000787,"Gourock East, Greenock West and Lyle Road"
+438,S02000788,Rural South Midlothian
+439,S02000789,Penicuik Southeast
+440,S02000790,Penicuik Southwest
+441,S02000791,Penicuik East
+442,S02000792,Penicuik North
+443,S02000793,Gorebridge and Middleton
+444,S02000794,Pathhead and Rural East Midlothian
+445,S02000795,North Gorebridge
+446,S02000796,Newbattle and Dalhousie
+447,S02000797,Pentland
+448,S02000798,Newtongrange
+449,S02000799,Mayfield
+450,S02000800,Bonnyrigg South
+451,S02000701,Milton West
+452,S02000702,Anniesland East
+453,S02000703,Knightswood West
+454,S02000704,Maryhill East
+455,S02000705,Anniesland West
+456,S02000706,Knightswood Park West
+457,S02000707,Yoker North
+458,S02000708,Milton East
+459,S02000709,Blairdardie East
+460,S02000710,Summerston North
+461,S02000711,Blairdardie West
+462,S02000712,Drumchapel South
+463,S02000713,Summerston Central and West
+464,S02000714,Drumry West
+465,S02000715,Drumchapel North
+466,S02000716,Drumry East
+467,S02000717,Fort William South
+468,S02000718,Lochaber West
+469,S02000719,Fort William North
+470,S02000720,Lochaber East and North
+471,S02000721,Badenoch and Strathspey South
+472,S02000722,Loch Ness
+473,S02000723,Badenoch and Strathspey Central
+474,S02000724,Skye South
+475,S02000725,Lochlash
+476,S02000726,Badenoch and Strathspey North
+477,S02000727,Inverness East Rural
+478,S02000728,Inverness West Rural
+479,S02000729,Inverness Inshes and Slackbuie
+480,S02000730,Inverness Lochardil and Holm Mains
+481,S02000731,Inverness Kinmylies and South West
+482,S02000732,Inverness Drummond
+483,S02000733,Inverness Hilton
+484,S02000734,Inverness Drakies
+485,S02000735,Inverness Ballifeary and Dalneigh
+486,S02000736,Inverness Crown and Haugh
+487,S02000737,Inverness Westhill
+488,S02000738,Nairn Rural
+489,S02000739,Inverness Muirtown
+490,S02000740,Inverness Smithton
+491,S02000741,Inverness Scorguie
+492,S02000742,"Inverness Central, Raigmore and Longman"
+493,S02000743,Inverness Culloden and Balloch
+494,S02000744,Inverness Merkinch
+495,S02000745,Skye North East
+496,S02000746,Skye North West
+497,S02000747,Conon and Muir of Ord
+498,S02000748,Black Isle South
+499,S02000749,Nairn West
+500,S02000750,Nairn East
+501,S02000601,Crookston South
+502,S02000602,Pollokshaws
+503,S02000603,Mount Florida
+504,S02000604,Langside
+505,S02000605,Shawlands East
+506,S02000606,Crookston North
+507,S02000607,Battlefield
+508,S02000608,Pollok South and West
+509,S02000609,Shawlands West
+510,S02000610,Toryglen and Oatlands
+511,S02000611,Shettleston South
+512,S02000612,Maxwell Park
+513,S02000613,Carmyle and Mount Vernon South
+514,S02000614,Strathbungo
+515,S02000615,Govanhill East and Aikenhead
+516,S02000616,Govanhill West
+517,S02000617,Pollok North and East
+518,S02000618,Baillieston East
+519,S02000619,Dalmarnock
+520,S02000620,Braidfauld
+521,S02000621,Mosspark
+522,S02000622,Pollokshields East
+523,S02000623,Mount Vernon North and Sandyhills
+524,S02000624,Pollokshields West
+525,S02000625,Cardonald South and East
+526,S02000626,Baillieston West
+527,S02000627,Cardonald West and Central
+528,S02000628,Gorbals and Hutchesontown
+529,S02000629,Parkhead East and Braidfauld North
+530,S02000630,Tollcross
+531,S02000631,Kingston West and Dumbreck
+532,S02000632,Shettleston North
+533,S02000633,Parkhead West and Barrowfield
+534,S02000634,Laurieston and Tradeston
+535,S02000635,"Calton, Galllowgate and Bridgeton"
+536,S02000636,Garrowhill West
+537,S02000637,Cardonald North
+538,S02000638,Craigton
+539,S02000639,Hillington
+540,S02000640,Greenfield
+541,S02000641,Penilee
+542,S02000642,Kinning Park and Festival Park
+543,S02000643,Old Shettleston and Parkhead North
+544,S02000644,Ibrox East and Cessnock
+545,S02000645,Garrowhill East and Swinton
+546,S02000646,Barlanark
+547,S02000647,Gallowgate North and Bellgrove
+548,S02000648,Carntyne West and Haghill
+549,S02000649,Ibrox
+550,S02000650,Dennistoun
+551,S02000401,"Abbeyhill, Meadowbank and Marionville"
+552,S02000551,Leslie and Newcastle
+553,S02000451,Douglas
+554,S02000501,"Valleyfield, Culross and Torryburn"
+555,S02000651,Anderston
+556,S02000402,Hillside and Calton Hill
+557,S02000403,Restalrig (Loganlea)
+558,S02000404,Stockbridge
+559,S02000405,New Town East
+560,S02000406,Craigentinny
+561,S02000407,Craigleith
+562,S02000408,Comely Bank
+563,S02000409,Lorne
+564,S02000410,Restalrig and Lochend
+565,S02000411,Drylaw
+566,S02000412,Broughton
+567,S02000413,Barnton and Cammo
+568,S02000414,Hermitage Park and Prospect Bank
+569,S02000415,Inverleith
+570,S02000416,South Leith
+571,S02000417,Silverknowes and Davidson's Mains
+572,S02000418,Bonnington and Pilrig
+573,S02000419,Muirhouse
+574,S02000420,Great Junction Street
+575,S02000421,Cramond
+576,S02000422,West Pilton
+577,S02000423,Boswall and Pilton
+578,S02000424,East Trinity and Bonnyhaugh
+579,S02000425,Trinity
+580,S02000426,Leith Docks
+581,S02000427,North Leith and Newhaven
+582,S02000428,Waterfront and Granton
+583,S02000429,South Queensferry (East) and Dalmeny
+584,S02000430,South Queensferry West
+585,S02000431,Barra and South Uist
+586,S02000432,Benbecula and North Ui
+587,S02000433,Harris
+588,S02000434,South Lewis
+589,S02000435,Point
+590,S02000436,Stornoway East
+591,S02000437,Stornoway West
+592,S02000438,Broadbay
+593,S02000439,Northwest Lewis
+594,S02000440,Braes Villages
+595,S02000441,Shieldhill
+596,S02000442,Maddiston and Rumford
+597,S02000443,"Lochgreen, Lionthorn and Prospecthill"
+598,S02000444,"Brightons, Reddingmuirhead and Wallacest"
+599,S02000445,Banknock and Haggs
+600,S02000446,Hallglen and Glen Village
+601,S02000447,Redding
+602,S02000448,High Bonnybridge and Greenhill
+603,S02000449,Polmont
+604,S02000450,Laurieston and Westquarter
+605,S02000652,North Barlanark and Easterhouse South
+606,S02000653,Easterhouse East
+607,S02000654,"Cranhill, Lightburn and Queenslie South"
+608,S02000655,City Centre West
+609,S02000656,Govan and Linthouse
+610,S02000657,Carntyne
+611,S02000658,City Centre East
+612,S02000659,Dennistoun North and Alexandra Parade
+613,S02000660,Drumoyne and Shieldhall
+614,S02000661,Finnieston and Kelvinhaugh
+615,S02000662,Central Easterhouse
+616,S02000663,Craigend and Ruchazie
+617,S02000664,Hillhead
+618,S02000665,Woodlands
+619,S02000666,"Roystonhill, Blochairn, and Provanmill"
+620,S02000667,Riddrie and Hogganfield
+621,S02000668,Glasgow Harbour and  Partick South
+622,S02000669,Woodside
+623,S02000670,Sighthill
+624,S02000671,Partick
+625,S02000672,Kelvingrove and University
+626,S02000673,Whiteinch
+627,S02000674,"Garthamlock, Auchinlea and Gartloch"
+628,S02000675,Firhill
+629,S02000676,Cowlairs and Port Dundas
+630,S02000677,Partickhill and Hyndland
+631,S02000678,Blackhill and Barmulloch East
+632,S02000679,Broomhill
+633,S02000680,Petershill
+634,S02000681,Dowanhill
+635,S02000682,Victoria Park
+636,S02000683,North Kelvin
+637,S02000684,Scotstoun South and West
+638,S02000685,Keppochhill
+639,S02000686,Scotstoun North and East
+640,S02000687,Barmulloch
+641,S02000688,Ruchill
+642,S02000689,Kelvinside and Jordanhill
+643,S02000690,Kelvindale
+644,S02000691,Springburn
+645,S02000692,Possil Park
+646,S02000693,Wyndford
+647,S02000694,Springburn East and Cowlairs
+648,S02000695,Robroyston and Millerston
+649,S02000696,Yoker South
+650,S02000697,Balornock
+651,S02000698,Knightswood Park East
+652,S02000699,Knightswood East
+653,S02000700,Maryhill West
+654,S02000502,Dunfermline Touch and Woodmill
+655,S02000452,Falkirk Town Centre and Callendar Park
+656,S02000552,Leven West
+657,S02000553,Glenrothes Macedonia and Tanshall
+658,S02000554,Glenrothes South Parks
+659,S02000555,Leven North
+660,S02000556,Glenrothes Cadham and Pitcoudie
+661,S02000557,Kennoway
+662,S02000558,St Monans and Pittenweem
+663,S02000559,"Glenrothes Balfarg, Pitcairn and Coul"
+664,S02000560,Glenrothes Collydean
+665,S02000561,Glenrothes Balgeddie
+666,S02000562,Markinch and Star
+667,S02000563,Largo
+668,S02000564,"Elie, Colinsburgh and Largoward"
+669,S02000565,Anstruther
+670,S02000566,Leven East and Bonnybank
+671,S02000567,Falkland and Freuchie
+672,S02000568,Kettle and Ladybank
+673,S02000569,Crail and Boarhills
+674,S02000570,Auchtermuchty and Gateside
+675,S02000571,"Dairsie, Ceres and Dunino"
+676,S02000572,St Andrews South West
+677,S02000573,Cupar West and Springfield
+678,S02000574,Cupar East
+679,S02000575,Cupar Central
+680,S02000576,St Andrews South East
+681,S02000577,St Andrews Central
+682,S02000578,St Andrews North and Strathkinness
+683,S02000579,Newburgh
+684,S02000580,Leuchars and Guardbridge
+685,S02000581,Balmullo and Gauldry
+686,S02000582,Newport and Wormit
+687,S02000583,Tayport
+688,S02000584,Carmunnock South
+689,S02000585,Glenwood South
+690,S02000586,Darnley West
+691,S02000587,Darnley East
+692,S02000588,Glenwood North
+693,S02000589,Castlemilk
+694,S02000590,Darnley North
+695,S02000591,Carmunnock North
+696,S02000592,Carnwadric West
+697,S02000593,Muirend and Old Cathcart
+698,S02000594,Carnwadric East
+699,S02000595,Kingspark South
+700,S02000596,Newlands
+701,S02000597,Nitshill
+702,S02000598,Merrylee and Millbrae
+703,S02000599,Cathcart
+704,S02000600,Kingspark North
+705,S02000453,Bantaskin
+706,S02000454,"Blackness, Carriden and Grahamsdyke"
+707,S02000455,Tamfourhill
+708,S02000456,Bowhouse
+709,S02000457,Newtown
+710,S02000458,Camelon West
+711,S02000459,Camelon East
+712,S02000460,Grahamston
+713,S02000461,Head of Muir and Dennyloanhead
+714,S02000462,Middlefield
+715,S02000463,Newlands
+716,S02000464,Kersiebank
+717,S02000465,Bonnybridge
+718,S02000466,Kinneil
+719,S02000467,Merchiston and New Carron Village
+720,S02000468,Grangemouth Town Centre
+721,S02000469,Nethermains
+722,S02000470,Bainsford and Langlees
+723,S02000471,Larbert Village and South Broomage
+724,S02000472,Stenhousemuir East
+725,S02000473,"Fankerton, Stoneywood and Denny Town"
+726,S02000474,Carron
+727,S02000475,Stenhousemuir West
+728,S02000476,Carronshore
+729,S02000477,North Broomage and Inches
+730,S02000478,Antonshill
+731,S02000479,Dunipace
+732,S02000480,Carse and Grangemouth Old Town
+733,S02000481,North Queensferry and Inverkeithing West
+734,S02000482,Rosyth South
+735,S02000483,Inverkeithing East
+736,S02000484,Dalgety Bay Central
+737,S02000485,Dalgety Bay West and Hillend
+738,S02000486,Rosyth Central
+739,S02000487,Dalgety Bay East
+740,S02000488,Rosyth East
+741,S02000489,Rosyth North
+742,S02000490,Cairneyhill and Crombie
+743,S02000491,"Crossford, Charleston and Limekilns"
+744,S02000492,Dunfermline Pitcorthie West
+745,S02000493,Dunfermline East and Pitcorthie East
+746,S02000494,Dunfermline Abbeyview South
+747,S02000495,Burntisland East
+748,S02000496,Dunfermline Brucefield
+749,S02000497,Dunfermline Abbeyview North
+750,S02000498,Crossgates and Halbeath
+751,S02000499,Dunfermline Central
+752,S02000500,Burntisland West
+753,S02000503,Dunfermline Garvock Hill
+754,S02000504,Dunfermline Baldridgeburn
+755,S02000505,Dunfermline Headwell
+756,S02000506,Kincardine
+757,S02000507,Kinghorn
+758,S02000508,Aberdour and Auchtertool
+759,S02000509,Dunfermline Bellyeoman
+760,S02000510,Dunfermline Milesmark and Wellwood
+761,S02000511,"Oakley, Comrie and Blairhall"
+762,S02000512,Kirkcaldy Linktown and Seafield
+763,S02000513,Dunfermline Townhill and Kingseat
+764,S02000514,Hill of Beath
+765,S02000515,Cowdenbeath South
+766,S02000516,Kirkcaldy Central
+767,S02000517,Kirkcaldy Raith
+768,S02000518,Kirkcaldy Bennochy East
+769,S02000519,Cowdenbeath North
+770,S02000520,Kirkcaldy Bennochy West
+771,S02000521,Saline and Gowkall
+772,S02000522,Kirkcaldy Pathhead
+773,S02000523,Kirkcaldy Newliston and Redcraigs
+774,S02000524,Kirkcaldy Hayfield and Smeaton
+775,S02000525,Lochgelly West and Lumphinnans
+776,S02000526,Kirkcaldy Templehall East
+777,S02000527,Kirkcaldy Templehall West
+778,S02000528,Dysart
+779,S02000529,Lochgelly East
+780,S02000530,Kirkcaldy Gallatown and Sinclairtown
+781,S02000531,Kelty East
+782,S02000532,Kelty West
+783,S02000533,Kirkcaldy Dunnikier
+784,S02000534,Cardenden
+785,S02000535,Kirkcaldy Chapel
+786,S02000536,Lochore and Crosshill
+787,S02000537,Wemyss
+788,S02000538,Ballingry
+789,S02000539,Thornton and Kinglassie
+790,S02000540,Buckhaven and Muiredge
+791,S02000541,Methil Denbeath
+792,S02000542,Glenrothes Stenton and Finglassie
+793,S02000543,Methil West
+794,S02000544,Glenrothes Pitteuchar
+795,S02000545,Glenrothes Woodside
+796,S02000546,Methil East
+797,S02000547,Methil Methilhill
+798,S02000548,Glenrothes Caskieberran and Rimbleton
+799,S02000549,Glenrothes Auchmuty
+800,S02000550,Windygates and Coaltown
+801,S02001151,Low Blantyre and Bardykes
+802,S02001152,Spittal
+803,S02001153,Cambuslang Central
+804,S02001154,High Crosshill
+805,S02001155,Uddingston and Gardenside
+806,S02001156,"Halfway, Hallside and Drumsagard"
+807,S02001157,Westburn and Newton
+808,S02001158,Bankhead South
+809,S02001159,"Burgh, Eastfield and Silverbank"
+810,S02001160,Burnhill and Bankhead North
+811,S02001161,Shawfield and Clincarthill
+812,S02001162,Farme Cross and Gallowflat North
+813,S02001163,Blane Valley
+814,S02001164,Sauchenford
+815,S02001165,Bannockburn
+816,S02001166,Cambusbarron and Carron Vall
+817,S02001167,Strathendrick
+818,S02001168,Borestone
+819,S02001169,Stirling East
+820,S02001170,Fallin
+821,S02001171,Torbrex
+822,S02001172,Town Centre
+823,S02001173,Forthside
+824,S02001174,Raploch
+825,S02001175,Wallace
+826,S02001176,Western Villages
+827,S02001177,Logie
+828,S02001178,Bridge of Allan
+829,S02001179,Teith Valley
+830,S02001180,Dunblane West
+831,S02001181,Dunblane East
+832,S02001182,Callander
+833,S02001183,Highland
+834,S02001184,IZ One
+835,S02001185,IZ Two
+836,S02001186,IZ Three
+837,S02001187,IZ Four
+838,S02001188,IZ Five
+839,S02001189,IZ Six
+840,S02001190,IZ Seven
+841,S02001191,IZ Eight
+842,S02001192,IZ Nine
+843,S02001193,IZ Ten
+844,S02001194,IZ Eleven
+845,S02001195,IZ Twelve
+846,S02001196,IZ Thirteen
+847,S02001197,IZ Fourteen
+848,S02001198,IZ Fifteen
+849,S02001199,IZ Sixteen
+850,S02001200,IZ Seventeen
+851,S02001001,Paisley North West
+852,S02000901,Birkenshaw
+853,S02001051,Lerwick South
+854,S02000801,Easthouses
+855,S02000951,Milnathort and Crook of Devon
+856,S02000952,"Muthill, Greenloaning and Gleneagles"
+857,S02000953,Auchterarder
+858,S02000954,"Glenfarg, Dunning and Rhynd"
+859,S02000955,Bridge of Earn and Abernethy
+860,S02000956,Aberuthven and Almondbank
+861,S02000957,Crieff South
+862,S02000958,Crieff North
+863,S02000959,Moncrieffe and Friarton
+864,S02000960,"Comrie, Gilmerton and St Fillans"
+865,S02000961,Gannochy and Walnut Grove
+866,S02000962,Burghmuir and Oakbank
+867,S02000963,"Viewlands, Craigie and Wellshill"
+868,S02000964,"Central, North Inch and South Inch"
+869,S02000965,Letham
+870,S02000966,Western Edge
+871,S02000967,Muirton
+872,S02000968,Scone
+873,S02000969,"Hillyland, Tulloch and Inveralmond"
+874,S02000970,Errol and Inchture
+875,S02000971,North Muirton and Old Scone
+876,S02000972,"Guildtown, Balbeggie and St Madoes"
+877,S02000973,"Invergowrie, Longforgan and Abernyte"
+878,S02000974,Luncarty and Dunkeld
+879,S02000975,Stanley and Murthly
+880,S02000976,Coupar Angus and Meigle
+881,S02000977,Blairgowrie West
+882,S02000978,Blairgowrie East (Rattray)
+883,S02000979,Alyth
+884,S02000980,Pitlochry
+885,S02000981,Rannoch and Aberfeldy
+886,S02000982,"Blair Atholl, Strathardle and Glenshee"
+887,S02000983,Lochwinnoch
+888,S02000984,Renfrewshire Rural South & Howwood
+889,S02000985,Paisley Glenburn West
+890,S02000986,Paisley Glenburn East
+891,S02000987,Paisley Foxbar
+892,S02000988,Johnstone South West
+893,S02000989,Paisley Dykebar
+894,S02000990,Paisley South West
+895,S02000991,Paisley South East
+896,S02000992,Johnstone South East
+897,S02000993,Paisley South
+898,S02000994,Johnstone North West
+899,S02000995,Paisley West
+900,S02000996,Kilbarchan
+901,S02000997,Paisley East
+902,S02000998,Johnstone North East
+903,S02000999,Elderslie and Phoenix
+904,S02001000,Paisley Central
+905,S02000851,Kilwinning West and Blacklan
+906,S02000802,Bonnyrigg North
+907,S02000803,Loanhead
+908,S02000804,Eskbank
+909,S02000805,Dalkeith
+910,S02000806,Thornybank
+911,S02000807,Shawfair
+912,S02000808,South Speyside and the Cabrach
+913,S02000809,North Speyside
+914,S02000810,Rural Keith and Strathisla
+915,S02000811,Keith and Fife Keith
+916,S02000812,"Rafford, Dallas, Dyke to Dava"
+917,S02000813,"Fochabers, Aultmore, Clochan and Ordiquish"
+918,S02000814,Forres South West and Mannachie
+919,S02000815,"Findhorn, Kinloss and Pluscarden Valley"
+920,S02000816,"Heldon West, Fogwatt to Inchberry"
+921,S02000817,Forres Central East and seaward
+922,S02000818,New Elgin West
+923,S02000819,New Elgin East
+924,S02000820,"Cullen, Portknockie, Findochty, Drybridge and Berryhillock"
+925,S02000821,"Mosstodloch, Portgordon and seaward"
+926,S02000822,Elgin Central West
+927,S02000823,Elgin Cathedral to Ashgrove and Pinefield
+928,S02000824,Elgin Bishopmill East and Ladyhill
+929,S02000825,Elgin Bishopmill West and Newfield
+930,S02000826,"Lhanbryde, Urquhart, Pitgavney and seaward"
+931,S02000827,Buckie West and Mains of Buckie
+932,S02000828,Buckie Central East
+933,S02000829,"Burghead, Roseisle and Laich"
+934,S02000830,Lossiemouth East and Seatown
+935,S02000831,Lossiemouth West
+936,S02000832,Arran
+937,S02000833,Irvine Tarryholme
+938,S02000834,Dreghorn
+939,S02000835,Irvine Fullarton
+940,S02000836,Irvine Broomlands
+941,S02000837,Irvine Bourtreehill
+942,S02000838,Irvine Central
+943,S02000839,Irvine East
+944,S02000840,Irvine Girdle Toll and Staneca
+945,S02000841,Irvine Castlepark South
+946,S02000842,Springside and Rural
+947,S02000843,Irvine Perceton and Lawthorn
+948,S02000844,Stevenston Ardeer
+949,S02000845,Irvine Castlepark North
+950,S02000846,Saltcoats Central
+951,S02000847,Stevenston North West
+952,S02000848,Saltcoats North West
+953,S02000849,Ardrossan Central
+954,S02000850,Stevenston Hayocks
+955,S02000902,Chapelhall West
+956,S02000903,Chapelhall East
+957,S02000904,Greenend and Carnbroe
+958,S02000905,Kirkshaws
+959,S02000906,Harthill and Salsburgh
+960,S02000907,Kirkwood and Bargeddie
+961,S02000908,Cairnhill
+962,S02000909,Dundyvan
+963,S02000910,Petersburn
+964,S02000911,Cliftonville South
+965,S02000912,Gartlea
+966,S02000913,Coatbridge West
+967,S02000914,Craigneuk Airdrie
+968,S02000915,Coatdyke and Whinhall
+969,S02000916,Sunnyside and Cliftonville
+970,S02000917,Drumgelloch
+971,S02000918,Airdrie North
+972,S02000919,Townhead
+973,S02000920,Thrashbush
+974,S02000921,Caldercruix and Plains
+975,S02000922,Glenmavis and Greengairs
+976,S02000923,Stepps
+977,S02000924,Gartcosh and Marnock
+978,S02000925,Chryston and Muirhead
+979,S02000926,Moodiesburn West
+980,S02000927,Moodiesburn East
+981,S02000928,Condorrat
+982,S02000929,Greenfaulds
+983,S02000930,Westfield
+984,S02000931,Seafar
+985,S02000932,Abronhill South
+986,S02000933,Balloch East
+987,S02000934,Cumbernauld Central
+988,S02000935,Kildrum
+989,S02000936,Balloch West
+990,S02000937,Abronhill North
+991,S02000938,Carrickstone
+992,S02000939,Village and Castlecary
+993,S02000940,Kilsyth Bogside
+994,S02000941,Balmalloch
+995,S02000942,Kilsyth East and Croy
+996,S02001002,Paisley Ralston
+997,S02001052,Lerwick North
+998,S02000943,East Mainland
+999,S02000944,West Kirkwall
+1000,S02000945,East Kirkwall
+1001,S02000946,"Stromness, Sandwick and Stenness"
+1002,S02000947,Isles
+1003,S02000948,West Mainland
+1004,S02000949,"Powmill, Cleish and Scotlandwell"
+1005,S02000950,Kinross
+1006,S02000852,Saltcoats North East
+1007,S02001101,Hareleeshill
+1008,S02000853,Kilwinning Pennyburn
+1009,S02000854,Ardrossan North West
+1010,S02000855,Ardrossan North East
+1011,S02000856,Kilwinning Whitehirst Park and Woodside
+1012,S02000857,Kilwinning Central and North
+1013,S02000858,West Kilbride and Seamill
+1014,S02000859,Dalry East and Rural
+1015,S02000860,Fairlie and Rural
+1016,S02000861,Dalry West
+1017,S02000862,Beith East and Rural
+1018,S02000863,Kilbirnie South and Longbar
+1019,S02000864,Beith West
+1020,S02000865,Kilbirnie North
+1021,S02000866,Largs Central and Cumbrae
+1022,S02000867,Skelmorlie and Rural
+1023,S02000868,Largs South
+1024,S02000869,Largs North
+1025,S02000870,Overtown
+1026,S02000871,Pather
+1027,S02000872,Wishaw East
+1028,S02000873,Wishaw South
+1029,S02000874,Netherton and Kirkhill
+1030,S02000875,Newmains
+1031,S02000876,Muirhouse and Knowetop
+1032,S02000877,Wishaw North
+1033,S02000878,Craigneuk Wishaw
+1034,S02000879,Ladywell
+1035,S02000880,Coltness
+1036,S02000881,Motherwell South
+1037,S02000882,Motherwell West
+1038,S02000883,Motherwell North
+1039,S02000884,Allanton
+1040,S02000885,Cleland
+1041,S02000886,Forgewood
+1042,S02001102,"Larkhall Central, Raploch, Millheugh and Burnhead"
+1043,S02000887,"Carfin, Cleekhimin and New Stevenston"
+1044,S02001053,Central Shetland
+1045,S02001003,Paisley Ferguslie
+1046,S02001103,Carluke West
+1047,S02000888,Orbiston
+1048,S02001054,East and West Mainland
+1049,S02001004,Paisley North East
+1050,S02001104,Carluke North
+1051,S02000889,Stane
+1052,S02001055,North Mainland
+1053,S02001005,Linwood South
+1054,S02001105,Crosshouse and Lindsayfield
+1055,S02000890,Milnwood
+1056,S02001056,North and East Isles
+1057,S02001006,Linwood North
+1058,S02001106,Merryton and Meadowhill
+1059,S02000891,Newarthill
+1060,S02001057,Carrick South
+1061,S02001007,Paisley Gallowhill and Hillington
+1062,S02001107,Law
+1063,S02000892,Bellshill South
+1064,S02001058,Girvan Glendoune
+1065,S02001008,Bridge of Weir
+1066,S02001108,Whitehills West
+1067,S02000893,Holytown
+1068,S02001059,Girvan Ailsa
+1069,S02001009,Houston South
+1070,S02001109,Greenhills
+1071,S02000894,Shotts
+1072,S02001060,Carrick North
+1073,S02001010,Paisley North
+1074,S02001110,Mossneuk and Newlandsmuir
+1075,S02000895,Fallside
+1076,S02001061,Maybole
+1077,S02001011,Renfrew South
+1078,S02001111,Little Earnock
+1079,S02000896,Carfin North
+1080,S02001062,Alloway and Doonfoot
+1081,S02001012,Houston North
+1082,S02001112,"Birniehill, Kelvin and Whitehills East"
+1083,S02000897,Hattonrigg
+1084,S02001063,Colyton
+1085,S02001013,Renfrew East
+1086,S02001113,"Forth, Braehead and Auchengray"
+1087,S02000898,Bellshill Central
+1088,S02001064,Castlehill and Kincaidston
+1089,S02001014,Renfrew West
+1090,S02001114,Nerston and EK Landward Area
+1091,S02000899,Viewpark
+1092,S02001065,Belmont
+1093,S02001015,Renfrewshire Rural North and Langbank
+1094,S02001115,Eddlewood
+1095,S02000900,Shawhead and Whifflet
+1096,S02001066,Holmston and Forehill
+1097,S02001067,Ayr South Harbour and Town Centre
+1098,S02001068,Dalmilling and Craigie
+1099,S02001069,"Ayr North Harbour, Wallacetown and Newton South"
+1100,S02001070,"Lochside, Braehead and Whitletts"
+1101,S02001071,Newton North
+1102,S02001072,Heathfield
+1103,S02001073,Prestwick East
+1104,S02001074,Prestwick West
+1105,S02001075,Prestwick Airport and Monkton
+1106,S02001076,"Annbank, Mossblown and Tarbolton - the Coalfields"
+1107,S02001077,Troon
+1108,S02001078,Muirhead
+1109,S02001079,Barassie
+1110,S02001080,"Dundonald, Loans and Symington"
+1111,S02001081,Clydesdale South
+1112,S02001082,"Douglas, Coalburn and Rigside"
+1113,S02001083,"Chapelton, Glengavel and Sandford"
+1114,S02001084,Lesmahagow
+1115,S02001085,"Biggar, Symington, Thankerton and Dolphinton"
+1116,S02001086,Lanark South
+1117,S02001087,Hazelbank and Kirkfieldbank
+1118,S02001088,Kirkmuirhill and Blackwood
+1119,S02001089,Strathaven South
+1120,S02001090,Lanark North West
+1121,S02001091,Lanark North East
+1122,S02001092,Stonehouse
+1123,S02001093,"Carstairs, Carstairs Junction and Carnwath"
+1124,S02001094,Strathaven North
+1125,S02001095,Ashgill and Netherburn
+1126,S02001096,"Crossford, Braidwood and Yieldshields"
+1127,S02001097,Strutherhill
+1128,S02001098,"Glassford, Quarter and Allanton"
+1129,S02001099,Carluke South
+1130,S02001100,Carluke East
+1131,S02001016,Renfrew North
+1132,S02001017,Erskine East and Inchinnan
+1133,S02001018,Erskine Central
+1134,S02001019,Erskine West
+1135,S02001020,Bishopton
+1136,S02001021,Newcastleton and Teviot area
+1137,S02001022,Hawick West End
+1138,S02001023,Hawick Central
+1139,S02001024,Hawick North
+1140,S02001025,Cheviot West
+1141,S02001026,Burnfoot and area
+1142,S02001027,Jedburgh
+1143,S02001028,"Ettrick, Yarrow and Yair"
+1144,S02001029,Cheviot East
+1145,S02001030,Selkirk
+1146,S02001031,St Boswells and Newtown area
+1147,S02001032,Kelso South
+1148,S02001033,Melrose and Tweedbank area
+1149,S02001034,Kelso North
+1150,S02001035,Galashiels South
+1151,S02001036,Langlee
+1152,S02001037,Galashiels West
+1153,S02001038,Galashiels North
+1154,S02001039,Innerleithen and Walkerburn area
+1155,S02001040,West Linton and Broughton area
+1156,S02001041,Peebles South
+1157,S02001042,Peebles North
+1158,S02001043,Coldstream and area
+1159,S02001044,"Earlston, Lauder and Stow area"
+1160,S02001045,Berwickshire West
+1161,S02001046,Duns
+1162,S02001047,Berwickshire Central
+1163,S02001048,Berwickshire East
+1164,S02001049,Eyemouth
+1165,S02001050,Shetland South
+1166,S02001116,Westwood South
+1167,S02001117,The Murray
+1168,S02001118,Woodhead and Meikle Earnock
+1169,S02001119,Low Waters
+1170,S02001120,Hairmyres and Westwood West
+1171,S02001121,St Leonards South
+1172,S02001122,Fairhill
+1173,S02001123,Westwood East
+1174,S02001124,"Thorntonhall, Jackton and Gardenhall"
+1175,S02001125,West Mains
+1176,S02001126,St Leonards North
+1177,S02001127,Silvertonhill
+1178,S02001128,Earnock
+1179,S02001129,Laighstonehall
+1180,S02001130,East Mains
+1181,S02001131,Stewartfield West
+1182,S02001132,Calderwood West and Nerston
+1183,S02001133,Burnbank South and Chantinghall
+1184,S02001134,Hillhouse
+1185,S02001135,Stewartfield East
+1186,S02001136,Calderwood Central
+1187,S02001137,Burnbank Central and Udston
+1188,S02001138,Calderwood East
+1189,S02001139,Hamilton Centre and Low Parks
+1190,S02001140,High Blantyre
+1191,S02001141,Burnbank North
+1192,S02001142,Whitehill
+1193,S02001143,Blantyre South and Wheatlands
+1194,S02001144,Blantytre North and Coatshill
+1195,S02001145,Bothwell South
+1196,S02001146,Fernhill and Cathkin
+1197,S02001147,Bothwell North
+1198,S02001148,Whitlawburn and Greenlees
+1199,S02001149,Vicarland and Cairns
+1200,S02001150,Burnside and Springhall
+1201,S02001201,IZ Eighteen
+1202,S02001202,Breich Valley
+1203,S02001203,West Calder
+1204,S02001204,Fauldhouse
+1205,S02001205,Blaeberry Hill
+1206,S02001206,Greenrigg
+1207,S02001207,Whitburn Central
+1208,S02001208,Murieston
+1209,S02001209,Oakbank
+1210,S02001210,Kirkton
+1211,S02001211,Dedridge
+1212,S02001212,Blackburn
+1213,S02001213,East Calder
+1214,S02001214,Howden
+1215,S02001215,Blackridge
+1216,S02001216,Ladywell
+1217,S02001217,Calderwood
+1218,S02001218,Craigshill
+1219,S02001219,Bathgate West
+1220,S02001220,Eliburn
+1221,S02001221,Deans
+1222,S02001222,Armadale
+1223,S02001223,Knightsridge
+1224,S02001224,Starlaw
+1225,S02001225,Bathgate East
+1226,S02001226,Houston
+1227,S02001227,Broxburn
+1228,S02001228,Westfield
+1229,S02001229,Dechmont
+1230,S02001230,Uphall
+1231,S02001231,Kirkhill
+1232,S02001232,Linlithgow South
+1233,S02001233,Winchburgh
+1234,S02001234,Linlithgow North
+1235,S02001235,Linlithgow Bridge

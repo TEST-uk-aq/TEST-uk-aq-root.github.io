@@ -107,7 +107,7 @@
       white-space: nowrap;
     }
 
-    .network-control {
+    .map-select {
       display: grid;
       gap: 6px;
       font-size: 0.85rem;
@@ -115,7 +115,7 @@
       font-weight: 600;
     }
 
-    .network-control select {
+    .map-select select {
       width: min(280px, 100%);
       padding: 8px 12px;
       border-radius: 12px;
@@ -127,7 +127,7 @@
       font-weight: 500;
     }
 
-    .network-control select:focus-visible {
+    .map-select select:focus-visible {
       outline: 2px solid rgba(60, 120, 172, 0.5);
       outline-offset: 2px;
     }
@@ -177,7 +177,7 @@
     }
 
     .pollutant-name {
-      margin: 0.15rem 0 0 0;
+      margin: 0.2rem 0 0 0;
       font-size: clamp(1.35rem, 2.2vw, 1.7rem);
       font-weight: 850;
       line-height: 1;
@@ -189,14 +189,14 @@
     }
 
     .pollutant-value {
-      margin-top: 0.3rem;
+      margin-top: 1.1rem;
       font-size: clamp(4.1rem, 7.4vw, 5.7rem);
       font-weight: 900;
       line-height: 0.9;
     }
 
     .pollutant-unit {
-      margin-top: 0.25rem;
+      margin-top: 0.4rem;
       font-size: 1rem;
       font-weight: 750;
     }
@@ -207,8 +207,8 @@
 
     .pollutant-station {
       width: 100%;
-      margin-top: auto;
-      padding-top: 0.75rem;
+      margin-top: 1.2rem;
+      padding-top: 0;
       font-size: clamp(0.92rem, 1.7vw, 1.08rem);
       font-weight: 800;
       line-height: 1.15;
@@ -606,7 +606,7 @@
           <p class="readings-updated">
             <time datetime="2026-07-03T10:00:00+01:00">Updated 03/07/2026 10:00</time>
           </p>
-          <label class="network-control" for="network-filter">
+          <label class="map-select" for="network-filter">
             <span>Network</span>
             <select id="network-filter" name="network" aria-describedby="network-filter-note">
               <option selected>All networks</option>

@@ -12,16 +12,16 @@
       min-height: 100vh;
       font-family: "Inter", "Segoe UI", Roboto, Arial, sans-serif;
       color: #101822;
-      background: #f8f2ea;
+      background: #fbfaf7;
     }
 
     .home-header {
       margin: 0 auto;
       padding: 32px 28px 24px;
-      background: #fff7ed;
+      background: #fbfaf7;
       text-align: left;
       box-sizing: border-box;
-      border-bottom: 1px solid #eadfd2;
+      border-bottom: 0;
     }
 
     .home-header-inner {
@@ -36,7 +36,7 @@
     .home-title-logo {
       display: block;
       max-width: 100%;
-      height: clamp(58px, 8vw, 110px);
+      height: clamp(44px, 6vw, 82px);
     }
 
     .home-subtitle {
@@ -50,7 +50,7 @@
       position: relative;
       max-width: 1220px;
       margin: 0 auto;
-      padding: 28px 28px 96px;
+      padding: 16px 28px 96px;
       background: transparent;
       border-radius: 0;
       box-shadow: none;
@@ -69,6 +69,157 @@
       border-radius: 30px;
       background: #fff7ed;
       box-shadow: 0 12px 32px rgba(67, 48, 29, 0.08);
+    }
+
+    .dashboard-tables {
+      display: grid;
+      gap: 1.5rem;
+      margin-top: -24px;
+    }
+
+    .dashboard-tables + .home-section {
+      margin-top: -24px;
+    }
+
+    .dashboard-table-card {
+      min-width: 0;
+      padding: clamp(1.25rem, 3vw, 1.75rem);
+      border: 1px solid #eadfd2;
+      border-radius: 24px;
+      background: #fff7ed;
+      box-shadow: 0 9px 24px rgba(67, 48, 29, 0.07);
+    }
+
+    .dashboard-table-header {
+      margin-bottom: 1.1rem;
+    }
+
+    .dashboard-table-title {
+      margin: 0;
+      color: #172535;
+      font-size: clamp(1.45rem, 3vw, 2rem);
+      line-height: 1.15;
+    }
+
+    .dashboard-table-wrap {
+      max-width: 100%;
+      overflow-x: auto;
+      border: 1px solid #e3d7ca;
+      border-radius: 16px;
+      background: #fffdfa;
+      -webkit-overflow-scrolling: touch;
+    }
+
+    .dashboard-table-wrap:focus-visible {
+      outline: 3px solid rgba(60, 120, 172, 0.45);
+      outline-offset: 3px;
+    }
+
+    .dashboard-table {
+      width: 100%;
+      border-spacing: 0;
+      border-collapse: separate;
+      color: #172535;
+      font-size: 0.95rem;
+      line-height: 1.35;
+      text-align: left;
+    }
+
+    .dashboard-table--areas {
+      min-width: 760px;
+    }
+
+    .dashboard-table--networks {
+      min-width: 680px;
+    }
+
+    .dashboard-table th,
+    .dashboard-table td {
+      padding: 0.9rem 1rem;
+      border-bottom: 1px solid #ded2c4;
+      vertical-align: middle;
+    }
+
+    .dashboard-table thead th {
+      background: #eee5da;
+      color: #263747;
+      font-weight: 800;
+      white-space: nowrap;
+    }
+
+    .dashboard-table thead th:first-child {
+      border-top-left-radius: 15px;
+    }
+
+    .dashboard-table thead th:last-child {
+      border-top-right-radius: 15px;
+    }
+
+    .dashboard-table tbody th {
+      font-weight: 750;
+    }
+
+    .dashboard-table tbody tr:last-child th,
+    .dashboard-table tbody tr:last-child td {
+      border-bottom: 0;
+    }
+
+    .dashboard-table tbody tr {
+      background: #fff;
+    }
+
+    .dashboard-table--networks tbody tr:last-child {
+      background: #eee5da;
+    }
+
+    .dashboard-table--networks th:not(:first-child),
+    .dashboard-table--networks td:not(:first-child) {
+      text-align: center;
+    }
+
+    .dashboard-table--networks td:not(:nth-child(2)) {
+      font-variant-numeric: tabular-nums;
+      font-weight: 700;
+    }
+
+    .dashboard-table time {
+      white-space: nowrap;
+      font-variant-numeric: tabular-nums;
+    }
+
+    .area-reading {
+      display: inline-flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 0.4rem;
+    }
+
+    .area-reading-name,
+    .area-reading-value {
+      white-space: nowrap;
+    }
+
+    .area-reading-value {
+      font-weight: 700;
+    }
+
+    .area-marker {
+      width: 1.17rem;
+      height: 1.35rem;
+      flex: 0 0 1.17rem;
+      clip-path: polygon(50% 0, 100% 25%, 100% 75%, 50% 100%, 0 75%, 0 25%);
+    }
+
+    .area-marker--pm25 {
+      background: #d7262e;
+    }
+
+    .area-marker--pm10 {
+      background: #ed6c02;
+    }
+
+    .area-marker--no2 {
+      background: #f2c500;
     }
 
     .readings-header {
@@ -136,7 +287,7 @@
       display: grid;
       grid-template-columns: repeat(3, minmax(0, 1fr));
       gap: clamp(1.5rem, 3vw, 2.5rem);
-      margin-top: 2rem;
+      margin-top: 1.35rem;
     }
 
     .pollutant-item {
@@ -480,7 +631,7 @@
       display: block;
     }
 
-    .tool-card-title-graphic--sensors-map {
+    .tool-card-title-graphic--sensor-map {
       max-height: 58px;
     }
 
@@ -545,13 +696,40 @@
       }
 
       .home-main {
-        padding: 22px 16px 84px;
+        padding: 14px 16px 84px;
         gap: 42px;
       }
 
       .readings-dashboard {
         padding: 1.1rem;
         border-radius: 22px;
+      }
+
+      .dashboard-tables {
+        gap: 1.25rem;
+        margin-top: -20px;
+      }
+
+      .dashboard-tables + .home-section {
+        margin-top: -20px;
+      }
+
+      .dashboard-table-card {
+        padding: 1rem;
+        border-radius: 20px;
+      }
+
+      .dashboard-table-wrap {
+        border-radius: 13px;
+      }
+
+      .dashboard-table {
+        font-size: 0.9rem;
+      }
+
+      .dashboard-table th,
+      .dashboard-table td {
+        padding: 0.75rem 0.8rem;
       }
 
       .readings-header {
@@ -596,7 +774,7 @@
       <h1 class="home-title">
         <img class="home-title-logo" src="images/UK-AQ-Logo-v3-1line.svg" alt="UK AQ">
       </h1>
-      <p class="home-subtitle">Live and historical air quality readings across the UK.</p>
+      <p class="home-subtitle">Live and historical air quality data from multiple sensor networks across the UK.</p>
     </div>
   </header>
 
@@ -704,12 +882,122 @@
       </div>
     </section>
 
+    <section class="dashboard-tables" aria-label="UK air quality dashboard tables">
+      <article class="dashboard-table-card">
+        <div class="dashboard-table-header">
+          <h2 class="dashboard-table-title">Highest area readings by pollutant</h2>
+        </div>
+        <div class="dashboard-table-wrap" tabindex="0" role="region" aria-label="Scrollable highest area readings table">
+          <table class="dashboard-table dashboard-table--areas">
+            <caption class="sr-only">Highest latest pollutant readings by UK area type</caption>
+            <thead>
+              <tr>
+                <th scope="col">Area type</th>
+                <th scope="col">PM2.5</th>
+                <th scope="col">PM10</th>
+                <th scope="col">NO<sub>2</sub></th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <th scope="row">Parliamentary constituencies</th>
+                <td>
+                  <span class="area-reading">
+                    <span class="area-reading-name">Bristol West</span>
+                    <span class="area-marker area-marker--pm25" aria-hidden="true"></span>
+                    <span class="area-reading-value">20 &micro;g/m<sup>3</sup></span>
+                  </span>
+                </td>
+                <td>
+                  <span class="area-reading">
+                    <span class="area-reading-name">Bristol West</span>
+                    <span class="area-marker area-marker--pm10" aria-hidden="true"></span>
+                    <span class="area-reading-value">20 &micro;g/m<sup>3</sup></span>
+                  </span>
+                </td>
+                <td>
+                  <span class="area-reading">
+                    <span class="area-reading-name">Bristol West</span>
+                    <span class="area-marker area-marker--no2" aria-hidden="true"></span>
+                    <span class="area-reading-value">30 &micro;g/m<sup>3</sup></span>
+                  </span>
+                </td>
+              </tr>
+              <tr>
+                <th scope="row">Local Authorities</th>
+                <td>
+                  <span class="area-reading">
+                    <span class="area-reading-name">City of Bristol</span>
+                    <span class="area-marker area-marker--pm25" aria-hidden="true"></span>
+                    <span class="area-reading-value">20 &micro;g/m<sup>3</sup></span>
+                  </span>
+                </td>
+                <td>
+                  <span class="area-reading">
+                    <span class="area-reading-name">City of Bristol</span>
+                    <span class="area-marker area-marker--pm10" aria-hidden="true"></span>
+                    <span class="area-reading-value">20 &micro;g/m<sup>3</sup></span>
+                  </span>
+                </td>
+                <td>
+                  <span class="area-reading">
+                    <span class="area-reading-name">City of Bristol</span>
+                    <span class="area-marker area-marker--no2" aria-hidden="true"></span>
+                    <span class="area-reading-value">30 &micro;g/m<sup>3</sup></span>
+                  </span>
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </article>
+
+      <article class="dashboard-table-card">
+        <div class="dashboard-table-header">
+          <h2 class="dashboard-table-title">Active sensors by network</h2>
+        </div>
+        <div class="dashboard-table-wrap" tabindex="0" role="region" aria-label="Scrollable reporting sensors by network table">
+          <table class="dashboard-table dashboard-table--networks">
+            <caption class="sr-only">Active sensor counts by network and pollutant</caption>
+            <thead>
+              <tr>
+                <th scope="col">Network</th>
+                <th scope="col">Last updated</th>
+                <th scope="col">PM2.5</th>
+                <th scope="col">PM10</th>
+                <th scope="col">NO<sub>2</sub></th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <th scope="row">GOV.UK AURN</th>
+                <td><time datetime="2026-07-03T10:00:00+01:00">03/07/2026 10:00</time></td>
+                <td>120</td>
+                <td>60</td>
+                <td>20</td>
+              </tr>
+              <tr>
+                <th scope="row">Breathe London</th>
+                <td><time datetime="2026-07-03T09:00:00+01:00">03/07/2026 09:00</time></td>
+                <td>120</td>
+                <td>80</td>
+                <td>40</td>
+              </tr>
+              <tr>
+                <th scope="row">Total sensors</th>
+                <td><time datetime="2026-07-03T10:00:00+01:00">03/07/2026 10:00</time></td>
+                <td>240</td>
+                <td>140</td>
+                <td>60</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </article>
+    </section>
+
     <section class="home-section" aria-labelledby="home-ukaq-heading">
       <h2 id="home-ukaq-heading" class="sr-only">UK AQ tools</h2>
-      <img class="section-logo section-logo--ukaq" src="images/UK-AQ-Logov2-1Line.svg" alt="UK-AQ">
-      <p class="section-description">
-        Live and historical air quality data from multiple sensor networks in the UK.
-      </p>
 
       <div class="tool-grid">
         <a class="tool-card tool-card--ukaq" href="/hex_map/" aria-label="Hex Map: Compare latest pollutant readings by UK constituencies, countries, and local authorities.">
@@ -742,8 +1030,8 @@
               <img class="tool-card-icon" src="sidebar-images/uk-aq-map-icon.svg" alt="">
             </span>
             <span class="tool-card-title-graphic-switch" data-one-line-min-width="220">
-              <img class="tool-card-title-graphic tool-card-title-graphic--two-line tool-card-title-graphic--sensors-map" src="images/UK-AQ-sensors-map-2line.svg" alt="Sensors Map">
-              <img class="tool-card-title-graphic tool-card-title-graphic--one-line" src="images/UK-AQ-sensors-map-1line.svg" alt="Sensors Map">
+              <img class="tool-card-title-graphic tool-card-title-graphic--two-line tool-card-title-graphic--sensor-map" src="images/UK-AQ-sensor-map-2line.svg" alt="Sensors Map">
+              <img class="tool-card-title-graphic tool-card-title-graphic--one-line" src="images/UK-AQ-sensor-map-1line.svg" alt="Sensors Map">
             </span>
           </div>
           <p class="tool-card-description">

@@ -16,7 +16,7 @@
       children: [
         { label: 'Hex Map',     iconImg: 'uk-aq-hex-map-icon.svg', href: '/hex_map/' },
         { label: 'Sensors',     iconImg: 'uk-aq-sensors-icon.svg',  href: '/uk-aq/sensors_chart.html' },
-        { label: 'Sensors Map', iconImg: 'uk-aq-map-icon.svg',       href: '/uk-aq/sensors_map.html' },
+        { label: 'Sensor Map', iconImg: 'uk-aq-map-icon.svg',       href: '/uk-aq/sensors_map.html' },
       ],
     },
     {

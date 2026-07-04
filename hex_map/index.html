@@ -24,14 +24,14 @@
     <link rel="preload" as="image" href="/sidebar-images/youtube-logo-Word.svg" />
     <link rel="preload" as="image" href="/sidebar-images/chain-link-icon-grey.svg" />
     <link rel="preload" as="image" href="/sidebar-images/Contacts-Email-icon-cic-web.svg" />
-    <link rel="preload" as="image" href="images/UK-AQ-Logo-v3-1line.svg" />
-    <link rel="preload" as="image" href="images/UK-AQ-hex-map.svg" />
-    <link rel="preload" as="image" href="images/Red-Square-Button-White-Cross-200x200.svg" />
-    <link rel="preload" as="image" href="images/settings-cog.svg" />
-    <link rel="preload" as="image" href="images/Link%20Icon.svg" />
-    <link rel="preload" as="image" href="images/openaq_logo.svg" />
-    <link rel="preload" as="image" href="images/breathelondon_logo_v2.svg" />
-    <link rel="preload" as="image" href="images/scomm_logo-sw.svg" />
+    <link rel="preload" as="image" href="/images/UK-AQ-Logo-v3-1line.svg" />
+    <link rel="preload" as="image" href="/images/UK-AQ-hex-map.svg" />
+    <link rel="preload" as="image" href="/images/Red-Square-Button-White-Cross-200x200.svg" />
+    <link rel="preload" as="image" href="/images/settings-cog.svg" />
+    <link rel="preload" as="image" href="/images/Link%20Icon.svg" />
+    <link rel="preload" as="image" href="/images/openaq_logo.svg" />
+    <link rel="preload" as="image" href="/images/breathelondon_logo_v2.svg" />
+    <link rel="preload" as="image" href="/images/scomm_logo-sw.svg" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link
@@ -5262,11 +5262,11 @@
   </head>
   <body>
     <div id="cic-sidebar-mount"></div>
-    <script src="sidebar.js"></script>
+    <script src="/sidebar.js"></script>
     <main>
       <header>
-        <img src="images/UK-AQ-Logo-v3-1line.svg" alt="UK AQ Logo" class="logo" />
-        <img src="images/UK-AQ-hex-map.svg" alt="Hex Map" class="page-title" />
+        <img src="/images/UK-AQ-Logo-v3-1line.svg" alt="UK AQ Logo" class="logo" />
+        <img src="/images/UK-AQ-hex-map.svg" alt="Hex Map" class="page-title" />
       </header>
 
       <div class="tab-panel" id="tab-panel-uk" role="tabpanel" aria-labelledby="tab-uk">
@@ -5298,7 +5298,7 @@
                   <!-- ── Toolbar: scope switcher + region popover + pollutant pills ── -->
                   <div class="toolbar" id="main-toolbar">
                     <button type="button" class="chart-back-pill" id="chart-back-to-map" aria-label="Back to Hex Map" title="Back to Hex Map" hidden>
-                      <img src="images/UK-AQ-back-arrow.svg" alt="" aria-hidden="true" />
+                      <img src="/images/UK-AQ-back-arrow.svg" alt="" aria-hidden="true" />
                       <span>Back to Hex Map</span>
                     </button>
                     <span class="field-label chart-mode-view-control">View</span>
@@ -5518,7 +5518,7 @@
                   <div class="map-settings-header">
                     <span class="map-settings-title">Sensor Data</span>
                     <button type="button" class="map-settings-close" id="map-settings-close" aria-label="Close colour scale">
-                      <img src="images/Red-Square-Button-White-Cross-200x200.svg" alt="" aria-hidden="true" />
+                      <img src="/images/Red-Square-Button-White-Cross-200x200.svg" alt="" aria-hidden="true" />
                     </button>
                   </div>
                   <div class="map-settings-section">
@@ -5551,7 +5551,7 @@
                   </div>
                 </div>
                 <button type="button" class="map-settings map-floating-tools" aria-label="Map settings" aria-controls="map-settings-panel" aria-expanded="false">
-                  <img src="images/settings-cog.svg" alt="" aria-hidden="true" />
+                  <img src="/images/settings-cog.svg" alt="" aria-hidden="true" />
                 </button>
                 <div class="map-zoom-controls" data-map-zoom-controls data-map-svg-id="hex-map">
                   <button type="button" data-zoom-action="in" aria-label="Zoom in">
@@ -5604,7 +5604,7 @@
                 <div class="sensor-panel-title-line">
                   <span class="sensor-panel-title-launch" data-chart-launch-available="false">
                     <button type="button" class="sensor-title-icon-button" aria-label="Open sensor chart" title="Open sensor chart" disabled>
-                      <img src="images/UK-AQ-Sensor-Buttons-chart.svg" alt="" aria-hidden="true" />
+                      <img src="/images/UK-AQ-Sensor-Buttons-chart.svg" alt="" aria-hidden="true" />
                     </button>
                     <div class="sensor-panel-title" id="sensor-panel-title"></div>
                   </span>
@@ -5617,7 +5617,7 @@
               </div>
               <div class="sensor-panel-count" id="sensor-panel-count"></div>
               <button type="button" class="sensor-panel-close" id="sensor-panel-close" aria-label="Close sensor panel">
-                <img src="images/Red-Square-Button-White-Cross-200x200.svg" alt="" aria-hidden="true" />
+                <img src="/images/Red-Square-Button-White-Cross-200x200.svg" alt="" aria-hidden="true" />
               </button>
             </div>
             <div class="map-inline-sensor-panel-body" id="sensor-panel-body">
@@ -5689,7 +5689,7 @@
                   target="_blank"
                   rel="noopener noreferrer"
                   aria-label="Open GOV.UK AURN website (external link)"
-                >GOV.UK AURN<img class="network-card-link-icon" src="images/Link Icon.svg" alt="" aria-hidden="true" /></a>
+                >GOV.UK AURN<img class="network-card-link-icon" src="/images/Link Icon.svg" alt="" aria-hidden="true" /></a>
               </div>
             </div>
             <div class="network-card-grid">
@@ -5750,8 +5750,8 @@
                 rel="noopener noreferrer"
                 aria-label="Open OpenAQ website (external link)"
               >
-                <img class="network-card-logo" src="images/openaq_logo.svg" alt="OpenAQ logo" />
-                <img class="network-card-link-icon" src="images/Link Icon.svg" alt="" aria-hidden="true" />
+                <img class="network-card-logo" src="/images/openaq_logo.svg" alt="OpenAQ logo" />
+                <img class="network-card-link-icon" src="/images/Link Icon.svg" alt="" aria-hidden="true" />
               </a>
             </div>
             <div class="network-card-grid">
@@ -5812,8 +5812,8 @@
                 rel="noopener noreferrer"
                 aria-label="Open Breathe London website (external link)"
               >
-                <img class="network-card-logo network-card-logo--breathe" src="images/breathelondon_logo_v2.svg" alt="Breathe London logo" />
-                <img class="network-card-link-icon" src="images/Link Icon.svg" alt="" aria-hidden="true" />
+                <img class="network-card-logo network-card-logo--breathe" src="/images/breathelondon_logo_v2.svg" alt="Breathe London logo" />
+                <img class="network-card-link-icon" src="/images/Link Icon.svg" alt="" aria-hidden="true" />
               </a>
             </div>
             <div class="network-card-grid">
@@ -5926,8 +5926,8 @@
                 rel="noopener noreferrer"
                 aria-label="Open Sensor.Community website (external link)"
               >
-                <img class="network-card-logo" src="images/scomm_logo-sw.svg" alt="Sensor.Community logo" />
-                <img class="network-card-link-icon" src="images/Link Icon.svg" alt="" aria-hidden="true" />
+                <img class="network-card-logo" src="/images/scomm_logo-sw.svg" alt="Sensor.Community logo" />
+                <img class="network-card-link-icon" src="/images/Link Icon.svg" alt="" aria-hidden="true" />
               </a>
             </div>
             <div class="network-card-grid">
@@ -6141,7 +6141,7 @@
                     <div class="map-settings-header">
                       <span class="map-settings-title">Sensor Data</span>
                       <button type="button" class="map-settings-close" id="cr-map-settings-close" aria-label="Close colour scale">
-                        <img src="images/Red-Square-Button-White-Cross-200x200.svg" alt="" aria-hidden="true" />
+                        <img src="/images/Red-Square-Button-White-Cross-200x200.svg" alt="" aria-hidden="true" />
                       </button>
                     </div>
                     <div class="map-settings-section">
@@ -6174,7 +6174,7 @@
                     </div>
                   </div>
                   <button type="button" class="map-settings map-floating-tools" aria-label="Map settings" aria-controls="cr-map-settings-panel" aria-expanded="false">
-                    <img src="images/settings-cog.svg" alt="" aria-hidden="true" />
+                    <img src="/images/settings-cog.svg" alt="" aria-hidden="true" />
                   </button>
                   <div class="map-zoom-controls" data-map-zoom-controls data-map-svg-id="cr-hex-map">
                     <button type="button" data-zoom-action="in" aria-label="Zoom in">
@@ -6227,7 +6227,7 @@
                 <div class="sensor-panel-title-line">
                   <span class="sensor-panel-title-launch" data-chart-launch-available="false">
                     <button type="button" class="sensor-title-icon-button" aria-label="Open sensor chart" title="Open sensor chart" disabled>
-                      <img src="images/UK-AQ-Sensor-Buttons-chart.svg" alt="" aria-hidden="true" />
+                      <img src="/images/UK-AQ-Sensor-Buttons-chart.svg" alt="" aria-hidden="true" />
                     </button>
                     <div class="sensor-panel-title" id="cr-sensor-panel-title"></div>
                   </span>
@@ -6240,7 +6240,7 @@
               </div>
               <div class="sensor-panel-count" id="cr-sensor-panel-count"></div>
               <button type="button" class="sensor-panel-close" id="cr-sensor-panel-close" aria-label="Close sensor panel">
-                <img src="images/Red-Square-Button-White-Cross-200x200.svg" alt="" aria-hidden="true" />
+                <img src="/images/Red-Square-Button-White-Cross-200x200.svg" alt="" aria-hidden="true" />
               </button>
             </div>
             <div class="map-inline-sensor-panel-body" id="cr-sensor-panel-body">
@@ -6312,7 +6312,7 @@
                     target="_blank"
                     rel="noopener noreferrer"
                     aria-label="Open GOV.UK AURN website (external link)"
-                  >GOV.UK AURN<img class="network-card-link-icon" src="images/Link Icon.svg" alt="" aria-hidden="true" /></a>
+                  >GOV.UK AURN<img class="network-card-link-icon" src="/images/Link Icon.svg" alt="" aria-hidden="true" /></a>
                 </div>
               </div>
               <div class="network-card-grid">
@@ -6373,8 +6373,8 @@
                   rel="noopener noreferrer"
                   aria-label="Open OpenAQ website (external link)"
                 >
-                  <img class="network-card-logo" src="images/openaq_logo.svg" alt="OpenAQ logo" />
-                  <img class="network-card-link-icon" src="images/Link Icon.svg" alt="" aria-hidden="true" />
+                  <img class="network-card-logo" src="/images/openaq_logo.svg" alt="OpenAQ logo" />
+                  <img class="network-card-link-icon" src="/images/Link Icon.svg" alt="" aria-hidden="true" />
                 </a>
               </div>
               <div class="network-card-grid">
@@ -6435,8 +6435,8 @@
                   rel="noopener noreferrer"
                   aria-label="Open Breathe London website (external link)"
                 >
-                  <img class="network-card-logo network-card-logo--breathe" src="images/breathelondon_logo_v2.svg" alt="Breathe London logo" />
-                  <img class="network-card-link-icon" src="images/Link Icon.svg" alt="" aria-hidden="true" />
+                  <img class="network-card-logo network-card-logo--breathe" src="/images/breathelondon_logo_v2.svg" alt="Breathe London logo" />
+                  <img class="network-card-link-icon" src="/images/Link Icon.svg" alt="" aria-hidden="true" />
                 </a>
               </div>
               <div class="network-card-grid">
@@ -6549,8 +6549,8 @@
                   rel="noopener noreferrer"
                   aria-label="Open Sensor.Community website (external link)"
                 >
-                  <img class="network-card-logo" src="images/scomm_logo-sw.svg" alt="Sensor.Community logo" />
-                  <img class="network-card-link-icon" src="images/Link Icon.svg" alt="" aria-hidden="true" />
+                  <img class="network-card-logo" src="/images/scomm_logo-sw.svg" alt="Sensor.Community logo" />
+                  <img class="network-card-link-icon" src="/images/Link Icon.svg" alt="" aria-hidden="true" />
                 </a>
               </div>
               <div class="network-card-grid">
@@ -6633,7 +6633,7 @@
           <img
             class="networks-panel-pin-icon"
             id="networks-panel-pin-icon"
-            src="images/UK-AQ_pin100_off.svg"
+            src="/images/UK-AQ_pin100_off.svg"
             alt=""
             aria-hidden="true"
           />
@@ -6658,8 +6658,8 @@
     </div>
 
     <script src="https://cdn.jsdelivr.net/npm/d3@7.9.0/dist/d3.min.js" crossorigin="anonymous"></script>
-    <script src="timeseries-client.js"></script>
-    <script src="chart-core.js"></script>
+    <script src="/timeseries-client.js"></script>
+    <script src="/chart-core.js"></script>
     <script>
       // ── Top summary boxes — shared updater ───────────────────────────────────
       window.updateTopSummary = function(data, idPrefix) {
@@ -7051,7 +7051,7 @@
       const anonKey = ANON_KEY_PLACEHOLDER.includes("__SB_PUBLISHABLE_DEFAULT_KEY__")
         ? (anonKeyParam || "")
         : ANON_KEY_PLACEHOLDER;
-      const TURNSTILE_SITE_KEY_PLACEHOLDER = "0x4AAAAAACgnR_Sa-RXK0lPJ";
+      const TURNSTILE_SITE_KEY_PLACEHOLDER = "0x4AAAAAADvk69amXC9V2nNx";
       const TURNSTILE_SITE_KEY_SENTINEL = ["__UK_AQ", "_TURNSTILE_SITE_KEY__"].join("");
       const turnstileSiteKey = turnstileSiteKeyParam || (
         TURNSTILE_SITE_KEY_PLACEHOLDER === TURNSTILE_SITE_KEY_SENTINEL
@@ -10276,7 +10276,7 @@
                 chartModeActive
                   ? symbolMarkup
                   : `<button type="button" class="sensor-chart-launch" data-station-id="${escapeHtmlLocal(stationId)}" aria-label="Open chart for ${escapeHtmlLocal(stationName)}" title="Open chart">
-                      <img src="images/UK-AQ-Sensor-Buttons-chart.svg" alt="" aria-hidden="true" />
+                      <img src="/images/UK-AQ-Sensor-Buttons-chart.svg" alt="" aria-hidden="true" />
                     </button>`
               }</td>
               <td class="sensor-col-sensor"><button type="button" class="sensor-name-button" data-station-id="${escapeHtmlLocal(stationId)}">${escapeHtmlLocal(stationName)}</button></td>
@@ -12011,7 +12011,7 @@
 	      const anonKey = ANON_KEY_PLACEHOLDER.includes("__SB_PUBLISHABLE_DEFAULT_KEY__")
 	        ? (anonKeyParam || "")
 	        : ANON_KEY_PLACEHOLDER;
-	        const TURNSTILE_SITE_KEY_PLACEHOLDER = "0x4AAAAAACgnR_Sa-RXK0lPJ";
+	        const TURNSTILE_SITE_KEY_PLACEHOLDER = "0x4AAAAAADvk69amXC9V2nNx";
 	        const TURNSTILE_SITE_KEY_SENTINEL = ["__UK_AQ", "_TURNSTILE_SITE_KEY__"].join("");
 	        const turnstileSiteKey = turnstileSiteKeyParam || (
 	          TURNSTILE_SITE_KEY_PLACEHOLDER === TURNSTILE_SITE_KEY_SENTINEL
@@ -14751,7 +14751,7 @@
                 chartModeActive
                   ? symbolMarkup
                   : `<button type="button" class="sensor-chart-launch" data-station-id="${escapeHtmlLocal(stationId)}" aria-label="Open chart for ${escapeHtmlLocal(stationName)}" title="Open chart">
-                      <img src="images/UK-AQ-Sensor-Buttons-chart.svg" alt="" aria-hidden="true" />
+                      <img src="/images/UK-AQ-Sensor-Buttons-chart.svg" alt="" aria-hidden="true" />
                     </button>`
               }</td>
               <td class="sensor-col-sensor"><button type="button" class="sensor-name-button" data-station-id="${escapeHtmlLocal(stationId)}">${escapeHtmlLocal(stationName)}</button></td>
@@ -18723,7 +18723,7 @@
         selectCell.innerHTML = "";
         symbolCell.innerHTML = stationId
           ? `<button type="button" class="sensor-chart-launch" data-station-id="${escapeHtml(stationId)}" aria-label="Open chart for ${escapeHtml(stationName)}" title="Open chart">
-              <img src="images/UK-AQ-Sensor-Buttons-chart.svg" alt="" aria-hidden="true" />
+              <img src="/images/UK-AQ-Sensor-Buttons-chart.svg" alt="" aria-hidden="true" />
             </button>`
           : "";
         return;

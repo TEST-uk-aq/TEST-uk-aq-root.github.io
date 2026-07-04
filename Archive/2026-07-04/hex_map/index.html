@@ -109,7 +109,6 @@
       /*
        * Turnstile controls its own visibility through appearance:
        * interaction-only. Keep the host usable if interaction is required.
-       * Hidden by default - shown only when user interaction is needed.
        */
       #uk-aq-turnstile-widget-shared {
         position: fixed !important;
@@ -119,8 +118,6 @@
         min-height: 65px !important;
         z-index: 2147483647 !important;
         background: transparent !important;
-        display: none !important;
-        pointer-events: none !important;
       }
 
       main {
@@ -7690,20 +7687,6 @@
             return Boolean(cacheAuthToken && Date.now() < (cacheAuthTokenExpiresAt - CACHE_SESSION_SKEW_MS));
           }
 
-          function hideTurnstileContainer() {
-            const container = document.getElementById("uk-aq-turnstile-widget-shared");
-            if (!container) return;
-            container.style.display = "none";
-            container.style.pointerEvents = "none";
-          }
-
-          function showTurnstileContainer() {
-            const container = ensureTurnstileContainer();
-            container.style.display = "";
-            container.style.pointerEvents = "";
-            return container;
-          }
-
           function ensureTurnstileContainer() {
             let container = document.getElementById("uk-aq-turnstile-widget-shared");
             if (!container) {
@@ -7719,8 +7702,6 @@
               minHeight: "65px",
               zIndex: "2147483647",
               background: "transparent",
-              display: "none",
-              pointerEvents: "none",
             });
             return container;
           }
@@ -7769,14 +7750,10 @@
               appearance: "interaction-only",
               execution: "execute",
               theme: "auto",
-              "before-interactive-callback": () => {
-                showTurnstileContainer();
-              },
               callback: (token) => {
                 const resolve = turnstileTokenResolver;
                 clearTurnstilePendingState();
                 turnstileDebugLog("turnstile-token-received");
-                hideTurnstileContainer();
                 if (resolve) resolve(token);
               },
               "error-callback": (errorCode) => {
@@ -7888,8 +7865,6 @@
             ensureTurnstileContainer,
             ensureTurnstileScript,
             ensureTurnstileWidget,
-            hideTurnstileContainer,
-            showTurnstileContainer,
             getTurnstileToken,
             getCacheAuthToken,
             fetchCacheApi,

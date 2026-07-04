@@ -24,7 +24,7 @@ const SCRIPT_DIR = path.dirname(scriptEntryPath);
 const REPO_ROOT = path.resolve(SCRIPT_DIR, "..");
 const ENV_PATH = path.join(REPO_ROOT, ".env");
 const DEFAULT_TARGETS = [
-  "hex_map.html",
+  "hex_map/index.html",
   "index.html",
   "sensors_chart.html",
   "sensors_map.html",

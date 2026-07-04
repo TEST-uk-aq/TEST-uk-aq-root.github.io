@@ -31,11 +31,12 @@
 
     .home-title {
       margin: 0;
-      color: #175283;
-      font-size: clamp(2.6rem, 7vw, 5rem);
-      font-weight: 900;
-      line-height: 0.95;
-      letter-spacing: -0.04em;
+    }
+
+    .home-title-logo {
+      display: block;
+      max-width: 100%;
+      height: clamp(58px, 8vw, 110px);
     }
 
     .home-subtitle {
@@ -108,25 +109,26 @@
 
     .network-control {
       display: grid;
-      gap: 0.3rem;
-      color: #344250;
-      font-size: 0.82rem;
-      font-weight: 700;
+      gap: 6px;
+      font-size: 0.85rem;
+      color: #3a4a5a;
+      font-weight: 600;
     }
 
     .network-control select {
-      max-width: 100%;
-      padding: 0.65rem 2.4rem 0.65rem 0.8rem;
-      border: 1px solid #adb5bd;
-      border-radius: 10px;
+      width: min(280px, 100%);
+      padding: 8px 12px;
+      border-radius: 12px;
+      border: 1px solid rgba(20, 34, 37, 0.18);
       background: #fff;
-      color: #172535;
+      font-size: 0.9rem;
+      color: #101822;
       font: inherit;
       font-weight: 500;
     }
 
     .network-control select:focus-visible {
-      outline: 3px solid rgba(23, 82, 131, 0.25);
+      outline: 2px solid rgba(60, 120, 172, 0.5);
       outline-offset: 2px;
     }
 
@@ -146,14 +148,14 @@
     }
 
     .pollutant-circle {
-      width: min(100%, 310px);
+      width: min(100%, 285px);
       aspect-ratio: 1;
       box-sizing: border-box;
       display: flex;
       flex-direction: column;
       align-items: center;
-      justify-content: center;
-      padding: 2rem 2.1rem;
+      justify-content: flex-start;
+      padding: 1.55rem 1.85rem 1.8rem;
       border-radius: 50%;
       color: #fff;
       text-align: center;
@@ -175,8 +177,8 @@
     }
 
     .pollutant-name {
-      margin: 0;
-      font-size: clamp(1.35rem, 2.4vw, 1.75rem);
+      margin: 0.15rem 0 0 0;
+      font-size: clamp(1.35rem, 2.2vw, 1.7rem);
       font-weight: 850;
       line-height: 1;
     }
@@ -187,14 +189,14 @@
     }
 
     .pollutant-value {
-      margin-top: 0.5rem;
-      font-size: clamp(3.6rem, 7vw, 5.1rem);
+      margin-top: 0.3rem;
+      font-size: clamp(4.1rem, 7.4vw, 5.7rem);
       font-weight: 900;
       line-height: 0.9;
     }
 
     .pollutant-unit {
-      margin-top: 0.35rem;
+      margin-top: 0.25rem;
       font-size: 1rem;
       font-weight: 750;
     }
@@ -205,7 +207,8 @@
 
     .pollutant-station {
       width: 100%;
-      margin: 0.75rem 0 0;
+      margin-top: auto;
+      padding-top: 0.75rem;
       font-size: clamp(0.92rem, 1.7vw, 1.08rem);
       font-weight: 800;
       line-height: 1.15;
@@ -214,7 +217,7 @@
 
     .pollutant-network {
       width: 100%;
-      margin: 0.35rem 0 0;
+      margin: 0.3rem 0 0;
       font-size: 0.82rem;
       font-weight: 650;
       line-height: 1.15;
@@ -222,7 +225,7 @@
     }
 
     .scale-legend {
-      width: min(100%, 310px);
+      width: min(100%, 285px);
     }
 
     .scale-label {
@@ -565,8 +568,8 @@
       }
 
       .pollutant-circle {
-        width: min(100%, 300px);
-        padding: 1.8rem 2rem;
+        width: min(100%, 280px);
+        padding: 1.55rem 1.85rem 1.8rem;
       }
 
       .tool-grid {
@@ -581,9 +584,12 @@
   </style>
 </head>
 <body class="home-page">
+  <div id="cic-sidebar-mount"></div>
   <header class="home-header">
     <div class="home-header-inner">
-      <h1 class="home-title">UK AQ</h1>
+      <h1 class="home-title">
+        <img class="home-title-logo" src="images/UK-AQ-Logo-v3-1line.svg" alt="UK AQ">
+      </h1>
       <p class="home-subtitle">Live and historical air quality readings across the UK.</p>
     </div>
   </header>
@@ -850,5 +856,6 @@
       updateAll();
     })();
   </script>
+  <script src="sidebar.js"></script>
 </body>
 </html>

@@ -1,0 +1,61 @@
+name: Deploy GH Pages
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Configure GitHub Pages
+        uses: actions/configure-pages@v5
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Verify AQI history base secret
+        run: test -n "${UK_AQ_AQI_HISTORY_BASE_URL}"
+        env:
+          UK_AQ_AQI_HISTORY_BASE_URL: ${{ secrets.UK_AQ_AQI_HISTORY_BASE_URL }}
+
+      - name: Inject Supabase config
+        run: node scripts/uk_aq_inject_project_ref.mjs
+        env:
+          SUPABASE_PROJECT_REF: ${{ secrets.SUPABASE_PROJECT_REF }}
+          SB_PUBLISHABLE_DEFAULT_KEY: ${{ secrets.SB_PUBLISHABLE_DEFAULT_KEY }}
+          UK_AQ_TURNSTILE_SITE_KEY: ${{ secrets.UK_AQ_TURNSTILE_SITE_KEY }}
+          UK_AQ_AQI_HISTORY_BASE_URL: ${{ secrets.UK_AQ_AQI_HISTORY_BASE_URL }}
+          UK_AQ_WEBSITE_DEBUG_LOG_ENABLED: ${{ vars.UK_AQ_WEBSITE_DEBUG_LOG_ENABLED || 'false' }}
+
+      - name: Upload artifact
+        uses: actions/upload-pages-artifact@v4
+        with:
+          path: .
+
+  deploy:
+    needs: build
+    permissions:
+      contents: read
+      pages: write
+      id-token: write
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4

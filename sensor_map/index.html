@@ -24,8 +24,8 @@
     <link rel="preload" as="image" href="/sidebar-images/youtube-logo-Word.svg" />
     <link rel="preload" as="image" href="/sidebar-images/chain-link-icon-grey.svg" />
     <link rel="preload" as="image" href="/sidebar-images/Contacts-Email-icon-cic-web.svg" />
-    <link rel="preload" as="image" href="images/UK-AQ-Logov2-1Line.svg" />
-    <link rel="preload" as="image" href="images/UK-AQ-sensors-map-1line.svg" />
+    <link rel="preload" as="image" href="/images/UK-AQ-Logov2-1Line.svg" />
+    <link rel="preload" as="image" href="/images/UK-AQ-sensor-map-1line.svg" />
     <link
       rel="stylesheet"
       href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
@@ -229,8 +229,8 @@
     <div id="cic-sidebar-mount"></div>
     <script src="sidebar.js"></script>
     <header id="uk-aq-header">
-      <img src="images/UK-AQ-Logov2-1Line.svg" alt="UK AQ Logo" class="logo" />
-      <img src="images/UK-AQ-sensors-map-1line.svg" alt="Sensors Map" class="page-title" />
+      <img src="/images/UK-AQ-Logov2-1Line.svg" alt="UK AQ Logo" class="logo" />
+      <img src="/images/UK-AQ-sensor-map-1line.svg" alt="Sensor Map" class="page-title" />
     </header>
     <div id="map" role="application" aria-label="UK AQ sensor map"></div>
     <div class="control-bar" role="region" aria-label="Map controls">
@@ -640,7 +640,7 @@
           url.searchParams.set("scope", "all");
           url.searchParams.set("window", "all");
           url.searchParams.set("limit", String(readingLimit));
-          url.searchParams.set("caller", "sensors_map");
+          url.searchParams.set("caller", "sensor_map");
           if (pollutantKey) {
             url.searchParams.set("pollutant", pollutantKey);
           }

@@ -14,9 +14,9 @@
       id: 'uk-aq',
       label: 'UK-AQ',
       children: [
-        { label: 'Hex Map',     iconImg: 'uk-aq-hex-map-icon.svg', href: '/hex_map/' },
-        { label: 'Sensors',     iconImg: 'uk-aq-sensors-icon.svg',  href: '/uk-aq/sensors_chart.html' },
-        { label: 'Sensor Map', iconImg: 'uk-aq-map-icon.svg',       href: '/uk-aq/sensors_map.html' },
+        { label: 'Hex Map',     iconImg: 'uk-aq-hex-map-sidebar.svg', href: '/hex_map/' },
+        { label: 'Sensors',     iconImg: 'uk-aq-sensors-icon-blue.svg',  href: '/uk-aq/sensors_chart.html' },
+        { label: 'Sensor Map', iconImg: 'uk-aq-location-pin.svg',       href: '/sensor_map/' },
       ],
     },
     {

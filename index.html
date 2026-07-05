@@ -69,14 +69,12 @@
       border-radius: 30px;
       background: #fff7ed;
       box-shadow: 0 12px 32px rgba(67, 48, 29, 0.08);
+      margin-bottom: 0;
     }
 
     .dashboard-tables {
       display: grid;
       gap: 1.5rem;
-    }
-
-    .readings-dashboard + .dashboard-tables {
       margin-top: -24px;
     }
 
@@ -129,6 +127,10 @@
 
     .dashboard-table--areas {
       min-width: 760px;
+    }
+
+    .dashboard-table--areas .dashboard-table-area-type-col {
+      width: 26%;
     }
 
     .dashboard-table--networks {
@@ -189,45 +191,102 @@
       font-weight: 700;
     }
 
+    .dashboard-table--networks th:first-child,
+    .dashboard-table--networks td:first-child {
+      border-right: 1px solid rgba(30, 42, 51, 0.12);
+    }
+
+    .dashboard-table--networks th:nth-child(n + 3),
+    .dashboard-table--networks td:nth-child(n + 3) {
+      border-left: 1px solid rgba(30, 42, 51, 0.08);
+    }
+
+    .dashboard-table--networks tbody tr:last-child th:first-child {
+      border-right: 0;
+    }
+
     .dashboard-table time {
       white-space: nowrap;
       font-variant-numeric: tabular-nums;
     }
 
-    .area-reading {
-      display: grid;
-      grid-template-columns: 1fr auto auto;
+    .dashboard-table--areas .area-reading {
+      display: inline-flex;
       align-items: center;
-      gap: 0.4rem;
-      width: 100%;
-    }
-
-    .area-reading-name,
-    .area-reading-value {
+      gap: 0.45rem;
+      max-width: 100%;
       white-space: nowrap;
     }
 
-    .area-reading-value {
-      font-weight: 700;
+    .dashboard-table--areas .area-reading-name {
+      display: inline-block;
+      min-width: 7.25rem;
+      font-weight: 600;
+      white-space: nowrap;
     }
 
-    .area-marker {
+    .dashboard-table--areas .area-reading-metric {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.35rem;
+      font-weight: 800;
+      white-space: nowrap;
+    }
+
+    .dashboard-table--areas .area-reading-value {
+      white-space: nowrap;
+    }
+
+    .dashboard-table--areas .area-marker {
       width: 1.17rem;
       height: 1.35rem;
       flex: 0 0 1.17rem;
       clip-path: polygon(50% 0, 100% 25%, 100% 75%, 50% 100%, 0 75%, 0 25%);
     }
 
-    .area-marker--pm25 {
+    .dashboard-table--areas .area-marker--level-red {
       background: #d7262e;
     }
 
-    .area-marker--pm10 {
+    .dashboard-table--areas .area-marker--level-orange {
       background: #ed6c02;
     }
 
-    .area-marker--no2 {
+    .dashboard-table--areas .area-marker--level-yellow {
       background: #f2c500;
+    }
+
+    .dashboard-table--areas th:first-child,
+    .dashboard-table--areas td:first-child {
+      border-right: 1px solid rgba(30, 42, 51, 0.12);
+    }
+
+    .dashboard-table--areas th + th,
+    .dashboard-table--areas td + td {
+      border-left: 1px solid rgba(30, 42, 51, 0.06);
+    }
+
+    .dashboard-table--areas th:nth-child(2),
+    .dashboard-table--areas td:nth-child(2) {
+      border-left: 0;
+    }
+
+    @media (max-width: 760px) {
+      .dashboard-table--areas .area-reading {
+        display: inline-grid;
+        grid-template-columns: 1fr;
+        row-gap: 0.25rem;
+        white-space: normal;
+      }
+
+      .dashboard-table--areas .area-reading-name {
+        min-width: 0;
+        white-space: normal;
+      }
+
+      .dashboard-table--areas .area-reading-metric {
+        justify-content: flex-start;
+      }
     }
 
     .readings-header {
@@ -898,6 +957,12 @@
         <div class="dashboard-table-wrap" tabindex="0" role="region" aria-label="Scrollable highest area readings table">
           <table class="dashboard-table dashboard-table--areas">
             <caption class="sr-only">Highest latest pollutant readings by UK area type</caption>
+            <colgroup>
+              <col class="dashboard-table-area-type-col">
+              <col>
+              <col>
+              <col>
+            </colgroup>
             <thead>
               <tr>
                 <th scope="col">Area type</th>
@@ -912,22 +977,28 @@
                 <td>
                   <span class="area-reading">
                     <span class="area-reading-name">Bristol West</span>
-                    <span class="area-marker area-marker--pm25" aria-hidden="true"></span>
-                    <span class="area-reading-value">20 &micro;g/m<sup>3</sup></span>
+                    <span class="area-reading-metric">
+                      <span class="area-marker area-marker--level-red" aria-hidden="true"></span>
+                      <span class="area-reading-value">20 &micro;g/m<sup>3</sup></span>
+                    </span>
                   </span>
                 </td>
                 <td>
                   <span class="area-reading">
                     <span class="area-reading-name">Bristol West</span>
-                    <span class="area-marker area-marker--pm10" aria-hidden="true"></span>
-                    <span class="area-reading-value">20 &micro;g/m<sup>3</sup></span>
+                    <span class="area-reading-metric">
+                      <span class="area-marker area-marker--level-orange" aria-hidden="true"></span>
+                      <span class="area-reading-value">20 &micro;g/m<sup>3</sup></span>
+                    </span>
                   </span>
                 </td>
                 <td>
                   <span class="area-reading">
                     <span class="area-reading-name">Bristol West</span>
-                    <span class="area-marker area-marker--no2" aria-hidden="true"></span>
-                    <span class="area-reading-value">30 &micro;g/m<sup>3</sup></span>
+                    <span class="area-reading-metric">
+                      <span class="area-marker area-marker--level-yellow" aria-hidden="true"></span>
+                      <span class="area-reading-value">30 &micro;g/m<sup>3</sup></span>
+                    </span>
                   </span>
                 </td>
               </tr>
@@ -936,22 +1007,28 @@
                 <td>
                   <span class="area-reading">
                     <span class="area-reading-name">City of Bristol</span>
-                    <span class="area-marker area-marker--pm25" aria-hidden="true"></span>
-                    <span class="area-reading-value">20 &micro;g/m<sup>3</sup></span>
+                    <span class="area-reading-metric">
+                      <span class="area-marker area-marker--level-red" aria-hidden="true"></span>
+                      <span class="area-reading-value">20 &micro;g/m<sup>3</sup></span>
+                    </span>
                   </span>
                 </td>
                 <td>
                   <span class="area-reading">
                     <span class="area-reading-name">City of Bristol</span>
-                    <span class="area-marker area-marker--pm10" aria-hidden="true"></span>
-                    <span class="area-reading-value">20 &micro;g/m<sup>3</sup></span>
+                    <span class="area-reading-metric">
+                      <span class="area-marker area-marker--level-orange" aria-hidden="true"></span>
+                      <span class="area-reading-value">20 &micro;g/m<sup>3</sup></span>
+                    </span>
                   </span>
                 </td>
                 <td>
                   <span class="area-reading">
                     <span class="area-reading-name">City of Bristol</span>
-                    <span class="area-marker area-marker--no2" aria-hidden="true"></span>
-                    <span class="area-reading-value">30 &micro;g/m<sup>3</sup></span>
+                    <span class="area-reading-metric">
+                      <span class="area-marker area-marker--level-yellow" aria-hidden="true"></span>
+                      <span class="area-reading-value">30 &micro;g/m<sup>3</sup></span>
+                    </span>
                   </span>
                 </td>
               </tr>

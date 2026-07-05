@@ -74,6 +74,9 @@
     .dashboard-tables {
       display: grid;
       gap: 1.5rem;
+    }
+
+    .readings-dashboard + .dashboard-tables {
       margin-top: -24px;
     }
 
@@ -176,6 +179,11 @@
       text-align: center;
     }
 
+    .dashboard-table--networks th:nth-child(2),
+    .dashboard-table--networks td:nth-child(2) {
+      text-align: left;
+    }
+
     .dashboard-table--networks td:not(:nth-child(2)) {
       font-variant-numeric: tabular-nums;
       font-weight: 700;
@@ -187,10 +195,11 @@
     }
 
     .area-reading {
-      display: inline-flex;
-      flex-wrap: wrap;
+      display: grid;
+      grid-template-columns: 1fr auto auto;
       align-items: center;
       gap: 0.4rem;
+      width: 100%;
     }
 
     .area-reading-name,
@@ -984,7 +993,7 @@
               </tr>
               <tr>
                 <th scope="row">Total sensors</th>
-                <td><time datetime="2026-07-03T10:00:00+01:00">03/07/2026 10:00</time></td>
+                <td></td>
                 <td>240</td>
                 <td>140</td>
                 <td>60</td>

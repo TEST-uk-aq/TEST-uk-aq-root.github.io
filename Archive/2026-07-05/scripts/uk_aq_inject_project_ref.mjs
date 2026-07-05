@@ -24,10 +24,10 @@ const SCRIPT_DIR = path.dirname(scriptEntryPath);
 const REPO_ROOT = path.resolve(SCRIPT_DIR, "..");
 const ENV_PATH = path.join(REPO_ROOT, ".env");
 const DEFAULT_TARGETS = [
-  { path: "hex_map/index.html", required: true },
-  { path: "index.html", required: true },
-  { path: "sensors_chart/index.html", required: true },
-  { path: "sensor_map/index.html", required: true },
+  "hex_map/index.html",
+  "index.html",
+  "sensors_chart.html",
+  "sensors_map.html",
 ];
 const refPattern = /const PROJECT_REF_PLACEHOLDER = "([^"]*)";/g;
 const anonPattern = /const ANON_KEY_PLACEHOLDER = "([^"]*)";/g;
@@ -62,23 +62,10 @@ async function main() {
 
   const cliTargets = nodeProcess.argv.slice(2).filter(Boolean);
   const targets = (cliTargets.length ? cliTargets : DEFAULT_TARGETS)
-    .map((target) => (typeof target === "string"
-      ? { path: target, required: true }
-      : target));
+    .map((target) => (path.isAbsolute(target) ? target : path.join(REPO_ROOT, target)));
 
-  for (const target of targets) {
-    if (path.isAbsolute(target.path)) {
-      throw new Error(`Target path must be relative to the repository: ${target.path}`);
-    }
-    const targetPath = path.join(REPO_ROOT, target.path);
-    const html = await readFileIfExists(targetPath);
-    if (html === null) {
-      if (!target.required) {
-        console.log(`Skipping ${target.path} (file not present).`);
-        continue;
-      }
-      throw new Error(`Required file missing: ${target.path}`);
-    }
+  for (const targetPath of targets) {
+    const html = await fs.readFile(targetPath, "utf8");
     let updated = html;
     updated = replacePlaceholder(
       updated,

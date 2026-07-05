@@ -112,7 +112,7 @@
       if (getBreakpoint() === 'desktop' && !pinnedOpenDesktop && getState() === EXPANDED) {
         setState(MINI);
       }
-    }, 3000);
+    }, 500);
   }
 
   function updateHamburgerIcon(btn) {
@@ -219,8 +219,8 @@
     }
     #cic-hamburger img { width: 44px; height: 44px; object-fit: contain; display: block; }
 
-    /* ── Top-right CIC home logo ── */
-    #cic-home-logo {
+    /* ── Top-right UK AQ home logo ── */
+    #ukaq-home-logo {
       position: absolute;
       top: 16px; right: 28px;
       z-index: 10011;
@@ -229,8 +229,8 @@
       overflow: hidden;
       transition: transform 0.2s ease, box-shadow 0.2s ease;
     }
-    #cic-home-logo:hover { transform: translateY(-1px); box-shadow: 0 8px 14px rgba(20,34,37,0.12); }
-    #cic-home-logo img {
+    #ukaq-home-logo:hover { transform: translateY(-1px); box-shadow: 0 8px 14px rgba(20,34,37,0.12); }
+    #ukaq-home-logo img {
       width: 104px; height: 104px;
       object-fit: contain; display: block;
     }
@@ -430,7 +430,7 @@
         ${NAV.map(buildSection).join('')}
       </nav>
       <div id="cic-sidebar-footer">
-        cic-test.chronicillnesschannel.co.uk · v2026.04
+        test-uk-aq.ukaq.co.uk·v0.2.2026.07
       </div>`;
   }
 
@@ -470,10 +470,10 @@
     // Top-right home logo (hidden on homepage)
     const homeLogo = isHomePage() ? null : (() => {
       const el = document.createElement('a');
-      el.id = 'cic-home-logo';
+      el.id = 'ukaq-home-logo';
       el.href = '/';
-      el.setAttribute('aria-label', 'Chronic Illness Channel home');
-      el.innerHTML = `<img src="${location.origin}/sidebar-images/CIC-Square-Border-Words-Alpha.svg" alt="CIC">`;
+      el.setAttribute('aria-label', 'UK AQ home');
+      el.innerHTML = `<img src="${location.origin}/sidebar-images/UK-AQ-Logo-v3-2Lines.svg" alt="UKAQ">`;
       return el;
     })();
 

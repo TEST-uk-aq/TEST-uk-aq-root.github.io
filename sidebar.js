@@ -43,18 +43,18 @@
           external: true,
         },
         { label: 'Resources', iconImg: 'chain-link-icon-grey.svg', href: '/resources/' },
-        { label: 'Contact', iconImg: 'Contacts-Email-icon-cic-web.svg', href: '/contact.html' },
+        { label: 'Contact', iconImg: 'uk-aq-contact-blue-200h.svg', href: '/contact.html' },
       ],
     },
   ];
   const HOME_ITEM = {
     label: 'Home',
-    iconImg: 'CIC-Home-Alpha.svg',
+    iconImg: 'uk-aq-home-sidebar-blue.svg',
     href: '/',
     className: 'cic-home-nav-item',
   };
-  const SIDEBAR_ICON_OFF = '/sidebar-images/CIC-Sidebar-Button-off.svg';
-  const SIDEBAR_ICON_ON = '/sidebar-images/CIC-Sidebar-Button-on.svg';
+  const SIDEBAR_ICON_OFF = '/sidebar-images/uk-aq-sidebar-off.svg';
+  const SIDEBAR_ICON_ON = '/sidebar-images/uk-aq-sidebar-on.svg';
 
   // ─── Preload default sidebar button image; lazy-warm the alternate icon ─────
   const sidebarIconOffHref = location.origin + SIDEBAR_ICON_OFF;

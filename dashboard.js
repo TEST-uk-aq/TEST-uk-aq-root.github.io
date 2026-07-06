@@ -358,12 +358,17 @@
         if (!cell) return;
         const highest = aggregateAreas(selectedRows(pollutant.key), type)
           .sort((a, b) => b.value - a.value)[0] || null;
+        const reading = cell.querySelector(".area-reading");
         const name = cell.querySelector(".area-reading-name");
         const marker = cell.querySelector(".area-marker");
         const value = cell.querySelector(".area-reading-value");
+        const formattedValue = highest ? formatValue(highest.value) : null;
         name.textContent = highest?.name || "No data";
-        value.innerHTML = highest ? `${formatValue(highest.value)} &micro;g/m<sup>3</sup>` : "—";
+        value.innerHTML = highest ? `${formattedValue} &micro;g/m<sup>3</sup>` : "—";
         marker.style.background = severityColour(highest?.value ?? null, pollutant.key);
+        reading?.setAttribute("aria-label", highest
+          ? `${pollutant.label} highest ${rowEl.cells[0].textContent} reading: ${highest.name}, ${formattedValue} micrograms per cubic metre.`
+          : `${pollutant.label} highest ${rowEl.cells[0].textContent} reading: No data.`);
       });
     });
   }

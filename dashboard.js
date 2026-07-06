@@ -340,12 +340,14 @@
       if (!code || !Number.isFinite(value)) return;
       const responseName = nameFields.map((key) => row?.[key] || source?.[key]).find(Boolean);
       const name = responseName || areaNames[type].get(String(code)) || code;
-      const group = groups.get(code) || { name, values: [] };
+      const group = groups.get(code) || { name, values: [], networks: new Set() };
       group.values.push(value);
+      group.networks.add(networkLabel(row));
       groups.set(code, group);
     });
     return [...groups.values()].map((group) => ({
       name: group.name,
+      network: group.networks.size === 1 ? [...group.networks][0] : "Multiple networks",
       value: group.values.reduce((sum, value) => sum + value, 0) / group.values.length,
     }));
   }
@@ -358,12 +360,19 @@
         if (!cell) return;
         const highest = aggregateAreas(selectedRows(pollutant.key), type)
           .sort((a, b) => b.value - a.value)[0] || null;
+        const reading = cell.querySelector(".area-reading");
         const name = cell.querySelector(".area-reading-name");
+        const network = cell.querySelector(".area-reading-network");
         const marker = cell.querySelector(".area-marker");
         const value = cell.querySelector(".area-reading-value");
+        const formattedValue = highest ? formatValue(highest.value) : null;
         name.textContent = highest?.name || "No data";
-        value.innerHTML = highest ? `${formatValue(highest.value)} &micro;g/m<sup>3</sup>` : "—";
+        network.textContent = highest?.network || "Selected networks";
+        value.innerHTML = highest ? `${formattedValue} &micro;g/m<sup>3</sup>` : "—";
         marker.style.background = severityColour(highest?.value ?? null, pollutant.key);
+        reading?.setAttribute("aria-label", highest
+          ? `${highest.name}, ${highest.network}, ${formattedValue} micrograms per cubic metre, ${pollutant.label}`
+          : `No data, selected networks, ${pollutant.label}`);
       });
     });
   }

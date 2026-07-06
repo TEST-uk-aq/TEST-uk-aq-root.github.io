@@ -232,28 +232,42 @@
 
     .dashboard-table--areas .area-reading {
       display: grid;
-      grid-template-columns: minmax(0, 1fr) 8.25rem;
+      grid-template-columns: minmax(0, 1fr) max-content;
       align-items: center;
-      gap: 0.45rem;
-      width: 100%;
-      white-space: nowrap;
+      column-gap: 0.6rem;
+      max-width: 100%;
+      min-width: 0;
+    }
+
+    .dashboard-table--areas .area-reading-text {
+      display: grid;
+      gap: 0.15rem;
+      min-width: 0;
     }
 
     .dashboard-table--areas .area-reading-name {
-      display: block;
       min-width: 0;
-      font-weight: 600;
-      line-height: 1.2;
-      white-space: normal;
+      overflow-wrap: anywhere;
+      word-break: normal;
+      line-height: 1.15;
+      font-weight: 700;
+    }
+
+    .dashboard-table--areas .area-reading-network {
+      min-width: 0;
+      color: #586573;
+      font-size: 0.78rem;
+      font-weight: 700;
+      line-height: 1.15;
+      overflow-wrap: anywhere;
     }
 
     .dashboard-table--areas .area-reading-metric {
-      display: grid;
-      grid-template-columns: 1.17rem minmax(0, 1fr);
+      display: inline-flex;
       align-items: center;
-      column-gap: 0.35rem;
-      width: 8.25rem;
-      font-weight: 800;
+      justify-self: end;
+      gap: 0.35rem;
+      font-weight: 850;
       white-space: nowrap;
     }
 
@@ -298,17 +312,12 @@
 
     @media (max-width: 760px) {
       .dashboard-table--areas .area-reading {
-        grid-template-columns: minmax(0, 1fr) 8.25rem;
-        white-space: nowrap;
-      }
-
-      .dashboard-table--areas .area-reading-name {
-        min-width: 0;
-        white-space: normal;
+        grid-template-columns: 1fr;
+        row-gap: 0.25rem;
       }
 
       .dashboard-table--areas .area-reading-metric {
-        justify-content: stretch;
+        justify-self: start;
       }
     }
 
@@ -1409,7 +1418,10 @@
                 <th scope="row">Parliamentary constituencies</th>
                 <td>
                   <span class="area-reading">
-                    <span class="area-reading-name"></span>
+                    <span class="area-reading-text">
+                      <span class="area-reading-name"></span>
+                      <span class="area-reading-network"></span>
+                    </span>
                     <span class="area-reading-metric">
                       <span class="area-marker" aria-hidden="true"></span>
                       <span class="area-reading-value"></span>
@@ -1418,7 +1430,10 @@
                 </td>
                 <td>
                   <span class="area-reading">
-                    <span class="area-reading-name"></span>
+                    <span class="area-reading-text">
+                      <span class="area-reading-name"></span>
+                      <span class="area-reading-network"></span>
+                    </span>
                     <span class="area-reading-metric">
                       <span class="area-marker" aria-hidden="true"></span>
                       <span class="area-reading-value"></span>
@@ -1427,7 +1442,10 @@
                 </td>
                 <td>
                   <span class="area-reading">
-                    <span class="area-reading-name"></span>
+                    <span class="area-reading-text">
+                      <span class="area-reading-name"></span>
+                      <span class="area-reading-network"></span>
+                    </span>
                     <span class="area-reading-metric">
                       <span class="area-marker" aria-hidden="true"></span>
                       <span class="area-reading-value"></span>
@@ -1439,7 +1457,10 @@
                 <th scope="row">Local Authorities</th>
                 <td>
                   <span class="area-reading">
-                    <span class="area-reading-name"></span>
+                    <span class="area-reading-text">
+                      <span class="area-reading-name"></span>
+                      <span class="area-reading-network"></span>
+                    </span>
                     <span class="area-reading-metric">
                       <span class="area-marker" aria-hidden="true"></span>
                       <span class="area-reading-value"></span>
@@ -1448,7 +1469,10 @@
                 </td>
                 <td>
                   <span class="area-reading">
-                    <span class="area-reading-name"></span>
+                    <span class="area-reading-text">
+                      <span class="area-reading-name"></span>
+                      <span class="area-reading-network"></span>
+                    </span>
                     <span class="area-reading-metric">
                       <span class="area-marker" aria-hidden="true"></span>
                       <span class="area-reading-value"></span>
@@ -1457,7 +1481,10 @@
                 </td>
                 <td>
                   <span class="area-reading">
-                    <span class="area-reading-name"></span>
+                    <span class="area-reading-text">
+                      <span class="area-reading-name"></span>
+                      <span class="area-reading-network"></span>
+                    </span>
                     <span class="area-reading-metric">
                       <span class="area-marker" aria-hidden="true"></span>
                       <span class="area-reading-value"></span>

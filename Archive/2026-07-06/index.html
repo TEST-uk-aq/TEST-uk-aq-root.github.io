@@ -210,49 +210,25 @@
       font-variant-numeric: tabular-nums;
     }
 
-    .dashboard-status {
-      margin: 0.55rem 0 0;
-      color: var(--ink-soft);
-      font-size: 0.82rem;
-    }
-
-    .dashboard-status[hidden] {
-      display: none;
-    }
-
-    .dashboard-status--error {
-      color: #8a2c2c;
-    }
-
-    .readings-dashboard.is-loading .pollutant-value,
-    .readings-dashboard.is-loading .pollutant-station,
-    .readings-dashboard.is-loading .pollutant-network {
-      opacity: 0.58;
-    }
-
     .dashboard-table--areas .area-reading {
-      display: grid;
-      grid-template-columns: minmax(0, 1fr) 8.25rem;
+      display: inline-flex;
       align-items: center;
       gap: 0.45rem;
-      width: 100%;
+      max-width: 100%;
       white-space: nowrap;
     }
 
     .dashboard-table--areas .area-reading-name {
-      display: block;
-      min-width: 0;
+      display: inline-block;
+      min-width: 7.25rem;
       font-weight: 600;
-      line-height: 1.2;
-      white-space: normal;
+      white-space: nowrap;
     }
 
     .dashboard-table--areas .area-reading-metric {
-      display: grid;
-      grid-template-columns: 1.17rem minmax(0, 1fr);
+      display: inline-flex;
       align-items: center;
-      column-gap: 0.35rem;
-      width: 8.25rem;
+      gap: 0.35rem;
       font-weight: 800;
       white-space: nowrap;
     }
@@ -265,7 +241,6 @@
       width: 1.17rem;
       height: 1.35rem;
       flex: 0 0 1.17rem;
-      background: #C8CDD1;
       clip-path: polygon(50% 0, 100% 25%, 100% 75%, 50% 100%, 0 75%, 0 25%);
     }
 
@@ -298,8 +273,10 @@
 
     @media (max-width: 760px) {
       .dashboard-table--areas .area-reading {
-        grid-template-columns: minmax(0, 1fr) 8.25rem;
-        white-space: nowrap;
+        display: inline-grid;
+        grid-template-columns: 1fr;
+        row-gap: 0.25rem;
+        white-space: normal;
       }
 
       .dashboard-table--areas .area-reading-name {
@@ -308,7 +285,7 @@
       }
 
       .dashboard-table--areas .area-reading-metric {
-        justify-content: stretch;
+        justify-content: flex-start;
       }
     }
 
@@ -348,228 +325,29 @@
       white-space: nowrap;
     }
 
-    .home-network-picker {
-      position: relative;
-      display: inline-flex;
-      font-family: "Inter", system-ui, -apple-system, sans-serif;
+    .map-select {
+      display: grid;
+      gap: 6px;
+      font-size: 0.85rem;
+      color: #3a4a5a;
+      font-weight: 600;
     }
 
-    .home-network-picker-button {
-      display: inline-flex;
-      align-items: center;
-      justify-content: space-between;
-      gap: 7px;
-      min-width: 17ch;
-      padding: 6px 11px;
+    .map-select select {
+      width: min(280px, 100%);
+      padding: 8px 12px;
+      border-radius: 12px;
       border: 1px solid rgba(20, 34, 37, 0.18);
-      border-radius: 6px;
       background: #fff;
-      color: #245b82;
+      font-size: 0.9rem;
+      color: #101822;
       font: inherit;
-      font-size: 16px;
       font-weight: 500;
-      line-height: 1.2;
-      cursor: pointer;
-      white-space: nowrap;
-      box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
     }
 
-    .home-network-picker-button:hover:not([aria-expanded="true"]) {
-      background: #f8fafc;
-      border-color: #d1d5db;
-    }
-
-    .home-network-picker-button[aria-expanded="true"] {
-      background: #eff6ff;
-      border-color: #3C78AC;
-      color: #3C78AC;
-    }
-
-    .home-network-picker-button:focus-visible {
+    .map-select select:focus-visible {
       outline: 2px solid rgba(60, 120, 172, 0.5);
       outline-offset: 2px;
-    }
-
-    .home-network-picker-chevron {
-      margin-left: auto;
-      flex-shrink: 0;
-      transition: transform 0.15s ease;
-    }
-
-    .home-network-picker-button[aria-expanded="true"] .home-network-picker-chevron {
-      transform: rotate(180deg);
-    }
-
-    .home-network-picker-panel {
-      position: absolute;
-      top: calc(100% + 8px);
-      right: 0;
-      z-index: 340;
-      display: grid;
-      gap: 8px;
-      width: min(350px, calc(100vw - 28px));
-      min-width: 270px;
-      box-sizing: border-box;
-      padding: 10px;
-      border: 1px solid rgba(20, 34, 37, 0.18);
-      border-radius: 12px;
-      background: #fffdfa;
-      box-shadow: 0 12px 30px rgba(16, 24, 34, 0.18);
-    }
-
-    .home-network-picker-panel[hidden] {
-      display: none;
-    }
-
-    .home-network-picker-header {
-      display: flex;
-      justify-content: space-between;
-      padding: 2px 2px 8px;
-      border-bottom: 1px solid rgba(30, 42, 51, 0.1);
-      color: #65717d;
-      font-size: 0.86rem;
-      font-weight: 700;
-      letter-spacing: 0.06em;
-      text-transform: uppercase;
-    }
-
-    .home-network-picker-count {
-      color: #245b82;
-      font-size: 1.05rem;
-      font-variant-numeric: tabular-nums;
-    }
-
-    .home-network-picker-actions {
-      display: flex;
-      align-items: center;
-      gap: 0.5rem;
-      padding: 0 2px 2px;
-    }
-
-    .home-network-picker-action {
-      padding: 0;
-      border: 0;
-      background: transparent;
-      color: #3C78AC;
-      font: inherit;
-      font-size: 0;
-      cursor: pointer;
-    }
-
-    .home-network-picker-action:disabled {
-      color: #9aa2a9;
-      cursor: not-allowed;
-    }
-
-    .home-network-picker-actions-divider {
-      color: #3C78AC;
-      font-size: 1.25rem;
-      font-weight: 700;
-      line-height: 1;
-      user-select: none;
-    }
-
-    .home-network-picker-action-icon {
-      position: relative;
-      display: block;
-      width: 16px;
-      height: 16px;
-      border-radius: 2px;
-    }
-
-    .home-network-picker-action-icon--select-all {
-      border: 1px solid #3C78AC;
-      background: #3C78AC;
-    }
-
-    .home-network-picker-action-icon--select-all::before {
-      content: "✓";
-      position: absolute;
-      inset: 0;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      color: #fff;
-      font-size: 13px;
-      font-weight: 800;
-      line-height: 1;
-    }
-
-    .home-network-picker-action-icon--clear-all {
-      border: 1px solid #3C78AC;
-      background: transparent;
-    }
-
-    .home-network-picker-action:disabled .home-network-picker-action-icon--select-all {
-      border-color: #9aa2a9;
-      background: #9aa2a9;
-    }
-
-    .home-network-picker-action:disabled .home-network-picker-action-icon--clear-all {
-      border-color: #9aa2a9;
-    }
-
-    .home-network-picker-list {
-      display: grid;
-      gap: 3px;
-      max-height: min(44vh, 360px);
-      overflow-y: auto;
-    }
-
-    .home-network-picker-row {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      gap: 10px;
-      padding: 7px 10px;
-      border-radius: 8px;
-      color: #172535;
-      font-size: 1.08rem;
-      font-weight: 600;
-      cursor: pointer;
-    }
-
-    .home-network-picker-row:hover,
-    .home-network-picker-row:focus-within {
-      background: rgba(40, 117, 168, 0.08);
-    }
-
-    .home-network-picker-row.is-unselected {
-      color: #73808d;
-    }
-
-    .home-network-picker-row-main {
-      display: inline-flex;
-      align-items: center;
-      gap: 8px;
-      min-width: 0;
-    }
-
-    .home-network-picker-row input {
-      width: 15px;
-      height: 15px;
-      accent-color: #2875a8;
-    }
-
-    .home-network-picker-sensor-count {
-      color: #3C78AC;
-      font-size: 1rem;
-      font-weight: 700;
-      font-variant-numeric: tabular-nums;
-    }
-
-    .home-network-picker-footer {
-      padding-top: 8px;
-      border-top: 1px solid rgba(30, 42, 51, 0.1);
-      color: #6b7280;
-      font-size: 13px;
-    }
-
-    @media (max-width: 720px) {
-      .home-network-picker-panel {
-        right: auto;
-        left: 0;
-      }
     }
 
     .pollutant-grid {
@@ -585,44 +363,6 @@
       justify-items: center;
       gap: 1rem;
       min-width: 0;
-    }
-
-    .pollutant-unavailable {
-      width: min(100%, 240px);
-      min-height: 150px;
-      box-sizing: border-box;
-      display: grid;
-      align-content: center;
-      justify-items: center;
-      gap: 0.45rem;
-      padding: 1.25rem;
-      border: 1px dashed rgba(30, 42, 51, 0.22);
-      border-radius: 24px;
-      background: rgba(255, 255, 255, 0.48);
-      color: #586573;
-      text-align: center;
-    }
-
-    .pollutant-unavailable[hidden],
-    .pollutant-item .pollutant-circle[hidden],
-    .pollutant-item .scale-legend[hidden],
-    .pollutant-item .pollutant-actions[hidden] {
-      display: none;
-    }
-
-    .pollutant-unavailable-title {
-      margin: 0;
-      color: #344250;
-      font-size: clamp(1.15rem, 2vw, 1.35rem);
-      font-weight: 850;
-      line-height: 1.1;
-    }
-
-    .pollutant-unavailable-copy {
-      margin: 0;
-      font-size: 0.92rem;
-      font-weight: 650;
-      line-height: 1.35;
     }
 
     .pollutant-circle {
@@ -644,32 +384,15 @@
     }
 
     .pollutant-circle--pm25 {
-      background: #C8CDD1;
+      background: #d7262e;
     }
 
     .pollutant-circle--pm10 {
-      background: #C8CDD1;
+      background: #ed6c02;
     }
 
     .pollutant-circle--no2 {
-      background: #C8CDD1;
-    }
-
-    .pollutant-circle--inactive {
-      background: #C8CDD1 !important;
-      color: #344250;
-      -webkit-text-stroke: 0;
-    }
-
-    .pollutant-circle--inactive .pollutant-value-slot {
-      height: clamp(3.69rem, 6.66vw, 5.13rem);
-    }
-
-    .pollutant-circle--inactive .pollutant-value {
-      max-width: 92%;
-      font-size: clamp(1.2rem, 2.2vw, 1.55rem);
-      line-height: 1.18;
-      white-space: normal;
+      background: #f2c500;
     }
 
     .pollutant-name {
@@ -684,28 +407,11 @@
       vertical-align: sub;
     }
 
-    .pollutant-value-slot {
-      width: 100%;
-      height: clamp(3.69rem, 6.66vw, 5.13rem);
-      margin-top: 1.1rem;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-    }
-
     .pollutant-value {
-      display: block;
-      max-width: 100%;
+      margin-top: 1.1rem;
       font-size: clamp(4.1rem, 7.4vw, 5.7rem);
       font-weight: 900;
       line-height: 0.9;
-      overflow: visible;
-      text-align: center;
-      white-space: nowrap;
-    }
-
-    .pollutant-value--fitted {
-      letter-spacing: -0.02em;
     }
 
     .pollutant-unit {
@@ -743,82 +449,31 @@
     }
 
     .scale-legend {
-      width: min(100%, 380px);
+      width: min(100%, 285px);
     }
 
-    .scale-stripe-row {
-      display: grid;
-      grid-template-columns: 2rem minmax(0, 285px) 2.75rem;
-      align-items: start;
-      justify-content: center;
-      column-gap: 0.45rem;
-    }
-
-    .scale-stripe-track {
-      min-width: 0;
-      width: 100%;
-    }
-
-    .scale-stripe-endpoint {
-      padding-top: 0.05rem;
+    .scale-label {
+      display: block;
+      margin-bottom: 0.45rem;
       color: #465462;
       font-size: 0.82rem;
       font-weight: 700;
-      line-height: 12px;
-      font-variant-numeric: tabular-nums;
-      white-space: nowrap;
-    }
-
-    .scale-stripe-endpoint--start {
-      text-align: right;
-    }
-
-    .scale-stripe-endpoint--end {
-      text-align: left;
+      text-align: center;
     }
 
     .scale-stripe {
-      position: relative;
       height: 12px;
       overflow: hidden;
       border: 1px solid rgba(30, 42, 51, 0.2);
       border-radius: 999px;
-      /* Keep in sync with the Hex Map HEAT_STOPS legend palette. */
       background: linear-gradient(
         90deg,
-        #00a85a,
-        #ffd54a,
-        #ff9b3a,
-        #e03c3c,
-        #5b2a86
+        #4caf50 0 20%,
+        #f2d13d 20% 40%,
+        #f39c34 40% 60%,
+        #d7262e 60% 80%,
+        #781c81 80% 100%
       );
-    }
-
-    .scale-stripe-tick {
-      position: absolute;
-      top: 0;
-      bottom: 0;
-      width: 2px;
-      background: rgba(20, 34, 37, 0.4);
-      pointer-events: none;
-    }
-
-    .scale-stripe-labels {
-      position: relative;
-      height: 1rem;
-      margin-top: 0.25rem;
-      color: #586573;
-      font-size: 0.68rem;
-      font-weight: 700;
-      line-height: 1;
-      font-variant-numeric: tabular-nums;
-    }
-
-    .scale-stripe-number {
-      position: absolute;
-      top: 0;
-      transform: translateX(-50%);
-      white-space: nowrap;
     }
 
     .pollutant-actions {
@@ -1195,186 +850,98 @@
       <div class="readings-header">
         <div>
           <h2 id="highest-readings-heading" class="readings-title">Highest sensor readings</h2>
-          <p class="readings-subtitle" id="dashboard-window-subtitle">Latest readings from active sensors.</p>
+          <p class="readings-subtitle">Latest available readings from active sensors.</p>
         </div>
 
         <div class="readings-meta">
           <p class="readings-updated">
-            <time id="dashboard-updated">Updated —</time>
+            <time datetime="2026-07-03T10:00:00+01:00">Updated 03/07/2026 10:00</time>
           </p>
-          <div class="home-network-picker" id="home-network-picker">
-            <button
-              type="button"
-              class="home-network-picker-button"
-              id="network-picker-button"
-              aria-haspopup="dialog"
-              aria-expanded="false"
-              aria-controls="network-picker-panel"
-            >
-              <span id="network-picker-button-text">Networks: 0 / 0</span>
-              <svg class="home-network-picker-chevron" width="10" height="6" viewBox="0 0 10 6" fill="none" aria-hidden="true">
-                <path d="M1 1l4 4 4-4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"></path>
-              </svg>
-            </button>
-            <div
-              class="home-network-picker-panel"
-              id="network-picker-panel"
-              role="dialog"
-              aria-label="Choose dashboard networks"
-              hidden
-            >
-              <div class="home-network-picker-header">
-                <span>NETWORKS</span>
-                <span class="home-network-picker-count" id="network-picker-count">0 / 0</span>
-              </div>
-              <div class="home-network-picker-actions">
-                <button type="button" class="home-network-picker-action" id="network-picker-select-all" aria-label="Select all networks" title="Select all networks">
-                  <span class="home-network-picker-action-icon home-network-picker-action-icon--select-all" aria-hidden="true"></span>
-                </button>
-                <span class="home-network-picker-actions-divider" aria-hidden="true">/</span>
-                <button type="button" class="home-network-picker-action" id="network-picker-clear-all" aria-label="Clear all networks" title="Clear all networks">
-                  <span class="home-network-picker-action-icon home-network-picker-action-icon--clear-all" aria-hidden="true"></span>
-                </button>
-              </div>
-              <div class="home-network-picker-list" id="network-picker-list"></div>
-              <div class="home-network-picker-footer" id="network-picker-footer"></div>
-            </div>
-          </div>
+          <label class="map-select" for="network-filter">
+            <span>Network</span>
+            <select id="network-filter" name="network" aria-describedby="network-filter-note">
+              <option selected>All networks</option>
+              <option>GOV.UK AURN</option>
+              <option>Breathe London</option>
+              <option>Sensor.Community</option>
+              <option>OpenAQ</option>
+            </select>
+          </label>
+          <span id="network-filter-note" class="sr-only">Static preview control; filtering is not enabled yet.</span>
         </div>
       </div>
-      <p id="dashboard-status" class="dashboard-status" role="status">Loading latest readings…</p>
 
-      <div class="pollutant-grid" aria-label="Highest pollutant readings">
-        <article class="pollutant-item" data-pollutant="pm25">
+      <div class="pollutant-grid" aria-label="Example highest pollutant readings">
+        <article class="pollutant-item" aria-label="PM2.5: 20 micrograms per cubic metre at Bristol Temple Way, GOV.UK AURN">
           <div class="pollutant-circle pollutant-circle--pm25">
             <h3 class="pollutant-name">PM2.5</h3>
-            <span class="pollutant-value-slot"><strong class="pollutant-value"></strong></span>
+            <strong class="pollutant-value">20</strong>
             <span class="pollutant-unit">&micro;g/m<sup>3</sup></span>
-            <p class="pollutant-station"></p>
-            <p class="pollutant-network"></p>
+            <p class="pollutant-station">Bristol Temple Way</p>
+            <p class="pollutant-network">GOV.UK AURN</p>
           </div>
-          <div class="pollutant-unavailable" role="note" hidden>
-            <h3 class="pollutant-unavailable-title">PM2.5 not available</h3>
-            <p class="pollutant-unavailable-copy"></p>
-          </div>
-          <div class="scale-legend" aria-label="PM2.5 Hex Map power-eased reading scale: 0 to 50 plus micrograms per cubic metre, with reference ticks at 10, 20, 30 and 40">
-            <div class="scale-stripe-row" aria-hidden="true">
-              <span class="scale-stripe-endpoint scale-stripe-endpoint--start">0</span>
-              <div class="scale-stripe-track">
-                <div class="scale-stripe scale-stripe--pm25">
-                  <span class="scale-stripe-tick" style="left: 28%"></span>
-                  <span class="scale-stripe-tick" style="left: 49.2%"></span>
-                  <span class="scale-stripe-tick" style="left: 68.7%"></span>
-                  <span class="scale-stripe-tick" style="left: 87.1%"></span>
-                </div>
-                <div class="scale-stripe-labels">
-                  <span class="scale-stripe-number" style="left: 28%">10</span>
-                  <span class="scale-stripe-number" style="left: 49.2%">20</span>
-                  <span class="scale-stripe-number" style="left: 68.7%">30</span>
-                  <span class="scale-stripe-number" style="left: 87.1%">40</span>
-                </div>
-              </div>
-              <span class="scale-stripe-endpoint scale-stripe-endpoint--end">50+</span>
-            </div>
+          <div class="scale-legend" aria-label="Placeholder PM2.5 reading scale">
+            <span class="scale-label">PM2.5 reading scale</span>
+            <div class="scale-stripe" aria-hidden="true"></div>
           </div>
           <nav class="pollutant-actions" aria-label="PM2.5 sensor actions">
             <a class="pollutant-action" href="/hex_map/" aria-label="Open PM2.5 sensor on Hex Map" title="Open sensor on Hex Map">
               <img src="images/UK AQ Buttons.Hex Map.svg" alt="">
             </a>
-            <a class="pollutant-action" href="/sensor_map/" aria-label="Open PM2.5 sensor on UK Map" title="Open sensor on UK Map">
+            <a class="pollutant-action" href="sensors_map.html" aria-label="Open PM2.5 sensor on UK Map" title="Open sensor on UK Map">
               <img src="images/UK AQ Buttons.Location.svg" alt="">
             </a>
-            <a class="pollutant-action" href="/sensors_chart/" aria-label="Open PM2.5 sensor line chart" title="Open sensor line chart">
+            <a class="pollutant-action" href="sensors_chart.html" aria-label="Open PM2.5 sensor line chart" title="Open sensor line chart">
               <img src="images/UK AQ Buttons.Chart.svg" alt="">
             </a>
           </nav>
         </article>
 
-        <article class="pollutant-item" data-pollutant="pm10">
+        <article class="pollutant-item" aria-label="PM10: 30 micrograms per cubic metre at London Marylebone Road, GOV.UK AURN">
           <div class="pollutant-circle pollutant-circle--pm10">
             <h3 class="pollutant-name">PM10</h3>
-            <span class="pollutant-value-slot"><strong class="pollutant-value"></strong></span>
+            <strong class="pollutant-value">30</strong>
             <span class="pollutant-unit">&micro;g/m<sup>3</sup></span>
-            <p class="pollutant-station"></p>
-            <p class="pollutant-network"></p>
+            <p class="pollutant-station">London Marylebone Road</p>
+            <p class="pollutant-network">GOV.UK AURN</p>
           </div>
-          <div class="pollutant-unavailable" role="note" hidden>
-            <h3 class="pollutant-unavailable-title">PM10 not available</h3>
-            <p class="pollutant-unavailable-copy"></p>
-          </div>
-          <div class="scale-legend" aria-label="PM10 Hex Map power-eased reading scale: 0 to 50 plus micrograms per cubic metre, with reference ticks at 10, 20, 30 and 40">
-            <div class="scale-stripe-row" aria-hidden="true">
-              <span class="scale-stripe-endpoint scale-stripe-endpoint--start">0</span>
-              <div class="scale-stripe-track">
-                <div class="scale-stripe scale-stripe--pm10">
-                  <span class="scale-stripe-tick" style="left: 28%"></span>
-                  <span class="scale-stripe-tick" style="left: 49.2%"></span>
-                  <span class="scale-stripe-tick" style="left: 68.7%"></span>
-                  <span class="scale-stripe-tick" style="left: 87.1%"></span>
-                </div>
-                <div class="scale-stripe-labels">
-                  <span class="scale-stripe-number" style="left: 28%">10</span>
-                  <span class="scale-stripe-number" style="left: 49.2%">20</span>
-                  <span class="scale-stripe-number" style="left: 68.7%">30</span>
-                  <span class="scale-stripe-number" style="left: 87.1%">40</span>
-                </div>
-              </div>
-              <span class="scale-stripe-endpoint scale-stripe-endpoint--end">50+</span>
-            </div>
+          <div class="scale-legend" aria-label="Placeholder PM10 reading scale">
+            <span class="scale-label">PM10 reading scale</span>
+            <div class="scale-stripe" aria-hidden="true"></div>
           </div>
           <nav class="pollutant-actions" aria-label="PM10 sensor actions">
             <a class="pollutant-action" href="/hex_map/" aria-label="Open PM10 sensor on Hex Map" title="Open sensor on Hex Map">
               <img src="images/UK AQ Buttons.Hex Map.svg" alt="">
             </a>
-            <a class="pollutant-action" href="/sensor_map/" aria-label="Open PM10 sensor on UK Map" title="Open sensor on UK Map">
+            <a class="pollutant-action" href="sensors_map.html" aria-label="Open PM10 sensor on UK Map" title="Open sensor on UK Map">
               <img src="images/UK AQ Buttons.Location.svg" alt="">
             </a>
-            <a class="pollutant-action" href="/sensors_chart/" aria-label="Open PM10 sensor line chart" title="Open sensor line chart">
+            <a class="pollutant-action" href="sensors_chart.html" aria-label="Open PM10 sensor line chart" title="Open sensor line chart">
               <img src="images/UK AQ Buttons.Chart.svg" alt="">
             </a>
           </nav>
         </article>
 
-        <article class="pollutant-item" data-pollutant="no2">
+        <article class="pollutant-item" aria-label="NO2: 11 micrograms per cubic metre at South Gloucestershire Yate Station Road, Sensor.Community">
           <div class="pollutant-circle pollutant-circle--no2">
             <h3 class="pollutant-name">NO<sub>2</sub></h3>
-            <span class="pollutant-value-slot"><strong class="pollutant-value"></strong></span>
+            <strong class="pollutant-value">11</strong>
             <span class="pollutant-unit">&micro;g/m<sup>3</sup></span>
-            <p class="pollutant-station"></p>
-            <p class="pollutant-network"></p>
+            <p class="pollutant-station">South Gloucestershire Yate Station Road</p>
+            <p class="pollutant-network">Sensor.Community</p>
           </div>
-          <div class="pollutant-unavailable" role="note" hidden>
-            <h3 class="pollutant-unavailable-title">NO<sub>2</sub> not available</h3>
-            <p class="pollutant-unavailable-copy"></p>
-          </div>
-          <div class="scale-legend" aria-label="NO2 Hex Map power-eased reading scale: 0 to 100 plus micrograms per cubic metre, with reference ticks at 20, 40, 60 and 80">
-            <div class="scale-stripe-row" aria-hidden="true">
-              <span class="scale-stripe-endpoint scale-stripe-endpoint--start">0</span>
-              <div class="scale-stripe-track">
-                <div class="scale-stripe scale-stripe--no2">
-                  <span class="scale-stripe-tick" style="left: 28%"></span>
-                  <span class="scale-stripe-tick" style="left: 49.2%"></span>
-                  <span class="scale-stripe-tick" style="left: 68.7%"></span>
-                  <span class="scale-stripe-tick" style="left: 87.1%"></span>
-                </div>
-                <div class="scale-stripe-labels">
-                  <span class="scale-stripe-number" style="left: 28%">20</span>
-                  <span class="scale-stripe-number" style="left: 49.2%">40</span>
-                  <span class="scale-stripe-number" style="left: 68.7%">60</span>
-                  <span class="scale-stripe-number" style="left: 87.1%">80</span>
-                </div>
-              </div>
-              <span class="scale-stripe-endpoint scale-stripe-endpoint--end">100+</span>
-            </div>
+          <div class="scale-legend" aria-label="Placeholder NO2 reading scale">
+            <span class="scale-label">NO<sub>2</sub> reading scale</span>
+            <div class="scale-stripe" aria-hidden="true"></div>
           </div>
           <nav class="pollutant-actions" aria-label="NO2 sensor actions">
             <a class="pollutant-action" href="/hex_map/" aria-label="Open NO2 sensor on Hex Map" title="Open sensor on Hex Map">
               <img src="images/UK AQ Buttons.Hex Map.svg" alt="">
             </a>
-            <a class="pollutant-action" href="/sensor_map/" aria-label="Open NO2 sensor on UK Map" title="Open sensor on UK Map">
+            <a class="pollutant-action" href="sensors_map.html" aria-label="Open NO2 sensor on UK Map" title="Open sensor on UK Map">
               <img src="images/UK AQ Buttons.Location.svg" alt="">
             </a>
-            <a class="pollutant-action" href="/sensors_chart/" aria-label="Open NO2 sensor line chart" title="Open sensor line chart">
+            <a class="pollutant-action" href="sensors_chart.html" aria-label="Open NO2 sensor line chart" title="Open sensor line chart">
               <img src="images/UK AQ Buttons.Chart.svg" alt="">
             </a>
           </nav>
@@ -1405,62 +972,62 @@
               </tr>
             </thead>
             <tbody>
-              <tr data-area-type="pcon">
+              <tr>
                 <th scope="row">Parliamentary constituencies</th>
                 <td>
                   <span class="area-reading">
-                    <span class="area-reading-name"></span>
+                    <span class="area-reading-name">Bristol West</span>
                     <span class="area-reading-metric">
-                      <span class="area-marker" aria-hidden="true"></span>
-                      <span class="area-reading-value"></span>
+                      <span class="area-marker area-marker--level-red" aria-hidden="true"></span>
+                      <span class="area-reading-value">20 &micro;g/m<sup>3</sup></span>
                     </span>
                   </span>
                 </td>
                 <td>
                   <span class="area-reading">
-                    <span class="area-reading-name"></span>
+                    <span class="area-reading-name">Bristol West</span>
                     <span class="area-reading-metric">
-                      <span class="area-marker" aria-hidden="true"></span>
-                      <span class="area-reading-value"></span>
+                      <span class="area-marker area-marker--level-orange" aria-hidden="true"></span>
+                      <span class="area-reading-value">20 &micro;g/m<sup>3</sup></span>
                     </span>
                   </span>
                 </td>
                 <td>
                   <span class="area-reading">
-                    <span class="area-reading-name"></span>
+                    <span class="area-reading-name">Bristol West</span>
                     <span class="area-reading-metric">
-                      <span class="area-marker" aria-hidden="true"></span>
-                      <span class="area-reading-value"></span>
+                      <span class="area-marker area-marker--level-yellow" aria-hidden="true"></span>
+                      <span class="area-reading-value">30 &micro;g/m<sup>3</sup></span>
                     </span>
                   </span>
                 </td>
               </tr>
-              <tr data-area-type="la">
+              <tr>
                 <th scope="row">Local Authorities</th>
                 <td>
                   <span class="area-reading">
-                    <span class="area-reading-name"></span>
+                    <span class="area-reading-name">City of Bristol</span>
                     <span class="area-reading-metric">
-                      <span class="area-marker" aria-hidden="true"></span>
-                      <span class="area-reading-value"></span>
+                      <span class="area-marker area-marker--level-red" aria-hidden="true"></span>
+                      <span class="area-reading-value">20 &micro;g/m<sup>3</sup></span>
                     </span>
                   </span>
                 </td>
                 <td>
                   <span class="area-reading">
-                    <span class="area-reading-name"></span>
+                    <span class="area-reading-name">City of Bristol</span>
                     <span class="area-reading-metric">
-                      <span class="area-marker" aria-hidden="true"></span>
-                      <span class="area-reading-value"></span>
+                      <span class="area-marker area-marker--level-orange" aria-hidden="true"></span>
+                      <span class="area-reading-value">20 &micro;g/m<sup>3</sup></span>
                     </span>
                   </span>
                 </td>
                 <td>
                   <span class="area-reading">
-                    <span class="area-reading-name"></span>
+                    <span class="area-reading-name">City of Bristol</span>
                     <span class="area-reading-metric">
-                      <span class="area-marker" aria-hidden="true"></span>
-                      <span class="area-reading-value"></span>
+                      <span class="area-marker area-marker--level-yellow" aria-hidden="true"></span>
+                      <span class="area-reading-value">30 &micro;g/m<sup>3</sup></span>
                     </span>
                   </span>
                 </td>
@@ -1476,7 +1043,7 @@
         </div>
         <div class="dashboard-table-wrap" tabindex="0" role="region" aria-label="Scrollable active sensors by network table">
           <table class="dashboard-table dashboard-table--networks">
-            <caption class="sr-only" id="active-sensors-caption">Active sensor counts by network and pollutant</caption>
+            <caption class="sr-only">Active sensor counts by network and pollutant</caption>
             <thead>
               <tr>
                 <th scope="col">Network</th>
@@ -1486,34 +1053,27 @@
                 <th scope="col">NO<sub>2</sub></th>
               </tr>
             </thead>
-            <tbody id="network-summary-body">
-              <tr data-network="gov_uk_aurn">
+            <tbody>
+              <tr>
                 <th scope="row">GOV.UK AURN</th>
-                <td></td>
-                <td></td>
-                <td></td>
-                <td></td>
+                <td><time datetime="2026-07-03T10:00:00+01:00">03/07/2026 10:00</time></td>
+                <td>120</td>
+                <td>60</td>
+                <td>20</td>
               </tr>
-              <tr data-network="breathelondon">
+              <tr>
                 <th scope="row">Breathe London</th>
-                <td></td>
-                <td></td>
-                <td></td>
-                <td></td>
+                <td><time datetime="2026-07-03T09:00:00+01:00">03/07/2026 09:00</time></td>
+                <td>120</td>
+                <td>80</td>
+                <td>40</td>
               </tr>
-              <tr data-network="sensorcommunity">
-                <th scope="row">Sensor.Community</th>
-                <td>—</td>
-                <td>—</td>
-                <td>—</td>
-                <td>—</td>
-              </tr>
-              <tr data-network="total">
+              <tr>
                 <th scope="row">Total sensors</th>
                 <td></td>
-                <td>—</td>
-                <td>—</td>
-                <td>—</td>
+                <td>240</td>
+                <td>140</td>
+                <td>60</td>
               </tr>
             </tbody>
           </table>
@@ -1631,7 +1191,6 @@
     const AQI_HISTORY_BASE_PLACEHOLDER = "https://cic-test.chronicillnesschannel.co.uk/api/aq/aqi-history";
     const WEBSITE_DEBUG_LOG_ENABLED_PLACEHOLDER = "true";
   </script>
-  <script src="/dashboard.js"></script>
   <script>
     (() => {
       const switches = Array.from(document.querySelectorAll(".tool-card-title-graphic-switch"));

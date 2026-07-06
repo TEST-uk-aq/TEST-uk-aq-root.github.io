@@ -588,7 +588,8 @@
     .pollutant-grid {
       display: grid;
       grid-template-columns: repeat(3, minmax(0, 1fr));
-      gap: clamp(1.5rem, 3vw, 2.5rem);
+      column-gap: clamp(1.5rem, 3vw, 2.5rem);
+      row-gap: 1rem;
       margin-top: 1.35rem;
     }
 
@@ -596,8 +597,36 @@
       display: grid;
       grid-template-rows: auto auto auto;
       justify-items: center;
+      align-items: start;
       gap: 1rem;
       min-width: 0;
+    }
+
+    .pollutant-item > .pollutant-circle,
+    .pollutant-item > .pollutant-unavailable {
+      grid-row: 1;
+    }
+
+    .pollutant-item > .scale-legend {
+      grid-row: 2;
+    }
+
+    .pollutant-item > .pollutant-actions {
+      grid-row: 3;
+    }
+
+    @supports (grid-template-rows: subgrid) {
+      @media (min-width: 641px) {
+        .pollutant-grid {
+          grid-auto-rows: auto auto auto;
+        }
+
+        .pollutant-item {
+          grid-row: span 3;
+          grid-template-rows: subgrid;
+          row-gap: 1rem;
+        }
+      }
     }
 
     .pollutant-unavailable {
@@ -702,6 +731,10 @@
     }
 
     .pollutant-name {
+      min-height: 1.25em;
+      display: flex;
+      align-items: baseline;
+      justify-content: center;
       margin: 0.2rem 0 0 0;
       font-size: clamp(1.35rem, 2.2vw, 1.7rem);
       font-weight: 850;
@@ -709,8 +742,19 @@
     }
 
     .pollutant-name sub {
-      font-size: 0.65em;
-      vertical-align: sub;
+      position: relative;
+      bottom: -0.18em;
+      font-size: 0.58em;
+      line-height: 0;
+    }
+
+    .pollutant-value-slot,
+    .pollutant-unit,
+    .pollutant-observed,
+    .pollutant-station,
+    .pollutant-network {
+      position: relative;
+      top: -8px;
     }
 
     .pollutant-value-slot {
@@ -876,10 +920,12 @@
 
     .pollutant-actions {
       display: flex;
+      width: 100%;
+      min-height: 54px;
       justify-content: center;
       align-items: center;
       gap: 0.75rem;
-      flex-wrap: wrap;
+      flex-wrap: nowrap;
     }
 
     .pollutant-action {
@@ -917,6 +963,10 @@
     }
 
     @media (max-width: 640px) {
+      .pollutant-actions {
+        min-height: 46px;
+      }
+
       .pollutant-action {
         height: 46px;
         border-radius: 7px;

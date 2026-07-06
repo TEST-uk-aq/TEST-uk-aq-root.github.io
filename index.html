@@ -1,4 +1,5 @@
 <!DOCTYPE html>
+<!-- uk-aq-root index.html  -->
 <html lang="en">
 <head>
   <meta charset="UTF-8">
@@ -6,7 +7,26 @@
   <title>UK AQ</title>
   <link rel="stylesheet" href="styles.css">
   <link rel="icon" href="images/favicon.ico" type="image/png">
-  <style>
+  <link rel="icon" href="/images/favicon.ico" type="image/png">
+  <link rel="preload" as="image" href="/sidebar-images/uk-aq-hex-map-icon.svg" />
+  <link rel="preload" as="image" href="/sidebar-images/uk-aq-sensors-icon.svg" />
+  <link rel="preload" as="image" href="/sidebar-images/uk-aq-map-icon.svg" />
+  <link rel="preload" as="image" href="/sidebar-images/Bubble-Chart-Icon.svg" />
+  <link rel="preload" as="image" href="/sidebar-images/Line-Chart-Icon.svg" />
+  <link rel="preload" as="image" href="/sidebar-images/Stove%20Ecodesign%20430x683.svg" />
+  <link rel="preload" as="image" href="/sidebar-images/Category%20Info%20-%20Icon.svg" />
+  <link rel="preload" as="image" href="/sidebar-images/user-guide.svg" />
+  <link rel="preload" as="image" href="/sidebar-images/youtube-logo.svg" />
+  <link rel="preload" as="image" href="/sidebar-images/youtube-logo-Word.svg" />
+  <link rel="preload" as="image" href="/sidebar-images/uk-aq-contact-blue-200h.svg" />
+  <link rel="preload" as="image" href="/images/UK-AQ-hex-map.svg" />
+  <link rel="preload" as="image" href="/images/Red-Square-Button-White-Cross-200x200.svg" />
+  <link rel="preload" as="image" href="/images/settings-cog.svg" />
+  <link rel="preload" as="image" href="/images/Link%20Icon.svg" />
+  <link rel="preload" as="image" href="/images/openaq_logo.svg" />
+  <link rel="preload" as="image" href="/images/breathelondon_logo_v2.svg" />
+  <link rel="preload" as="image" href="/images/scomm_logo-sw.svg" />
+    <style>
     .home-page {
       margin: 0;
       min-height: 100vh;
@@ -666,6 +686,22 @@
       white-space: normal;
     }
 
+    .pollutant-circle--inactive .pollutant-name {
+      grid-row: 1;
+    }
+
+    .pollutant-circle--inactive .pollutant-value-slot {
+      grid-row: 2;
+    }
+
+    .pollutant-circle--inactive .pollutant-station {
+      grid-row: 5;
+    }
+
+    .pollutant-circle--inactive .pollutant-network {
+      grid-row: 6;
+    }
+
     .pollutant-name {
       margin: 0.2rem 0 0 0;
       font-size: clamp(1.35rem, 2.2vw, 1.7rem);
@@ -712,15 +748,38 @@
       font-size: 0.65em;
     }
 
-    .pollutant-station {
+    .pollutant-observed {
       width: 100%;
+      align-self: end;
+      margin: 0;
+      padding-top: 0.4rem;
+      font-size: clamp(0.66rem, 1.15vw, 0.78rem);
+      font-weight: 700;
+      line-height: 1.15;
+      opacity: 0.95;
+      white-space: nowrap;
+    }
+
+    .pollutant-observed[hidden] {
+      display: none;
+    }
+
+    .pollutant-observed-zone {
+      font-size: 0.82em;
+      font-weight: 850;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+    }
+
+    .pollutant-station {
+      width: 82%;
       align-self: end;
       min-height: 2.25em;
       max-height: 2.25em;
       display: flex;
       align-items: flex-end;
       justify-content: center;
-      margin-top: 0;
+      margin-top: 0.25rem;
       font-size: clamp(0.92rem, 1.7vw, 1.08rem);
       font-weight: 800;
       line-height: 1.08;
@@ -729,7 +788,8 @@
 
     .pollutant-network {
       width: 100%;
-      margin-top: 0.04rem;
+      margin-top: 0.02rem;
+      transform: translateY(-5px);
       font-size: 0.82rem;
       font-weight: 650;
       line-height: 1.12;
@@ -1244,6 +1304,7 @@
             <h3 class="pollutant-name">PM2.5</h3>
             <span class="pollutant-value-slot"><strong class="pollutant-value"></strong></span>
             <span class="pollutant-unit">&micro;g/m<sup>3</sup></span>
+            <p class="pollutant-observed" hidden>Observed <time></time></p>
             <p class="pollutant-station"></p>
             <p class="pollutant-network"></p>
           </div>
@@ -1278,7 +1339,7 @@
             <a class="pollutant-action" href="/sensor_map/" aria-label="Open PM2.5 sensor on UK Map" title="Open sensor on UK Map">
               <img src="images/UK AQ Buttons.Location.svg" alt="">
             </a>
-            <a class="pollutant-action" href="/sensors_chart/" aria-label="Open PM2.5 sensor line chart" title="Open sensor line chart">
+            <a class="pollutant-action" href="/sensors/" aria-label="Open PM2.5 sensor line chart" title="Open sensor line chart">
               <img src="images/UK AQ Buttons.Chart.svg" alt="">
             </a>
           </nav>
@@ -1289,6 +1350,7 @@
             <h3 class="pollutant-name">PM10</h3>
             <span class="pollutant-value-slot"><strong class="pollutant-value"></strong></span>
             <span class="pollutant-unit">&micro;g/m<sup>3</sup></span>
+            <p class="pollutant-observed" hidden>Observed <time></time></p>
             <p class="pollutant-station"></p>
             <p class="pollutant-network"></p>
           </div>
@@ -1323,7 +1385,7 @@
             <a class="pollutant-action" href="/sensor_map/" aria-label="Open PM10 sensor on UK Map" title="Open sensor on UK Map">
               <img src="images/UK AQ Buttons.Location.svg" alt="">
             </a>
-            <a class="pollutant-action" href="/sensors_chart/" aria-label="Open PM10 sensor line chart" title="Open sensor line chart">
+            <a class="pollutant-action" href="/sensors/" aria-label="Open PM10 sensor line chart" title="Open sensor line chart">
               <img src="images/UK AQ Buttons.Chart.svg" alt="">
             </a>
           </nav>
@@ -1334,6 +1396,7 @@
             <h3 class="pollutant-name">NO<sub>2</sub></h3>
             <span class="pollutant-value-slot"><strong class="pollutant-value"></strong></span>
             <span class="pollutant-unit">&micro;g/m<sup>3</sup></span>
+            <p class="pollutant-observed" hidden>Observed <time></time></p>
             <p class="pollutant-station"></p>
             <p class="pollutant-network"></p>
           </div>
@@ -1368,7 +1431,7 @@
             <a class="pollutant-action" href="/sensor_map/" aria-label="Open NO2 sensor on UK Map" title="Open sensor on UK Map">
               <img src="images/UK AQ Buttons.Location.svg" alt="">
             </a>
-            <a class="pollutant-action" href="/sensors_chart/" aria-label="Open NO2 sensor line chart" title="Open sensor line chart">
+            <a class="pollutant-action" href="/sensors/" aria-label="Open NO2 sensor line chart" title="Open sensor line chart">
               <img src="images/UK AQ Buttons.Chart.svg" alt="">
             </a>
           </nav>
@@ -1531,7 +1594,7 @@
           </p>
         </a>
 
-        <a class="tool-card tool-card--ukaq" href="sensors_chart.html" aria-label="Sensors: Browse live and historical readings from selected air quality sensor networks.">
+        <a class="tool-card tool-card--ukaq" href="sensors.html" aria-label="Sensors: Browse live and historical readings from selected air quality sensor networks.">
           <div class="tool-card-header">
             <span class="tool-card-icon-box">
               <img class="tool-card-icon" src="sidebar-images/uk-aq-sensors-icon-blue.svg" alt="">
@@ -1560,7 +1623,7 @@
       </div>
     </section>
 
-    <section class="home-section" aria-labelledby="home-data-explorer-heading">
+<!--     <section class="home-section" aria-labelledby="home-data-explorer-heading">
       <h2 id="home-data-explorer-heading" class="sr-only">Data Explorer</h2>
       <img class="section-logo section-logo--de" src="images/Data-Explorer-Logov2-1Line.svg" alt="Data Explorer">
       <p class="section-description">
@@ -1611,6 +1674,7 @@
         </a>
       </div>
     </section>
+-->
   </main>
 
   <footer class="home-footer">

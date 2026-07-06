@@ -12,14 +12,15 @@
   const NAV = [
     {
       id: 'uk-aq',
-      label: 'UK-AQ',
+      label: 'UK AQ',
+      showLabel: false,
       children: [
         { label: 'Hex Map',     iconImg: 'uk-aq-hex-map-sidebar.svg', href: '/hex_map/' },
-        { label: 'Sensors',     iconImg: 'uk-aq-sensors-icon-blue.svg',  href: '/uk-aq/sensors_chart.html' },
+        { label: 'Sensors',     iconImg: 'uk-aq-sensors-icon-blue.svg',  href: '/sensors/' },
         { label: 'Sensor Map', iconImg: 'uk-aq-location-pin.svg',       href: '/sensor_map/' },
       ],
     },
-    {
+/*    {
       id: 'data-explorer',
       label: 'Data Explorer',
       children: [
@@ -30,19 +31,19 @@
         { label: 'User Guide',         iconImg: 'user-guide.svg', href: '/data-explorer/user-guide/' },
       ],
     },
-    {
+*/    {
       id: 'quick-links',
       showLabel: false,
       dividerBefore: true,
       children: [
-        {
+/*        {
           label: 'YouTube',
           iconImg: 'youtube-logo.svg',
           labelImg: 'youtube-logo-Word.svg',
           href: 'https://youtube.com/@chronicillnesschannel',
           external: true,
         },
-        { label: 'Resources', iconImg: 'chain-link-icon-grey.svg', href: '/resources/' },
+*/        { label: 'Resources', iconImg: 'chain-link-icon-ukaqblue-200h.svg', href: '/resources/' },
         { label: 'Contact', iconImg: 'uk-aq-contact-blue-200h.svg', href: '/contact.html' },
       ],
     },
@@ -277,7 +278,7 @@
       text-transform: uppercase;
       font-weight: 700;
       padding: 14px 10px 5px;
-      background: linear-gradient(285deg, #FF0000, #FEAE00);
+      background: linear-gradient(285deg,#004D80,#67B0ED);
       -webkit-background-clip: text;
       -webkit-text-fill-color: transparent;
       background-clip: text;

@@ -42,6 +42,8 @@
   );
   const rowsByPollutant = new Map();
   const capabilityRowsByPollutant = new Map();
+  const connectorRefreshByCode = new Map();
+  let dashboardLoadedAt = null;
   let fitValuesFrame = null;
   let fitValuesTimer = null;
 
@@ -105,6 +107,39 @@
       .filter((row) => row.code && row.label);
   }
 
+  async function fetchConnectorRefreshMetadata() {
+    const projectRef = typeof PROJECT_REF_PLACEHOLDER === "string"
+      && !PROJECT_REF_PLACEHOLDER.includes("__SUPABASE_PROJECT_REF__")
+      ? PROJECT_REF_PLACEHOLDER.trim()
+      : "";
+    const publishableKey = typeof ANON_KEY_PLACEHOLDER === "string"
+      && !ANON_KEY_PLACEHOLDER.includes("__SB_PUBLISHABLE_DEFAULT_KEY__")
+      ? ANON_KEY_PLACEHOLDER.trim()
+      : "";
+    if (!projectRef || !publishableKey) {
+      throw new Error("Public Supabase configuration is unavailable.");
+    }
+    const url = new URL(
+      `https://${projectRef}.supabase.co/rest/v1/connector_refresh_metadata`,
+    );
+    url.searchParams.set("select", "connector_code,last_polled_at");
+    const response = await fetch(url, {
+      headers: {
+        apikey: publishableKey,
+        "Accept-Profile": "uk_aq_public",
+      },
+    });
+    if (!response.ok) {
+      console.warn(
+        `[UK AQ dashboard] Optional connector refresh metadata unavailable (${response.status}). `
+        + "Dashboard will use its successful load time.",
+      );
+      return [];
+    }
+    const payload = await response.json();
+    return Array.isArray(payload) ? payload : [];
+  }
+
   async function fetchAreaNames() {
     const [pconResponse, laResponse] = await Promise.all([
       fetch("/data/PCON/uk-constituencies-2023.hexjson"),
@@ -141,6 +176,55 @@
     const value = row?.last_value_at || row?.observed_at || row?.latest_value_at;
     const parsed = value ? new Date(value) : null;
     return parsed && !Number.isNaN(parsed.getTime()) ? parsed : null;
+  }
+
+  function observedTimestampValue(row) {
+    return row?.observed_at || row?.last_value_at || row?.latest_observed_at
+      || row?.reading_observed_at || row?.latest_value_at || null;
+  }
+
+  function formatObservedDateTime(value) {
+    if (!value) return null;
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) return null;
+    const parts = new Intl.DateTimeFormat("en-GB", {
+      timeZone: "Europe/London",
+      day: "2-digit",
+      month: "2-digit",
+      year: "numeric",
+      hour: "2-digit",
+      minute: "2-digit",
+      hourCycle: "h23",
+      timeZoneName: "short",
+    }).formatToParts(date);
+    const part = (type) => parts.find((entry) => entry.type === type)?.value || "";
+    const rawZone = part("timeZoneName").toUpperCase();
+    const zone = rawZone === "BST" || /(?:GMT|UTC)\+0?1(?::00)?/.test(rawZone)
+      ? "BST"
+      : "GMT";
+    return {
+      dateTime: `${part("day")}/${part("month")}/${part("year")} ${part("hour")}:${part("minute")}`,
+      zone,
+      iso: date.toISOString(),
+    };
+  }
+
+  function renderObservedDateTime(container, row) {
+    const formatted = formatObservedDateTime(observedTimestampValue(row));
+    if (!formatted) {
+      container.hidden = true;
+      container.querySelector("time").removeAttribute("datetime");
+      container.querySelector("time").textContent = "";
+      return "";
+    }
+    const time = container.querySelector("time");
+    const zone = document.createElement("span");
+    zone.className = "pollutant-observed-zone";
+    zone.textContent = formatted.zone;
+    time.replaceChildren(document.createTextNode(`${formatted.dateTime} `), zone);
+    time.setAttribute("datetime", formatted.iso);
+    container.hidden = false;
+    return `${formatted.dateTime} ${formatted.zone}`;
   }
 
   function stationKey(row) {
@@ -203,6 +287,7 @@
   function formatDate(value) {
     if (!(value instanceof Date) || Number.isNaN(value.getTime())) return "—";
     const parts = new Intl.DateTimeFormat("en-GB", {
+      timeZone: "Europe/London",
       day: "2-digit", month: "2-digit", year: "numeric",
       hour: "2-digit", minute: "2-digit", hourCycle: "h23",
     }).formatToParts(value);
@@ -280,6 +365,7 @@
       const actionsContainer = item.querySelector(".pollutant-actions");
       const unit = item.querySelector(".pollutant-unit");
       const valueElement = item.querySelector(".pollutant-value");
+      const observedElement = item.querySelector(".pollutant-observed");
       const showInactiveCircle = !row && hasPollutant;
       circle.hidden = !row && !showInactiveCircle;
       unavailable.hidden = Boolean(row) || showInactiveCircle;
@@ -291,6 +377,7 @@
         valueElement.textContent = formatValue(value);
         item.querySelector(".pollutant-station").textContent = stationName(row);
         item.querySelector(".pollutant-network").textContent = networkLabel(row);
+        renderObservedDateTime(observedElement, row);
         circle.style.background = severityColour(value, pollutant.key);
       } else if (showInactiveCircle) {
         valueElement.style.fontSize = "";
@@ -299,8 +386,10 @@
           `No active readings in the last ${DASHBOARD_ACTIVE_WINDOW_HOURS} hours`;
         item.querySelector(".pollutant-station").textContent = "";
         item.querySelector(".pollutant-network").textContent = selectedNetworkScopeLabel();
+        renderObservedDateTime(observedElement, null);
         circle.style.background = "#C8CDD1";
       } else {
+        renderObservedDateTime(observedElement, null);
         let message = `Selected networks do not currently report ${pollutant.label}.`;
         if (selectedNetworks.size === 1) {
           const label = networkLabels.get([...selectedNetworks][0]) || "Selected network";
@@ -310,8 +399,9 @@
         }
         unavailable.querySelector(".pollutant-unavailable-copy").textContent = message;
       }
+      const observedLabel = row ? formatObservedDateTime(observedTimestampValue(row)) : null;
       item.setAttribute("aria-label", row
-        ? `${pollutant.label}: ${formatValue(value)} micrograms per cubic metre at ${stationName(row)}, ${networkLabel(row)}`
+        ? `${pollutant.label}: ${formatValue(value)} micrograms per cubic metre at ${stationName(row)}, ${networkLabel(row)}${observedLabel ? `, observed ${observedLabel.dateTime} ${observedLabel.zone}` : ""}`
         : (showInactiveCircle
           ? `${pollutant.label}: No active readings in the last ${DASHBOARD_ACTIVE_WINDOW_HOURS} hours`
           : `${pollutant.label}: Not provided by the selected networks`));
@@ -489,13 +579,34 @@
   }
 
   function renderUpdated() {
-    let newest = null;
-    POLLUTANTS.forEach(({ key }) => selectedRows(key).forEach((row) => {
-      const at = timestamp(row);
-      if (at && (!newest || at > newest)) newest = at;
-    }));
-    updatedEl.textContent = newest ? `Updated ${formatDate(newest)}` : "Updated —";
-    if (newest) updatedEl.setAttribute("datetime", newest.toISOString());
+    const connectorCodes = new Set();
+    POLLUTANTS.forEach(({ key }) => {
+      const baselineRows = capabilityRowsByPollutant.get(key);
+      const rows = Array.isArray(baselineRows) ? baselineRows : (rowsByPollutant.get(key) || []);
+      rows.forEach((row) => {
+        if (!selectedNetworks.has(networkCode(row))) return;
+        const code = String(row?.connector_code || row?.connector?.connector_code || "").trim();
+        if (code) connectorCodes.add(code);
+      });
+    });
+    // For multiple selected networks, use the most recent successful connector
+    // poll: this communicates when UK AQ most recently refreshed any selected data.
+    let refreshedAt = null;
+    connectorCodes.forEach((code) => {
+      const candidate = connectorRefreshByCode.get(code);
+      if (candidate && (!refreshedAt || candidate > refreshedAt)) refreshedAt = candidate;
+    });
+    // TODO: Remove this load-time fallback once refresh metadata is guaranteed on
+    // the public connector surface. Never substitute a sensor observation time.
+    const displayedAt = refreshedAt || dashboardLoadedAt;
+    updatedEl.textContent = displayedAt ? `Updated ${formatDate(displayedAt)}` : "Updated —";
+    updatedEl.setAttribute(
+      "aria-label",
+      displayedAt
+        ? `Dashboard data refreshed ${formatDate(displayedAt)} UK time`
+        : "Dashboard refresh time unavailable",
+    );
+    if (displayedAt) updatedEl.setAttribute("datetime", displayedAt.toISOString());
     else updatedEl.removeAttribute("datetime");
   }
 
@@ -511,7 +622,7 @@
   async function load() {
     dashboard?.classList.add("is-loading");
     try {
-      const [results, capabilityResults, catalogResult, areaNamesResult] = await Promise.all([
+      const [results, capabilityResults, catalogResult, areaNamesResult, refreshMetadataResult] = await Promise.all([
         Promise.allSettled(POLLUTANTS.map(({ key }) => fetchRows(key))),
         Promise.allSettled(POLLUTANTS.map(({ key }) => fetchRows(key, "all"))),
         Promise.resolve(fetchNetworkCatalog()).then(
@@ -520,6 +631,10 @@
         ),
         Promise.resolve(fetchAreaNames()).then(
           () => ({ status: "fulfilled" }),
+          (reason) => ({ status: "rejected", reason }),
+        ),
+        Promise.resolve(fetchConnectorRefreshMetadata()).then(
+          (value) => ({ status: "fulfilled", value }),
           (reason) => ({ status: "rejected", reason }),
         ),
       ]);
@@ -554,6 +669,19 @@
           debugLog(`Unable to load ${key} capability baseline`, result.reason);
         }
       });
+      connectorRefreshByCode.clear();
+      if (refreshMetadataResult.status === "fulfilled") {
+        refreshMetadataResult.value.forEach((row) => {
+          const code = String(row?.connector_code || "").trim();
+          const polledAt = row?.last_polled_at ? new Date(row.last_polled_at) : null;
+          if (code && polledAt && !Number.isNaN(polledAt.getTime())) {
+            connectorRefreshByCode.set(code, polledAt);
+          }
+        });
+      } else {
+        debugLog("Unable to load connector refresh metadata", refreshMetadataResult.reason);
+      }
+      dashboardLoadedAt = new Date();
       render();
       if (!loaded) throw new Error("All latest-reading requests failed.");
       statusEl.hidden = loaded === POLLUTANTS.length;

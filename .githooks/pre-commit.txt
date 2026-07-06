@@ -6,7 +6,7 @@ SCRIPT="${ROOT_DIR}/scripts/uk_aq_inject_project_ref.mjs"
 TARGETS=(
   "hex_map/index.html"
   "index.html"
-  "sensors_chart/index.html"
+  "sensors/index.html"
   "sensor_map/index.html"
 )
 

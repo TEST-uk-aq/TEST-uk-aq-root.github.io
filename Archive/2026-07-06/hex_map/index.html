@@ -6976,7 +6976,6 @@
         };
       };
     </script>
-    <script src="/js/uk-aq-cache-auth.js"></script>
     <script>
       const PROJECT_REF_PLACEHOLDER = "zztjgmdiftqtdcrlfpvc";
       const ANON_KEY_PLACEHOLDER = "sb_publishable_Cru7ACLoK8kKQdID5jPaDw_3RHvQNxO";
@@ -17910,7 +17909,7 @@
     try {
       const prepared = prepareWebsiteDebugPayloadForUpload(payload);
       const body = prepared.body;
-      const response = await window.ukAqFetchCacheApi(WEBSITE_DEBUG_LOG_ENDPOINT, {
+      const response = await fetch(WEBSITE_DEBUG_LOG_ENDPOINT, {
         method: "POST",
         credentials: "include",
         headers: { "Content-Type": "application/json" },
@@ -22262,7 +22261,7 @@
 
   async function loadPrefixHints() {
     try {
-      const response = await window.ukAqFetchCacheApi(POSTCODE_PREFIX_HINTS_URL);
+      const response = await fetch(POSTCODE_PREFIX_HINTS_URL, { credentials: "include" });
       const bodyText = await response.text();
       if (!response.ok) {
         const debug = window.ukAqWebsiteDebugLog;
@@ -22561,7 +22560,7 @@
         q: query,
         limit,
       });
-      const response = await window.ukAqFetchCacheApi(requestUrl, { signal });
+      const response = await fetch(requestUrl, { signal });
       const payload = await safeReadJson(response);
       if (!response.ok) {
         if (response.status === 404 && !workingPostcodeSuggestUrl) {
@@ -22638,7 +22637,7 @@
     let lastError = null;
     for (const baseUrl of candidates) {
       const requestUrl = makeRequestUrl(baseUrl, { postcode });
-      const response = await window.ukAqFetchCacheApi(requestUrl);
+      const response = await fetch(requestUrl);
       const payload = await safeReadJson(response);
       if (!response.ok || payload?.ok === false) {
         const status = response.status || 500;

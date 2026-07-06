@@ -83,8 +83,18 @@
     return url;
   }
 
+  async function fetchCacheApi(input, init = {}, retryOnAuthFailure = true) {
+    if (window.ukAqSharedAuth?.fetchCacheApi) {
+      return window.ukAqSharedAuth.fetchCacheApi(input, init, retryOnAuthFailure);
+    }
+    if (window.ukAqFetchCacheApi) {
+      return window.ukAqFetchCacheApi(input, init, retryOnAuthFailure);
+    }
+    return fetch(input, { ...init, credentials: "include" });
+  }
+
   async function fetchRows(pollutant, windowLabel = DASHBOARD_ACTIVE_WINDOW) {
-    const response = await fetch(endpoint("latest-snapshot", pollutant, windowLabel), {
+    const response = await fetchCacheApi(endpoint("latest-snapshot", pollutant, windowLabel), {
       credentials: "include",
     });
     if (!response.ok) throw new Error(`Latest ${pollutant} request failed: ${response.status}`);
@@ -94,7 +104,7 @@
   }
 
   async function fetchNetworkCatalog() {
-    const response = await fetch(`${cacheBaseUrl}/networks`, { credentials: "include" });
+    const response = await fetchCacheApi(`${cacheBaseUrl}/networks`, { credentials: "include" });
     if (!response.ok) throw new Error(`Network catalog request failed: ${response.status}`);
     const payload = await response.json();
     return (Array.isArray(payload?.data) ? payload.data : [])

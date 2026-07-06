@@ -259,7 +259,6 @@
     </div>
 
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" crossorigin="anonymous"></script>
-    <script src="/js/uk-aq-cache-auth.js"></script>
     <script>
       (() => {
         const PROJECT_REF_PLACEHOLDER = "zztjgmdiftqtdcrlfpvc";
@@ -600,18 +599,30 @@
           const requestMethod = String(init?.method || "GET").toUpperCase();
           let response;
           try {
-            response = await window.ukAqSharedAuth.fetchCacheApi(input, init, retryOnAuthFailure);
+            response = await fetch(input, { ...init, credentials: "include" });
           } catch (error) {
             if (requestMethod !== "GET" && requestMethod !== "HEAD") {
               throw error;
             }
             await waitMs(300);
-            return window.ukAqSharedAuth.fetchCacheApi(input, init, retryOnAuthFailure);
+            return fetch(input, { ...init, credentials: "include" });
+          }
+
+          if (response.status === 401 && retryOnAuthFailure) {
+            cacheSessionReadyUntil = 0;
+            await ensureCacheSession(false);
+            response = await fetch(input, { ...init, credentials: "include" });
+            if (response.status !== 401) {
+              return response;
+            }
+            cacheSessionReadyUntil = 0;
+            await ensureCacheSession(true);
+            return fetch(input, { ...init, credentials: "include" });
           }
 
           if ((requestMethod === "GET" || requestMethod === "HEAD") && [502, 503, 504].includes(response.status)) {
             await waitMs(300);
-            return window.ukAqSharedAuth.fetchCacheApi(input, init, retryOnAuthFailure);
+            return fetch(input, { ...init, credentials: "include" });
           }
 
           return response;

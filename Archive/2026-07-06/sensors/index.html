@@ -552,7 +552,6 @@
     <script src="https://cdn.jsdelivr.net/npm/d3@7.9.0/dist/d3.min.js" crossorigin="anonymous"></script>
     <script src="/timeseries-client.js"></script>
     <script src="/chart-core.js"></script>
-    <script src="/js/uk-aq-cache-auth.js"></script>
     <script>
       const PROJECT_REF_PLACEHOLDER = "zztjgmdiftqtdcrlfpvc";
       const ANON_KEY_PLACEHOLDER = "sb_publishable_Cru7ACLoK8kKQdID5jPaDw_3RHvQNxO";
@@ -1490,9 +1489,16 @@
 
       async function fetchCacheApi(input, init = {}, retryOnAuthFailure = true, retryOnTransient = true) {
         const requestMethod = String(init?.method || "GET").toUpperCase();
+        if (retryOnAuthFailure && !hasFreshCacheSession()) {
+          try {
+            await ensureCacheSession(false);
+          } catch (_err) {
+            // Fall back to the explicit 401 recovery path below.
+          }
+        }
         let response;
         try {
-          response = await window.ukAqSharedAuth.fetchCacheApi(input, init, retryOnAuthFailure);
+          response = await fetch(input, { ...init, credentials: "include" });
         } catch (error) {
           if (isAbortError(error) || init?.signal?.aborted) {
             throw error;
@@ -1501,11 +1507,23 @@
             throw error;
           }
           await waitMs(CACHE_API_TRANSIENT_RETRY_DELAY_MS);
-          return window.ukAqSharedAuth.fetchCacheApi(input, init, retryOnAuthFailure);
+          return fetch(input, { ...init, credentials: "include" });
+        }
+        if (response.status === 401 && retryOnAuthFailure) {
+          // A real 401 means the shared localStorage hint is stale for this browser session too.
+          clearCacheSessionState();
+          await ensureCacheSession(true);
+          response = await fetch(input, { ...init, credentials: "include" });
+          if (response.status !== 401) {
+            return response;
+          }
+          clearCacheSessionState();
+          await ensureCacheSession(true);
+          return fetch(input, { ...init, credentials: "include" });
         }
         if (retryOnTransient && isSafeCacheApiMethod(requestMethod) && shouldRetryTransientStatus(response.status)) {
           await waitMs(CACHE_API_TRANSIENT_RETRY_DELAY_MS);
-          return window.ukAqSharedAuth.fetchCacheApi(input, init, retryOnAuthFailure);
+          return fetch(input, { ...init, credentials: "include" });
         }
         return response;
       }

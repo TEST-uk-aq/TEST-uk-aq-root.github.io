@@ -18,7 +18,6 @@
   <link rel="preload" as="image" href="/sidebar-images/youtube-logo.svg" />
   <link rel="preload" as="image" href="/sidebar-images/youtube-logo-Word.svg" />
   <link rel="preload" as="image" href="/sidebar-images/uk-aq-contact-blue-200h.svg" />
-  <link rel="preload" as="image" href="/sidebar-images/UK-AQ-WHO-button-medium.svg" />
   <link rel="preload" as="image" href="/images/UK-AQ-hex-map.svg" />
   <link rel="preload" as="image" href="/images/Red-Square-Button-White-Cross-200x200.svg" />
   <link rel="preload" as="image" href="/images/settings-cog.svg" />
@@ -75,16 +74,12 @@
       border-radius: 0;
       box-shadow: none;
       display: grid;
-      gap: 16px;
+      gap: 48px;
     }
 
     .home-section {
       display: grid;
       gap: 16px;
-    }
-
-    .home-main > section {
-      margin-bottom: 0;
     }
 
     .readings-dashboard {
@@ -98,12 +93,12 @@
 
     .dashboard-tables {
       display: grid;
-      gap: 16px;
-      margin-top: 0;
+      gap: 1.5rem;
+      margin-top: -24px;
     }
 
     .dashboard-tables + .home-section {
-      margin-top: 0;
+      margin-top: -24px;
     }
 
     .dashboard-table-card {
@@ -1190,343 +1185,6 @@
       border: 0;
     }
 
-    .who-dashboard-card {
-      --who-surface: #ffffff;
-      --who-wrap: #fefaf4;
-      --who-accent: #3c78ac;
-      --who-accent-deep: #285a84;
-      --who-label: #72808d;
-      --who-line: #e4e6ea;
-      --who-line-soft: #eef0f3;
-      --who-bar-grey: #d0d4da;
-      display: grid;
-      gap: 0.9rem;
-      min-width: 0;
-      padding: clamp(0.95rem, 2.2vw, 1.4rem);
-      border: 1px solid #e6ddcf;
-      border-radius: 18px;
-      background: var(--who-wrap);
-      box-shadow: 0 12px 30px rgba(40, 90, 132, 0.09);
-      color: #162434;
-    }
-
-    .who-dashboard-card + .readings-dashboard {
-      margin-top: 0;
-    }
-
-    .who-card-header {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      gap: 1rem;
-      min-width: 0;
-    }
-
-    .who-title-group {
-      min-width: 0;
-    }
-
-    .who-title {
-      margin: 0;
-      color: #17212c;
-      font-size: clamp(1.55rem, 3vw, 2.1rem);
-      font-weight: 900;
-      line-height: 1.05;
-    }
-
-    .who-header-actions {
-      display: flex;
-      align-items: center;
-      justify-content: flex-end;
-      gap: 0.7rem;
-      flex: 0 0 auto;
-    }
-
-    .who-source-pill,
-    .who-date-pill {
-      display: inline-flex;
-      align-items: center;
-      gap: 0.35rem;
-      width: fit-content;
-      max-width: 100%;
-      padding: 0.42rem 0.62rem;
-      border: 1px solid rgba(60, 120, 172, 0.22);
-      border-radius: 8px;
-      background: #fff;
-      color: var(--who-accent-deep);
-      font-size: 0.82rem;
-      font-weight: 800;
-      line-height: 1.1;
-      white-space: nowrap;
-    }
-
-    .who-date-pill {
-      background: #edf6fd;
-      border-color: rgba(60, 120, 172, 0.28);
-      color: #34495d;
-      font-size: 0.78rem;
-      font-weight: 750;
-    }
-
-    .who-date-pill-label {
-      color: var(--who-accent-deep);
-      font-weight: 900;
-      text-transform: uppercase;
-    }
-
-    .who-page-button {
-      display: inline-flex;
-      align-items: center;
-      justify-content: center;
-      height: 52px;
-      width: 52px;
-      border-radius: 8px;
-      text-decoration: none;
-      transition: transform 0.16s ease, filter 0.16s ease;
-    }
-
-    .who-page-button:hover {
-      transform: translateY(-2px);
-      filter: drop-shadow(0 7px 11px rgba(40, 90, 132, 0.2));
-    }
-
-    .who-page-button:focus-visible,
-    .who-toggle button:focus-visible {
-      outline: 3px solid rgba(60, 120, 172, 0.42);
-      outline-offset: 3px;
-    }
-
-    .who-page-button img {
-      display: block;
-      width: 52px;
-      height: 52px;
-      object-fit: contain;
-    }
-
-    .who-toggle {
-      display: none;
-      grid-template-columns: repeat(2, minmax(0, 1fr));
-      gap: 0.35rem;
-      padding: 0.28rem;
-      border: 1px solid var(--who-line);
-      border-radius: 10px;
-      background: #fff;
-    }
-
-    .who-toggle button {
-      min-width: 0;
-      min-height: 42px;
-      border: 0;
-      border-radius: 8px;
-      background: transparent;
-      color: #4c5c6c;
-      font: inherit;
-      font-size: 0.92rem;
-      font-weight: 850;
-      cursor: pointer;
-    }
-
-    .who-toggle button[aria-selected="true"] {
-      background: var(--who-accent);
-      color: #fff;
-    }
-
-    .who-summary-grid {
-      display: grid;
-      grid-template-columns: minmax(0, 1.65fr) minmax(280px, 0.85fr);
-      gap: 0.85rem;
-      align-items: stretch;
-      min-width: 0;
-    }
-
-    .who-rolling-card,
-    .who-summary-card {
-      min-width: 0;
-      padding: clamp(0.86rem, 1.7vw, 1rem) clamp(0.86rem, 1.7vw, 1rem) 0.72rem;
-      border: 1px solid var(--who-line);
-      border-radius: 10px;
-      background: var(--who-surface);
-      box-shadow: 0 8px 20px rgba(40, 90, 132, 0.06);
-    }
-
-    .who-rolling-card {
-      display: grid;
-      grid-template-rows: auto 1fr;
-      gap: 0.78rem;
-    }
-
-    .who-summary-card {
-      display: grid;
-      grid-template-rows: auto 1fr;
-      gap: 0.58rem;
-    }
-
-    .who-rolling-card-header,
-    .who-summary-card-header {
-      display: grid;
-      gap: 0.36rem;
-      min-width: 0;
-    }
-
-    .who-rolling-card-header {
-      grid-template-columns: minmax(0, 1fr) auto;
-      align-items: start;
-      column-gap: 1rem;
-    }
-
-    .who-rolling-title {
-      min-width: 0;
-    }
-
-    .who-summary-label {
-      color: var(--who-label);
-      font-size: 0.82rem;
-      font-weight: 900;
-      line-height: 1.1;
-      text-transform: uppercase;
-    }
-
-    .who-summary-value {
-      margin-top: 0.15rem;
-      color: var(--who-accent);
-      font-size: clamp(1.22rem, 2.2vw, 1.55rem);
-      font-weight: 900;
-      line-height: 1.08;
-    }
-
-    .who-summary-subtext {
-      color: #6f7d8b;
-      font-size: 0.88rem;
-      font-weight: 650;
-      line-height: 1.35;
-    }
-
-    .who-rolling-sections {
-      position: relative;
-      display: grid;
-      grid-template-columns: repeat(2, minmax(0, 1fr));
-      grid-template-rows: 1fr;
-      align-items: stretch;
-      gap: 1rem;
-      min-width: 0;
-    }
-
-    .who-rolling-sections::before {
-      content: "";
-      position: absolute;
-      top: 0.35rem;
-      bottom: 0.35rem;
-      left: 50%;
-      width: 1px;
-      background: var(--who-line-soft);
-      transform: translateX(-50%);
-      pointer-events: none;
-    }
-
-    .who-rolling-section {
-      display: grid;
-      grid-template-rows: auto 1fr;
-      align-self: stretch;
-      height: 100%;
-      gap: 0.68rem;
-      min-width: 0;
-    }
-
-    .who-pollutant-list {
-      display: grid;
-      align-self: start;
-      gap: 0.48rem;
-      min-width: 0;
-      transform: translateY(0.5rem);
-    }
-
-    .who-pollutant-row {
-      display: grid;
-      gap: 0.26rem;
-      min-width: 0;
-    }
-
-    .who-pollutant-topline {
-      display: grid;
-      grid-template-columns: minmax(70px, 0.72fr) minmax(0, 1fr) auto;
-      gap: 0.6rem;
-      align-items: baseline;
-      min-width: 0;
-      color: #1a2b3b;
-    }
-
-    .who-pollutant-name {
-      font-size: clamp(1.2rem, 1.55vw, 1.48rem);
-      font-weight: 900;
-      line-height: 1.1;
-      white-space: nowrap;
-    }
-
-    .who-pollutant-name sub,
-    .who-guideline-values-line sub {
-      font-size: 0.7em;
-      line-height: 0;
-    }
-
-    .who-pollutant-count {
-      min-width: 0;
-      color: #4f6070;
-      font-size: 0.86rem;
-      font-weight: 720;
-      line-height: 1.2;
-      overflow-wrap: anywhere;
-    }
-
-    .who-pollutant-percent {
-      color: var(--who-accent-deep);
-      font-size: clamp(1.2rem, 1.55vw, 1.48rem);
-      font-weight: 900;
-      line-height: 1.1;
-      font-variant-numeric: tabular-nums;
-      white-space: nowrap;
-    }
-
-    .who-bar {
-      height: 10px;
-      overflow: hidden;
-      border-radius: 999px;
-      background: var(--who-bar-grey);
-    }
-
-    .who-bar-fill {
-      display: block;
-      width: var(--pct);
-      max-width: 100%;
-      height: 100%;
-      border-radius: inherit;
-      background: linear-gradient(90deg, var(--who-accent), var(--who-accent-deep));
-    }
-
-    .who-card-footer {
-      display: grid;
-      gap: 0.34rem;
-      padding: 0.72rem 0.86rem;
-      border: 1px solid rgba(60, 120, 172, 0.14);
-      border-radius: 10px;
-      background: #edf6fd;
-      color: #38495a;
-      font-size: 0.88rem;
-      font-weight: 650;
-      line-height: 1.35;
-    }
-
-    .who-guideline-values-line {
-      display: flex;
-      align-items: baseline;
-      gap: 0.35rem;
-      flex-wrap: wrap;
-    }
-
-    .who-guideline-values-line strong,
-    .who-guideline-values-line span {
-      line-height: 1.35;
-    }
-
     @media (max-width: 980px) {
       .pollutant-grid {
         grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -1534,18 +1192,6 @@
 
       .tool-grid {
         grid-template-columns: repeat(2, minmax(0, 1fr));
-      }
-
-      .who-summary-grid {
-        grid-template-columns: 1fr;
-      }
-
-      .who-rolling-sections {
-        grid-template-columns: 1fr;
-      }
-
-      .who-rolling-sections::before {
-        display: none;
       }
     }
 
@@ -1566,7 +1212,7 @@
 
       .home-main {
         padding: 14px 16px 84px;
-        gap: 16px;
+        gap: 42px;
       }
 
       .readings-dashboard {
@@ -1574,77 +1220,13 @@
         border-radius: 22px;
       }
 
-      .who-dashboard-card {
-        padding: 0.9rem;
-        border-radius: 16px;
-      }
-
-      .who-card-header {
-        align-items: flex-start;
-        flex-direction: column;
-      }
-
-      .who-header-actions {
-        width: 100%;
-        justify-content: space-between;
-      }
-
-      .who-source-pill {
-        white-space: normal;
-      }
-
-      .who-page-button,
-      .who-page-button img {
-        width: 48px;
-        height: 48px;
-      }
-
-      .who-toggle {
-        display: grid;
-      }
-
-      .who-summary-grid {
-        display: block;
-      }
-
-      .who-dashboard-card.is-enhanced .who-summary-card,
-      .who-dashboard-card.is-enhanced .who-rolling-card {
-        display: none;
-      }
-
-      .who-dashboard-card.is-enhanced .who-summary-card.is-active,
-      .who-dashboard-card.is-enhanced .who-rolling-card.is-active {
-        display: grid;
-      }
-
-      .who-rolling-card-header {
-        grid-template-columns: 1fr;
-      }
-
-      .who-date-pill {
-        white-space: normal;
-      }
-
-      .who-pollutant-topline {
-        grid-template-columns: minmax(64px, 0.6fr) minmax(0, 1fr) auto;
-        gap: 0.48rem;
-      }
-
-      .who-pollutant-count {
-        font-size: 0.8rem;
-      }
-
-      .who-card-footer {
-        padding: 0.82rem 0.86rem;
-      }
-
       .dashboard-tables {
-        gap: 16px;
-        margin-top: 0;
+        gap: 1.25rem;
+        margin-top: -20px;
       }
 
       .dashboard-tables + .home-section {
-        margin-top: 0;
+        margin-top: -20px;
       }
 
       .dashboard-table-card {
@@ -1712,157 +1294,6 @@
   </header>
 
   <main class="home-main">
-    <section class="who-dashboard-card" aria-labelledby="who-guideline-title">
-      <div class="who-card-header">
-        <div class="who-title-group">
-          <h2 class="who-title" id="who-guideline-title">WHO guideline summary</h2>
-        </div>
-        <div class="who-header-actions">
-          <span class="who-source-pill">GOV.UK AURN only</span>
-          <a class="who-page-button" href="/who-guidelines/" aria-label="Open the WHO guideline page">
-            <img src="sidebar-images/UK-AQ-WHO-button-medium.svg" alt="WHO" />
-          </a>
-        </div>
-      </div>
-
-      <div class="who-toggle" role="tablist" aria-label="WHO guideline summary range">
-        <button type="button" id="who-tab-rolling-combined" role="tab" aria-selected="true" aria-controls="who-card-rolling-combined" data-who-tab="rolling-combined">Rolling year</button>
-        <button type="button" id="who-tab-last-year" role="tab" aria-selected="false" aria-controls="who-card-last-year" data-who-tab="last-year">Last year</button>
-      </div>
-
-      <div class="who-summary-grid">
-        <article class="who-rolling-card is-active" id="who-card-rolling-combined" role="tabpanel" aria-labelledby="who-tab-rolling-combined" data-who-card="rolling-combined">
-          <div class="who-rolling-card-header">
-            <div class="who-rolling-title">
-              <div class="who-summary-label">Rolling year</div>
-              <div class="who-summary-value">Latest 365 days</div>
-            </div>
-            <span class="who-date-pill"><span class="who-date-pill-label">Range</span> 03/07/2025 to 02/07/2026</span>
-          </div>
-
-          <div class="who-rolling-sections">
-            <section class="who-rolling-section" aria-labelledby="who-daily-heading">
-              <div class="who-summary-card-header">
-                <div class="who-summary-label" id="who-daily-heading">Daily guideline</div>
-                <div class="who-summary-subtext">Sensors with more than 4 days above the WHO daily guideline in the latest 365 days.</div>
-              </div>
-              <div class="who-pollutant-list">
-                <div class="who-pollutant-row">
-                  <div class="who-pollutant-topline">
-                    <span class="who-pollutant-name">PM2.5</span>
-                    <span class="who-pollutant-count">141 of 145 sensors</span>
-                    <span class="who-pollutant-percent">97.2%</span>
-                  </div>
-                  <div class="who-bar" aria-label="97.2 percent of PM2.5 AURN sensors above WHO daily guideline"><span class="who-bar-fill" style="--pct: 97.2%"></span></div>
-                </div>
-
-                <div class="who-pollutant-row">
-                  <div class="who-pollutant-topline">
-                    <span class="who-pollutant-name">PM10</span>
-                    <span class="who-pollutant-count">10 of 135 sensors</span>
-                    <span class="who-pollutant-percent">7.4%</span>
-                  </div>
-                  <div class="who-bar" aria-label="7.4 percent of PM10 AURN sensors above WHO daily guideline"><span class="who-bar-fill" style="--pct: 7.4%"></span></div>
-                </div>
-
-                <div class="who-pollutant-row">
-                  <div class="who-pollutant-topline">
-                    <span class="who-pollutant-name">NO<sub>2</sub></span>
-                    <span class="who-pollutant-count">124 of 153 sensors</span>
-                    <span class="who-pollutant-percent">81.0%</span>
-                  </div>
-                  <div class="who-bar" aria-label="81.0 percent of NO2 AURN sensors above WHO daily guideline"><span class="who-bar-fill" style="--pct: 81.0%"></span></div>
-                </div>
-              </div>
-            </section>
-
-            <section class="who-rolling-section" aria-labelledby="who-yearly-heading">
-              <div class="who-summary-card-header">
-                <div class="who-summary-label" id="who-yearly-heading">Yearly guideline</div>
-                <div class="who-summary-subtext">Sensors where the latest 365-day average is above the WHO yearly guideline.</div>
-              </div>
-              <div class="who-pollutant-list">
-                <div class="who-pollutant-row">
-                  <div class="who-pollutant-topline">
-                    <span class="who-pollutant-name">PM2.5</span>
-                    <span class="who-pollutant-count">133 of 145 sensors</span>
-                    <span class="who-pollutant-percent">91.7%</span>
-                  </div>
-                  <div class="who-bar" aria-label="91.7 percent of PM2.5 AURN sensors above WHO yearly guideline"><span class="who-bar-fill" style="--pct: 91.7%"></span></div>
-                </div>
-
-                <div class="who-pollutant-row">
-                  <div class="who-pollutant-topline">
-                    <span class="who-pollutant-name">PM10</span>
-                    <span class="who-pollutant-count">22 of 135 sensors</span>
-                    <span class="who-pollutant-percent">16.3%</span>
-                  </div>
-                  <div class="who-bar" aria-label="16.3 percent of PM10 AURN sensors above WHO yearly guideline"><span class="who-bar-fill" style="--pct: 16.3%"></span></div>
-                </div>
-
-                <div class="who-pollutant-row">
-                  <div class="who-pollutant-topline">
-                    <span class="who-pollutant-name">NO<sub>2</sub></span>
-                    <span class="who-pollutant-count">109 of 153 sensors</span>
-                    <span class="who-pollutant-percent">71.2%</span>
-                  </div>
-                  <div class="who-bar" aria-label="71.2 percent of NO2 AURN sensors above WHO yearly guideline"><span class="who-bar-fill" style="--pct: 71.2%"></span></div>
-                </div>
-              </div>
-            </section>
-          </div>
-        </article>
-
-        <article class="who-summary-card" id="who-card-last-year" role="tabpanel" aria-labelledby="who-tab-last-year" data-who-card="last-year">
-          <div class="who-summary-card-header">
-            <div class="who-summary-label">Last full year</div>
-            <div class="who-summary-value">2025</div>
-            <div class="who-summary-subtext">Sensors where the full calendar-year average was above the WHO yearly guideline.</div>
-          </div>
-          <div class="who-pollutant-list">
-            <div class="who-pollutant-row">
-              <div class="who-pollutant-topline">
-                <span class="who-pollutant-name">PM2.5</span>
-                <span class="who-pollutant-count">128 of 133 sensors</span>
-                <span class="who-pollutant-percent">96.2%</span>
-              </div>
-              <div class="who-bar" aria-label="96.2 percent of PM2.5 AURN sensors above WHO yearly guideline in 2025"><span class="who-bar-fill" style="--pct: 96.2%"></span></div>
-            </div>
-
-            <div class="who-pollutant-row">
-              <div class="who-pollutant-topline">
-                <span class="who-pollutant-name">PM10</span>
-                <span class="who-pollutant-count">40 of 125 sensors</span>
-                <span class="who-pollutant-percent">32.0%</span>
-              </div>
-              <div class="who-bar" aria-label="32.0 percent of PM10 AURN sensors above WHO yearly guideline in 2025"><span class="who-bar-fill" style="--pct: 32.0%"></span></div>
-            </div>
-
-            <div class="who-pollutant-row">
-              <div class="who-pollutant-topline">
-                <span class="who-pollutant-name">NO<sub>2</sub></span>
-                <span class="who-pollutant-count">121 of 152 sensors</span>
-                <span class="who-pollutant-percent">79.6%</span>
-              </div>
-              <div class="who-bar" aria-label="79.6 percent of NO2 AURN sensors above WHO yearly guideline in 2025"><span class="who-bar-fill" style="--pct: 79.6%"></span></div>
-            </div>
-          </div>
-        </article>
-      </div>
-
-      <div class="who-card-footer">
-        <div class="who-guideline-values-line" aria-label="WHO guideline values">
-          <strong>World Health Organization guideline values:</strong>
-          <span>PM2.5 daily 15 &micro;g/m<sup>3</sup>, yearly 5 &micro;g/m<sup>3</sup></span>
-          <span aria-hidden="true">&middot;</span>
-          <span>PM10 daily 45 &micro;g/m<sup>3</sup>, yearly 15 &micro;g/m<sup>3</sup></span>
-          <span aria-hidden="true">&middot;</span>
-          <span>NO<sub>2</sub> daily 25 &micro;g/m<sup>3</sup>, yearly 10 &micro;g/m<sup>3</sup></span>
-        </div>
-        <div><strong>Note:</strong> Daily averages use GMT days from midnight to midnight. &ldquo;Above guideline&rdquo; means above WHO health-based guidelines, not UK legal limits.</div>
-      </div>
-    </section>
-
     <section class="readings-dashboard" aria-labelledby="highest-readings-heading">
       <div class="readings-header">
         <div>
@@ -2309,26 +1740,6 @@
   </script>
   <script src="/js/uk-aq-cache-auth.js"></script>
   <script src="/dashboard.js"></script>
-  <script>
-    (() => {
-      const tabs = Array.from(document.querySelectorAll("[data-who-tab]"));
-      const cards = Array.from(document.querySelectorAll("[data-who-card]"));
-      if (!tabs.length || !cards.length) return;
-      document.querySelector(".who-dashboard-card")?.classList.add("is-enhanced");
-
-      tabs.forEach((tab) => {
-        tab.addEventListener("click", () => {
-          const target = tab.dataset.whoTab;
-          tabs.forEach((button) => {
-            button.setAttribute("aria-selected", String(button === tab));
-          });
-          cards.forEach((card) => {
-            card.classList.toggle("is-active", card.dataset.whoCard === target);
-          });
-        });
-      });
-    })();
-  </script>
   <script>
     (() => {
       const switches = Array.from(document.querySelectorAll(".tool-card-title-graphic-switch"));

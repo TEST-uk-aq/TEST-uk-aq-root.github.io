@@ -34,6 +34,7 @@ const anonPattern = /const ANON_KEY_PLACEHOLDER = "([^"]*)";/g;
 const turnstilePattern = /const TURNSTILE_SITE_KEY_PLACEHOLDER = "([^"]*)";/g;
 const aqiHistoryPattern = /const AQI_HISTORY_BASE_PLACEHOLDER = "([^"]*)";/g;
 const websiteDebugLogPattern = /const WEBSITE_DEBUG_LOG_ENABLED_PLACEHOLDER = "([^"]*)";/g;
+const aqiMutableHoursPattern = /const AQI_MUTABLE_HOURS_PLACEHOLDER = "([^"]*)";/g;
 
 async function main() {
   const envText = await readFileIfExists(ENV_PATH);
@@ -46,6 +47,9 @@ async function main() {
   const turnstileSiteKey = (nodeProcess.env.UK_AQ_TURNSTILE_SITE_KEY || "").trim();
   const aqiHistoryBaseUrl = (nodeProcess.env.UK_AQ_AQI_HISTORY_BASE_URL || "__UK_AQ_AQI_HISTORY_BASE_URL__").trim();
   const websiteDebugLogEnabled = (nodeProcess.env.UK_AQ_WEBSITE_DEBUG_LOG_ENABLED || "false").trim();
+  // UK_AQ_AQI_MUTABLE_HOURS: backend mutable horizon in hours (default 120, range 1–720).
+  // Passed through as a raw string; resolveAqiMutableHours() in the page validates it and falls back to 120 when invalid.
+  const aqiMutableHours = (nodeProcess.env.UK_AQ_AQI_MUTABLE_HOURS || "__UK_AQ_AQI_MUTABLE_HOURS__").trim();
 
   if (!projectRef) {
     console.error("SUPABASE_PROJECT_REF is missing. Set it in .env or the environment.");
@@ -117,12 +121,20 @@ async function main() {
       targetPath,
       { required: false },
     );
+    updated = replacePlaceholder(
+      updated,
+      aqiMutableHoursPattern,
+      `const AQI_MUTABLE_HOURS_PLACEHOLDER = "${aqiMutableHours}";`,
+      "AQI_MUTABLE_HOURS_PLACEHOLDER",
+      targetPath,
+      { required: false },
+    );
 
     if (updated !== html) {
       await fs.writeFile(targetPath, updated);
-      console.log(`Injected SUPABASE_PROJECT_REF, publishable key, Turnstile site key, AQI history base, and website debug flag into ${path.relative(REPO_ROOT, targetPath)}`);
+      console.log(`Injected SUPABASE_PROJECT_REF, publishable key, Turnstile site key, AQI history base, website debug flag, and AQI mutable hours into ${path.relative(REPO_ROOT, targetPath)}`);
     } else {
-      console.log(`${path.relative(REPO_ROOT, targetPath)} already uses the configured SUPABASE project ref, publishable key, Turnstile site key, AQI history base, and website debug flag.`);
+      console.log(`${path.relative(REPO_ROOT, targetPath)} already uses the configured SUPABASE project ref, publishable key, Turnstile site key, AQI history base, website debug flag, and AQI mutable hours.`);
     }
   }
 }

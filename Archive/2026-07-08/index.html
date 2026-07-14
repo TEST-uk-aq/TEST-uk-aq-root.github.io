@@ -1242,20 +1242,6 @@
       flex: 0 0 auto;
     }
 
-    .who-status {
-      display: none;
-      max-width: 12rem;
-      color: #5e6f7f;
-      font-size: 0.78rem;
-      font-weight: 750;
-      line-height: 1.2;
-      text-align: right;
-    }
-
-    .who-status.is-visible {
-      display: inline-block;
-    }
-
     .who-source-pill,
     .who-date-pill {
       display: inline-flex;
@@ -1732,7 +1718,6 @@
           <h2 class="who-title" id="who-guideline-title">WHO guideline summary</h2>
         </div>
         <div class="who-header-actions">
-          <span class="who-status" data-who-status aria-live="polite"></span>
           <span class="who-source-pill">GOV.UK AURN only</span>
           <a class="who-page-button" href="/who-guidelines/" aria-label="Open the WHO guideline page">
             <img src="sidebar-images/UK-AQ-WHO-button-medium.svg" alt="WHO" />
@@ -1750,9 +1735,9 @@
           <div class="who-rolling-card-header">
             <div class="who-rolling-title">
               <div class="who-summary-label">Rolling year</div>
-              <div class="who-summary-value" data-who-rolling-title>Latest 365 days</div>
+              <div class="who-summary-value">Latest 365 days</div>
             </div>
-            <span class="who-date-pill"><span class="who-date-pill-label">Range</span> <span data-who-rolling-range>03/07/2025 to 02/07/2026</span></span>
+            <span class="who-date-pill"><span class="who-date-pill-label">Range</span> 03/07/2025 to 02/07/2026</span>
           </div>
 
           <div class="who-rolling-sections">
@@ -1762,31 +1747,31 @@
                 <div class="who-summary-subtext">Sensors with more than 4 days above the WHO daily guideline in the latest 365 days.</div>
               </div>
               <div class="who-pollutant-list">
-                <div class="who-pollutant-row" data-who-row="rolling_daily:pm25">
+                <div class="who-pollutant-row">
                   <div class="who-pollutant-topline">
                     <span class="who-pollutant-name">PM2.5</span>
-                    <span class="who-pollutant-count" data-who-count>141 of 145 sensors</span>
-                    <span class="who-pollutant-percent" data-who-percent>97.2%</span>
+                    <span class="who-pollutant-count">141 of 145 sensors</span>
+                    <span class="who-pollutant-percent">97.2%</span>
                   </div>
-                  <div class="who-bar" aria-label="97.2 percent of PM2.5 AURN sensors above WHO daily guideline" data-who-bar><span class="who-bar-fill" style="--pct: 97.2%" data-who-bar-fill></span></div>
+                  <div class="who-bar" aria-label="97.2 percent of PM2.5 AURN sensors above WHO daily guideline"><span class="who-bar-fill" style="--pct: 97.2%"></span></div>
                 </div>
 
-                <div class="who-pollutant-row" data-who-row="rolling_daily:pm10">
+                <div class="who-pollutant-row">
                   <div class="who-pollutant-topline">
                     <span class="who-pollutant-name">PM10</span>
-                    <span class="who-pollutant-count" data-who-count>10 of 135 sensors</span>
-                    <span class="who-pollutant-percent" data-who-percent>7.4%</span>
+                    <span class="who-pollutant-count">10 of 135 sensors</span>
+                    <span class="who-pollutant-percent">7.4%</span>
                   </div>
-                  <div class="who-bar" aria-label="7.4 percent of PM10 AURN sensors above WHO daily guideline" data-who-bar><span class="who-bar-fill" style="--pct: 7.4%" data-who-bar-fill></span></div>
+                  <div class="who-bar" aria-label="7.4 percent of PM10 AURN sensors above WHO daily guideline"><span class="who-bar-fill" style="--pct: 7.4%"></span></div>
                 </div>
 
-                <div class="who-pollutant-row" data-who-row="rolling_daily:no2">
+                <div class="who-pollutant-row">
                   <div class="who-pollutant-topline">
                     <span class="who-pollutant-name">NO<sub>2</sub></span>
-                    <span class="who-pollutant-count" data-who-count>124 of 153 sensors</span>
-                    <span class="who-pollutant-percent" data-who-percent>81.0%</span>
+                    <span class="who-pollutant-count">124 of 153 sensors</span>
+                    <span class="who-pollutant-percent">81.0%</span>
                   </div>
-                  <div class="who-bar" aria-label="81.0 percent of NO2 AURN sensors above WHO daily guideline" data-who-bar><span class="who-bar-fill" style="--pct: 81.0%" data-who-bar-fill></span></div>
+                  <div class="who-bar" aria-label="81.0 percent of NO2 AURN sensors above WHO daily guideline"><span class="who-bar-fill" style="--pct: 81.0%"></span></div>
                 </div>
               </div>
             </section>
@@ -1797,31 +1782,31 @@
                 <div class="who-summary-subtext">Sensors where the latest 365-day average is above the WHO yearly guideline.</div>
               </div>
               <div class="who-pollutant-list">
-                <div class="who-pollutant-row" data-who-row="rolling_yearly:pm25">
+                <div class="who-pollutant-row">
                   <div class="who-pollutant-topline">
                     <span class="who-pollutant-name">PM2.5</span>
-                    <span class="who-pollutant-count" data-who-count>133 of 145 sensors</span>
-                    <span class="who-pollutant-percent" data-who-percent>91.7%</span>
+                    <span class="who-pollutant-count">133 of 145 sensors</span>
+                    <span class="who-pollutant-percent">91.7%</span>
                   </div>
-                  <div class="who-bar" aria-label="91.7 percent of PM2.5 AURN sensors above WHO yearly guideline" data-who-bar><span class="who-bar-fill" style="--pct: 91.7%" data-who-bar-fill></span></div>
+                  <div class="who-bar" aria-label="91.7 percent of PM2.5 AURN sensors above WHO yearly guideline"><span class="who-bar-fill" style="--pct: 91.7%"></span></div>
                 </div>
 
-                <div class="who-pollutant-row" data-who-row="rolling_yearly:pm10">
+                <div class="who-pollutant-row">
                   <div class="who-pollutant-topline">
                     <span class="who-pollutant-name">PM10</span>
-                    <span class="who-pollutant-count" data-who-count>22 of 135 sensors</span>
-                    <span class="who-pollutant-percent" data-who-percent>16.3%</span>
+                    <span class="who-pollutant-count">22 of 135 sensors</span>
+                    <span class="who-pollutant-percent">16.3%</span>
                   </div>
-                  <div class="who-bar" aria-label="16.3 percent of PM10 AURN sensors above WHO yearly guideline" data-who-bar><span class="who-bar-fill" style="--pct: 16.3%" data-who-bar-fill></span></div>
+                  <div class="who-bar" aria-label="16.3 percent of PM10 AURN sensors above WHO yearly guideline"><span class="who-bar-fill" style="--pct: 16.3%"></span></div>
                 </div>
 
-                <div class="who-pollutant-row" data-who-row="rolling_yearly:no2">
+                <div class="who-pollutant-row">
                   <div class="who-pollutant-topline">
                     <span class="who-pollutant-name">NO<sub>2</sub></span>
-                    <span class="who-pollutant-count" data-who-count>109 of 153 sensors</span>
-                    <span class="who-pollutant-percent" data-who-percent>71.2%</span>
+                    <span class="who-pollutant-count">109 of 153 sensors</span>
+                    <span class="who-pollutant-percent">71.2%</span>
                   </div>
-                  <div class="who-bar" aria-label="71.2 percent of NO2 AURN sensors above WHO yearly guideline" data-who-bar><span class="who-bar-fill" style="--pct: 71.2%" data-who-bar-fill></span></div>
+                  <div class="who-bar" aria-label="71.2 percent of NO2 AURN sensors above WHO yearly guideline"><span class="who-bar-fill" style="--pct: 71.2%"></span></div>
                 </div>
               </div>
             </section>
@@ -1831,35 +1816,35 @@
         <article class="who-summary-card" id="who-card-last-year" role="tabpanel" aria-labelledby="who-tab-last-year" data-who-card="last-year">
           <div class="who-summary-card-header">
             <div class="who-summary-label">Last full year</div>
-            <div class="who-summary-value" data-who-calendar-year>2025</div>
+            <div class="who-summary-value">2025</div>
             <div class="who-summary-subtext">Sensors where the full calendar-year average was above the WHO yearly guideline.</div>
           </div>
           <div class="who-pollutant-list">
-            <div class="who-pollutant-row" data-who-row="calendar_yearly:pm25">
+            <div class="who-pollutant-row">
               <div class="who-pollutant-topline">
                 <span class="who-pollutant-name">PM2.5</span>
-                <span class="who-pollutant-count" data-who-count>128 of 133 sensors</span>
-                <span class="who-pollutant-percent" data-who-percent>96.2%</span>
+                <span class="who-pollutant-count">128 of 133 sensors</span>
+                <span class="who-pollutant-percent">96.2%</span>
               </div>
-              <div class="who-bar" aria-label="96.2 percent of PM2.5 AURN sensors above WHO yearly guideline in 2025" data-who-bar><span class="who-bar-fill" style="--pct: 96.2%" data-who-bar-fill></span></div>
+              <div class="who-bar" aria-label="96.2 percent of PM2.5 AURN sensors above WHO yearly guideline in 2025"><span class="who-bar-fill" style="--pct: 96.2%"></span></div>
             </div>
 
-            <div class="who-pollutant-row" data-who-row="calendar_yearly:pm10">
+            <div class="who-pollutant-row">
               <div class="who-pollutant-topline">
                 <span class="who-pollutant-name">PM10</span>
-                <span class="who-pollutant-count" data-who-count>40 of 125 sensors</span>
-                <span class="who-pollutant-percent" data-who-percent>32.0%</span>
+                <span class="who-pollutant-count">40 of 125 sensors</span>
+                <span class="who-pollutant-percent">32.0%</span>
               </div>
-              <div class="who-bar" aria-label="32.0 percent of PM10 AURN sensors above WHO yearly guideline in 2025" data-who-bar><span class="who-bar-fill" style="--pct: 32.0%" data-who-bar-fill></span></div>
+              <div class="who-bar" aria-label="32.0 percent of PM10 AURN sensors above WHO yearly guideline in 2025"><span class="who-bar-fill" style="--pct: 32.0%"></span></div>
             </div>
 
-            <div class="who-pollutant-row" data-who-row="calendar_yearly:no2">
+            <div class="who-pollutant-row">
               <div class="who-pollutant-topline">
                 <span class="who-pollutant-name">NO<sub>2</sub></span>
-                <span class="who-pollutant-count" data-who-count>121 of 152 sensors</span>
-                <span class="who-pollutant-percent" data-who-percent>79.6%</span>
+                <span class="who-pollutant-count">121 of 152 sensors</span>
+                <span class="who-pollutant-percent">79.6%</span>
               </div>
-              <div class="who-bar" aria-label="79.6 percent of NO2 AURN sensors above WHO yearly guideline in 2025" data-who-bar><span class="who-bar-fill" style="--pct: 79.6%" data-who-bar-fill></span></div>
+              <div class="who-bar" aria-label="79.6 percent of NO2 AURN sensors above WHO yearly guideline in 2025"><span class="who-bar-fill" style="--pct: 79.6%"></span></div>
             </div>
           </div>
         </article>
@@ -2342,192 +2327,6 @@
           });
         });
       });
-    })();
-  </script>
-  <script>
-    (() => {
-      const WHO_SUMMARY_PATH = "/history/v2/who_2021/latest_who_2021.json";
-      const WHO_CACHE_KEY = "uk_aq_who_2021_homepage_summary_v1";
-      const card = document.querySelector(".who-dashboard-card");
-      if (!card) return;
-
-      const statusEl = card.querySelector("[data-who-status]");
-      const rowByKey = new Map(
-        Array.from(card.querySelectorAll("[data-who-row]")).map((row) => [row.dataset.whoRow, row])
-      );
-
-      function setWhoStatus(message) {
-        if (!statusEl) return;
-        const text = String(message || "").trim();
-        statusEl.textContent = text;
-        statusEl.classList.toggle("is-visible", Boolean(text));
-      }
-
-      function isoDay(date) {
-        return date.toISOString().slice(0, 10);
-      }
-
-      function addDays(day, offsetDays) {
-        const parsed = new Date(`${day}T00:00:00.000Z`);
-        parsed.setUTCDate(parsed.getUTCDate() + offsetDays);
-        return isoDay(parsed);
-      }
-
-      function latestExpectedCompleteDay() {
-        return addDays(isoDay(new Date()), -1);
-      }
-
-      function formatDisplayDay(day) {
-        if (!/^\d{4}-\d{2}-\d{2}$/.test(String(day || ""))) return "";
-        const [year, month, date] = day.split("-");
-        return `${date}/${month}/${year}`;
-      }
-
-      function formatPercent(value) {
-        const number = Number(value);
-        if (!Number.isFinite(number)) return "—";
-        return `${number.toFixed(1)}%`;
-      }
-
-      function pctForBar(value) {
-        const number = Number(value);
-        if (!Number.isFinite(number)) return "0%";
-        return `${Math.max(0, Math.min(100, number)).toFixed(1)}%`;
-      }
-
-      function pollutantNameForAria(cardRow) {
-        return String(cardRow?.pollutant_label || cardRow?.pollutant_code || "")
-          .replace("PM2.5", "PM2.5")
-          .replace("NO2", "NO2");
-      }
-
-      function normalizeCardKey(cardRow) {
-        const key = String(cardRow?.card_key || "").toLowerCase();
-        const group = String(cardRow?.card_group || "").toLowerCase();
-        const section = String(cardRow?.card_section || "").toLowerCase();
-        const pollutant = String(cardRow?.pollutant_code || "").toLowerCase();
-        if (!pollutant) return "";
-        if (key === "rolling_daily" || (group.includes("rolling") && section.includes("daily"))) {
-          return `rolling_daily:${pollutant}`;
-        }
-        if (key === "rolling_yearly" || (group.includes("rolling") && section.includes("yearly"))) {
-          return `rolling_yearly:${pollutant}`;
-        }
-        if (
-          key === "calendar_yearly" ||
-          key === "last_year" ||
-          group.includes("last") ||
-          group.includes("calendar")
-        ) {
-          return `calendar_yearly:${pollutant}`;
-        }
-        return "";
-      }
-
-      function renderWhoRow(cardRow) {
-        const row = rowByKey.get(normalizeCardKey(cardRow));
-        if (!row) return;
-        const countEl = row.querySelector("[data-who-count]");
-        const percentEl = row.querySelector("[data-who-percent]");
-        const barEl = row.querySelector("[data-who-bar]");
-        const barFill = row.querySelector("[data-who-bar-fill]");
-        const percent = formatPercent(cardRow.percent_above_guideline);
-        const pct = pctForBar(cardRow.percent_above_guideline);
-        const count = String(cardRow.card_count_label || "").trim() || "—";
-        if (countEl) countEl.textContent = count;
-        if (percentEl) percentEl.textContent = percent;
-        if (barFill) barFill.style.setProperty("--pct", pct);
-        if (barEl) {
-          const pollutant = pollutantNameForAria(cardRow);
-          const section = String(cardRow.card_section || "guideline").toLowerCase();
-          const suffix = normalizeCardKey(cardRow).startsWith("calendar_yearly") && cardRow.calendar_year
-            ? ` in ${cardRow.calendar_year}`
-            : "";
-          barEl.setAttribute(
-            "aria-label",
-            `${percent} of ${pollutant} AURN sensors above WHO ${section}${suffix}`
-          );
-        }
-      }
-
-      function renderWhoSummary(payload) {
-        if (!payload || !Array.isArray(payload.cards)) return false;
-        payload.cards.forEach(renderWhoRow);
-        const rollingCard = payload.cards.find((item) =>
-          normalizeCardKey(item).startsWith("rolling_daily:")
-        ) || payload.cards.find((item) => normalizeCardKey(item).startsWith("rolling_yearly:"));
-        const calendarCard = payload.cards.find((item) =>
-          normalizeCardKey(item).startsWith("calendar_yearly:")
-        );
-        const rollingRange = card.querySelector("[data-who-rolling-range]");
-        const rollingTitle = card.querySelector("[data-who-rolling-title]");
-        const calendarYear = card.querySelector("[data-who-calendar-year]");
-        if (rollingRange && rollingCard?.range_label) {
-          rollingRange.textContent = String(rollingCard.range_label);
-        }
-        if (rollingTitle && payload.data_as_of_day_utc) {
-          rollingTitle.textContent = `To ${formatDisplayDay(payload.data_as_of_day_utc)}`;
-        }
-        if (calendarYear) {
-          calendarYear.textContent = String(
-            calendarCard?.calendar_year || payload.last_full_calendar_year || calendarYear.textContent || ""
-          );
-        }
-        card.dataset.whoDataAsOf = String(payload.data_as_of_day_utc || "");
-        return true;
-      }
-
-      function readCachedWhoSummary() {
-        try {
-          const parsed = JSON.parse(localStorage.getItem(WHO_CACHE_KEY) || "null");
-          return parsed && typeof parsed === "object" ? parsed : null;
-        } catch (_) {
-          return null;
-        }
-      }
-
-      function writeCachedWhoSummary(payload) {
-        try {
-          localStorage.setItem(WHO_CACHE_KEY, JSON.stringify({
-            cached_at_utc: new Date().toISOString(),
-            data_as_of_day_utc: payload?.data_as_of_day_utc || null,
-            payload,
-          }));
-        } catch (_) {
-          // Ignore local cache write failures.
-        }
-      }
-
-      async function loadWhoSummary() {
-        const cached = readCachedWhoSummary();
-        const cachedPayload = cached?.payload || null;
-        const renderedCache = cachedPayload ? renderWhoSummary(cachedPayload) : false;
-        setWhoStatus(renderedCache ? "Updating WHO data…" : "Loading WHO data…");
-
-        const asOf = latestExpectedCompleteDay();
-        const url = new URL(WHO_SUMMARY_PATH, window.location.href);
-        url.searchParams.set("as_of", asOf);
-        try {
-          const response = await fetch(url.toString(), {
-            headers: { Accept: "application/json" },
-            cache: "default",
-          });
-          if (!response.ok) {
-            throw new Error(`WHO summary request failed (${response.status})`);
-          }
-          const payload = await response.json();
-          if (!renderWhoSummary(payload)) {
-            throw new Error("WHO summary payload missing cards");
-          }
-          writeCachedWhoSummary(payload);
-          setWhoStatus("");
-        } catch (error) {
-          console.warn("WHO summary JSON failed to load", error);
-          setWhoStatus(renderedCache ? "Using cached WHO data" : "Static WHO fallback");
-        }
-      }
-
-      loadWhoSummary();
     })();
   </script>
   <script>

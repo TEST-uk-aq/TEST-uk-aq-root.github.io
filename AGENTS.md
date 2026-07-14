@@ -2,8 +2,10 @@
 
 ## Main Repo
 
-- `TEST-uk-aq-root.github.io` is the main repo for the UK-AQ website and the default starting point for website work.
-- Filesystem location: `/Users/mikehinford/Dropbox/Projects/UK-AQ Website & Network/TEST UK-AQ GH Repos/TEST-uk-aq-root.github.io`.
+- `TEST-uk-aq-ops` is the main repo for this project and the default starting point for cross-repo work.
+- Ops repo path: `/Users/mikehinford/Dropbox/Projects/UK-AQ Website & Network/TEST UK-AQ GH Repos/TEST-uk-aq-ops`.
+- `TEST-uk-aq-root.github.io` is the website implementation repo and the starting point for website-only file changes after any required cross-repo context is established in ops.
+- Website repo path: `/Users/mikehinford/Dropbox/Projects/UK-AQ Website & Network/TEST UK-AQ GH Repos/TEST-uk-aq-root.github.io`.
 
 - Do not inspect or modify any `LIVE` repo unless the user explicitly asks.
 - Do not manually copy changes to a live UK-AQ website repo unless the user explicitly asks for that repo to be changed.

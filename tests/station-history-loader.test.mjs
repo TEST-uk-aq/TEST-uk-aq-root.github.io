@@ -46,6 +46,19 @@ const retryKey = loader.chunkKey("aqi", range);
 const record = loader.createCacheRecord({ completed_chunks: { [retryKey]: range } });
 assert.equal(record.completed_chunks[retryKey].end_utc, range.end_utc);
 assert.equal(record.contract_version, "station-history-v1");
+assert.equal(record.identity, null);
+
+const authoritativeIdentity = loader.resolveAuthoritativeIdentity({
+  request: { timeseries_id: 420, connector_id: 2, station_id: 42, pollutant: "no2" },
+}, { timeseriesId: "420", pollutant: "NO2" });
+assert.deepEqual(authoritativeIdentity, {
+  source: "authoritative_timeseries_lookup",
+  timeseries_id: 420,
+  connector_id: 2,
+  station_id: 42,
+  pollutant: "no2",
+});
+assert.equal(loader.createCacheRecord({ identity: authoritativeIdentity }).identity.connector_id, 2);
 
 // A 12h/24h response that says its next boundary is the requested start has
 // no historical R2 work to schedule.

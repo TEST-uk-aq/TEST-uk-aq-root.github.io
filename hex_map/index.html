@@ -18083,10 +18083,9 @@
   }
 
   function hasStationHistoryRequestIdentity(entry) {
-    const timeseriesId = String(entry?.timeseriesId ?? "").trim();
-    const connectorId = getEntryConnectorId(entry);
-    return /^\d+$/.test(timeseriesId) && Number(timeseriesId) > 0
-      && /^\d+$/.test(String(connectorId || "")) && Number(connectorId) > 0;
+    return window.UkAqStationHistoryLoader?.hasPositiveTimeseriesIdentity
+      ? window.UkAqStationHistoryLoader.hasPositiveTimeseriesIdentity(entry)
+      : /^\d+$/.test(String(entry?.timeseriesId ?? "").trim()) && Number(entry.timeseriesId) > 0;
   }
 
   function reportUnresolvedSelectedChartEntries(resolution, route) {
@@ -18094,7 +18093,7 @@
     const invalidEntries = Array.isArray(resolution?.invalidEntries) ? resolution.invalidEntries : [];
     const message = unresolvedIds.length
       ? "A selected sensor cannot be resolved for chart data. Refresh the sensor list and try again."
-      : "A selected sensor is missing its timeseries or connector identity.";
+      : "A selected sensor is missing its timeseries identity.";
     const availableEntries = (state.visibleEntries || []).map((entry) => ({
       station_id: getEntryStationId(entry),
       timeseries_id: entry?.timeseriesId ?? null,
@@ -20745,7 +20744,9 @@
   }
 
   function buildStationHistoryCacheKey(entry) {
-    return `${HEX_MAP_STATION_HISTORY_CACHE_CONTRACT}|${buildSeriesCacheKey(entry)}`;
+    if (!entry?.timeseriesId) return "";
+    const pollutantKey = normalizeAqiSupportedPollutant(entry?.pollutant || "") || "unknown";
+    return `${HEX_MAP_STATION_HISTORY_CACHE_CONTRACT}|timeseries:${normalizeCacheKeyPart(entry.timeseriesId)}|pollutant:${normalizeCacheKeyPart(pollutantKey)}`;
   }
 
   function getStationHistoryRecord(entry) {
@@ -20816,12 +20817,14 @@
 
   async function fetchStationSeriesBundle(entry, range, windowValue, includeAqi, signal) {
     const connectorId = getEntryConnectorId(entry);
-    if (!stationSeriesUrl || !entry?.timeseriesId || !connectorId) {
+    if (!stationSeriesUrl || !window.UkAqStationHistoryLoader.hasPositiveTimeseriesIdentity(entry)) {
       throw new Error("station_series_request_identity_missing");
     }
     const url = new URL(stationSeriesUrl);
     url.searchParams.set("timeseries_id", String(entry.timeseriesId));
-    url.searchParams.set("connector_id", connectorId);
+    if (/^\d+$/.test(String(connectorId || "")) && Number(connectorId) > 0) {
+      url.searchParams.set("connector_id", connectorId);
+    }
     url.searchParams.set("pollutant", normalizeAqiSupportedPollutant(entry?.pollutant || getCurrentContext()?.pollutant || "") || "");
     url.searchParams.set("start_utc", range.startIso);
     url.searchParams.set("end_utc", range.endIso);
@@ -20840,6 +20843,11 @@
       });
       const error = new Error(`Station-series request failed: ${response.status}`);
       error.ukAqHttpStatus = response.status;
+      try {
+        error.ukAqContractCode = JSON.parse(body)?.error?.code || null;
+      } catch (_error) {
+        error.ukAqContractCode = null;
+      }
       throw error;
     }
     const payload = await response.json();
@@ -20856,16 +20864,17 @@
     return payload;
   }
 
-  async function fetchStationHistoryChunk(kind, entry, range, stableHeadStartUtc, signal) {
-    const connectorId = getEntryConnectorId(entry);
+  async function fetchStationHistoryChunk(kind, entry, record, range, stableHeadStartUtc, signal) {
+    const identity = record?.identity;
+    const connectorId = identity?.connector_id;
     const baseUrl = kind === "aqi" ? cacheAqiHistoryBase : seriesUrl;
-    if (!baseUrl || !entry?.timeseriesId || !connectorId || !stableHeadStartUtc) {
+    if (!baseUrl || !entry?.timeseriesId || !connectorId || identity?.timeseries_id !== Number(entry.timeseriesId) || !stableHeadStartUtc) {
       throw new Error("station_history_chunk_identity_missing");
     }
     const url = new URL(baseUrl);
-    url.searchParams.set("timeseries_id", String(entry.timeseriesId));
+    url.searchParams.set("timeseries_id", String(identity.timeseries_id));
     url.searchParams.set("connector_id", connectorId);
-    url.searchParams.set("pollutant", normalizeAqiSupportedPollutant(entry?.pollutant || getCurrentContext()?.pollutant || "") || "");
+    url.searchParams.set("pollutant", identity.pollutant);
     url.searchParams.set("start_utc", range.start_utc);
     url.searchParams.set("end_utc", range.end_utc);
     url.searchParams.set("stable_head_start_utc", stableHeadStartUtc);
@@ -20926,7 +20935,7 @@
         continue;
       }
       try {
-        const payload = await fetchStationHistoryChunk(kind, entry, chunk, stableHeadStartUtc, signal);
+        const payload = await fetchStationHistoryChunk(kind, entry, record, chunk, stableHeadStartUtc, signal);
         const sectionRows = kind === "aqi" ? { rows: payload?.points } : { rows: payload?.rows };
         if (payload?.response_complete !== true || payload?.has_gap === true) {
           throw new Error(`${kind}_history_incomplete`);
@@ -21031,8 +21040,19 @@
       try {
         primaryRequestCount += 1;
         primaryPayload = await fetchStationSeriesBundle(primary, range, windowValue, true, signal);
+        primaryRecord.identity = window.UkAqStationHistoryLoader.resolveAuthoritativeIdentity(primaryPayload, {
+          timeseriesId: primary.timeseriesId,
+          pollutant: primary.pollutant || getCurrentContext()?.pollutant,
+        });
+        if (!primaryRecord.identity) throw new Error("station_series_authoritative_identity_invalid");
       } catch (error) {
         if (signal.aborted || token !== state.loadToken) return;
+        if (String(error?.ukAqContractCode || "").startsWith("station_history_") || error?.message === "station_series_authoritative_identity_invalid") {
+          const message = "Current data identity could not be resolved for the selected sensor.";
+          renderEmptyChart(message);
+          setMessage(message, { error: true });
+          return;
+        }
         const staleAqi = getPointsInRange(primaryRecord.aqi_points, range);
         const staleObservations = getPointsInRange(primaryRecord.observation_points, range);
         if (staleAqi.length || staleObservations.length) {
@@ -21099,6 +21119,11 @@
           secondaryRequestCount += 1;
           const payload = await fetchStationSeriesBundle(entry, range, windowValue, false, signal);
           if (signal.aborted || token !== state.loadToken) return;
+          record.identity = window.UkAqStationHistoryLoader.resolveAuthoritativeIdentity(payload, {
+            timeseriesId: entry.timeseriesId,
+            pollutant: entry.pollutant || getCurrentContext()?.pollutant,
+          });
+          if (!record.identity) throw new Error("station_series_authoritative_identity_invalid");
           const observationHeadBounds = stationSeriesHeadBounds(payload, range);
           record.observation_points = window.UkAqStationHistoryLoader.replaceAuthoritativeObservationHead(
             record.observation_points,

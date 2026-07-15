@@ -159,6 +159,42 @@
     return String(value).trim();
   }
 
+  function positiveInteger(value) {
+    const text = String(value ?? "").trim();
+    return /^\d+$/.test(text) && Number(text) > 0 ? Number(text) : null;
+  }
+
+  function normalizePollutant(value) {
+    const normalized = String(value ?? "").trim().toLowerCase().replace(/[\s._-]+/g, "");
+    return ["pm25", "pm10", "no2"].includes(normalized) ? normalized : null;
+  }
+
+  function hasPositiveTimeseriesIdentity(entry) {
+    return positiveInteger(entry?.timeseriesId ?? entry?.timeseries_id) !== null;
+  }
+
+  function resolveAuthoritativeIdentity(payload, expected = {}) {
+    const source = payload?.identity && typeof payload.identity === "object"
+      ? payload.identity
+      : payload?.request;
+    const timeseriesId = positiveInteger(source?.timeseries_id);
+    const connectorId = positiveInteger(source?.connector_id);
+    const stationId = positiveInteger(source?.station_id);
+    const pollutant = normalizePollutant(source?.pollutant ?? source?.pollutant_code);
+    const expectedTimeseriesId = positiveInteger(expected.timeseriesId ?? expected.timeseries_id);
+    const expectedPollutant = normalizePollutant(expected.pollutant);
+    if (!timeseriesId || !connectorId || !stationId || !pollutant) return null;
+    if (expectedTimeseriesId && timeseriesId !== expectedTimeseriesId) return null;
+    if (expectedPollutant && pollutant !== expectedPollutant) return null;
+    return {
+      source: String(source?.source || "authoritative_timeseries_lookup"),
+      timeseries_id: timeseriesId,
+      connector_id: connectorId,
+      station_id: stationId,
+      pollutant,
+    };
+  }
+
   function stationEntryMap(entries) {
     const byStationId = new Map();
     (Array.isArray(entries) ? entries : []).forEach(function (entry) {
@@ -205,6 +241,7 @@
         : {},
       aqi_complete: value.aqi_complete === true,
       observations_complete: value.observations_complete === true,
+      identity: resolveAuthoritativeIdentity({ identity: value.identity }) || null,
       guideline: value.guideline && typeof value.guideline === "object" ? value.guideline : null,
       updated_at: typeof value.updated_at === "string" ? value.updated_at : null,
     };
@@ -222,6 +259,8 @@
     nextChunkRange,
     chunkKey,
     normalizeStationIdentity,
+    hasPositiveTimeseriesIdentity,
+    resolveAuthoritativeIdentity,
     resolveSelectedStationEntries,
     createCacheRecord,
   };

@@ -12,6 +12,8 @@ assert.match(page, /station_history_loader/);
 assert.match(page, /HEX_MAP_STATION_HISTORY_CACHE_CONTRACT = "hex-map-station-history-v2"/);
 assert.match(page, /<script src="\/station-history-loader\.js"><\/script>/);
 assert.match(page, /return loadLegacyChartData\(reason\)/, "legacy loader remains available for TEST rollback");
+assert.match(page, /A selected sensor is missing its timeseries identity\./, "missing timeseries retains a visible frontend diagnostic");
+assert.doesNotMatch(page, /A selected sensor is missing its timeseries or connector identity\./);
 
 const requestHead = section.indexOf("primaryPayload = await fetchStationSeriesBundle");
 const resolveSelectedEntries = section.indexOf("resolveChartableSelectedEntries(\"station-history\")");
@@ -47,6 +49,18 @@ assert.match(section, /station_history_time_to_first_aqi_render_ms/);
 assert.match(page, /record\.completed_chunks\[key\]/);
 assert.match(page, /record\.failed_chunks\[key\]/);
 assert.match(page, /Continue backwards/);
+assert.match(section, /primaryRecord\.identity = window\.UkAqStationHistoryLoader\.resolveAuthoritativeIdentity/);
+assert.match(section, /record\.identity = window\.UkAqStationHistoryLoader\.resolveAuthoritativeIdentity/);
+assert.match(page, /fetchStationHistoryChunk\(kind, entry, record, chunk/);
+assert.match(section, /Current data identity could not be resolved for the selected sensor\./);
+
+const fetchHeadStart = page.indexOf("async function fetchStationSeriesBundle");
+const fetchHeadEnd = page.indexOf("async function fetchStationHistoryChunk", fetchHeadStart);
+const fetchHeadSection = page.slice(fetchHeadStart, fetchHeadEnd);
+assert.match(fetchHeadSection, /hasPositiveTimeseriesIdentity\(entry\)/);
+assert.doesNotMatch(fetchHeadSection, /!connectorId/);
+assert.match(fetchHeadSection, /if \(\/\^\\d\+\$\/\.test\(String\(connectorId \|\| ""\)\)/, "a valid connector hint is included when available");
+assert.doesNotMatch(fetchHeadSection, /networkLabel|AURN|aurn/, "the head request contains no network-to-connector guessing");
 
 const head = loader.normalizeAqiPoint({ period_start_utc: "2026-07-15T12:00:00.000Z", daqi_index_level: 2, eaqi_index_level: "Low" }, { daqiField: "daqi_index_level", eaqiField: "eaqi_index_level" });
 const replacement = loader.normalizeAqiPoint({ period_start_utc: "2026-07-15T12:00:00.000Z", daqi_index_level: 8, eaqi_index_level: "Very High" }, { daqiField: "daqi_index_level", eaqiField: "eaqi_index_level" });
@@ -73,10 +87,18 @@ assert.deepEqual(freshObservations.map((point) => point.date.toISOString()), ["2
 const shortRange = loader.nextChunkRange("2026-07-15T00:00:00.000Z", "2026-07-15T00:00:00.000Z", loader.HOUR_MS);
 assert.equal(shortRange, null, "null next boundaries schedule no 12h/24h R2 chunks");
 
-const visiblePrimary = { stationId: "7", timeseriesId: "70", connectorId: "1" };
+const visiblePrimary = { stationId: "7", timeseriesId: "70" };
 const retainedSecondary = { stationId: "8", timeseriesId: "80", connectorId: "2" };
 const resolvedSelected = loader.resolveSelectedStationEntries([7, 8], [visiblePrimary], new Map([["8", retainedSecondary]]));
 assert.deepEqual(resolvedSelected.entries, [visiblePrimary, retainedSecondary], "selected order and primary identity survive a visible-filter refresh");
 assert.equal(resolvedSelected.entries[0].timeseriesId, "70", "the selected primary retains its request identity for fetchStationSeriesBundle");
+assert.equal(loader.hasPositiveTimeseriesIdentity(resolvedSelected.entries[0]), true, "an AURN-style selected entry remains requestable without connector metadata");
+
+const authoritative = loader.resolveAuthoritativeIdentity({
+  identity: { source: "authoritative_timeseries_lookup", timeseries_id: 70, connector_id: 6, station_id: 7, pollutant: "pm25" },
+}, { timeseriesId: "70", pollutant: "PM2.5" });
+assert.equal(authoritative.connector_id, 6);
+assert.equal(authoritative.station_id, 7);
+assert.equal(loader.resolveAuthoritativeIdentity({ identity: { timeseries_id: 71, connector_id: 6, station_id: 7, pollutant: "pm25" } }, { timeseriesId: 70, pollutant: "pm25" }), null, "a head cannot replace the requested timeseries identity");
 
 console.log("Hex Map station-history loader harness passed");

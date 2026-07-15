@@ -6659,7 +6659,6 @@
     <script src="https://cdn.jsdelivr.net/npm/d3@7.9.0/dist/d3.min.js" crossorigin="anonymous"></script>
     <script src="/timeseries-client.js"></script>
     <script src="/chart-core.js"></script>
-    <script src="/station-history-loader.js"></script>
     <script>
       // ── Top summary boxes — shared updater ───────────────────────────────────
       window.updateTopSummary = function(data, idPrefix) {
@@ -16994,20 +16993,12 @@
   const params = new URLSearchParams(window.location.search);
   const cacheBaseUrl = resolveCacheBaseUrl(params.get("cache_base"));
   const seriesUrl = cacheBaseUrl ? `${cacheBaseUrl}/timeseries` : "";
-  const stationSeriesUrl = cacheBaseUrl ? `${cacheBaseUrl}/station-series` : "";
   // chart-core.js is rendering-only; timeseries-client.js owns URL/payload normalization.
   const sharedTimeseriesClient = window.UkAqTimeseriesClient || null;
   const UK_AQ_CHART_TIMESERIES_PROXY_V2_ENABLED = parseBooleanFlag(
     params.get("timeseries_v2"),
     true
   );
-  // TEST rollback switch. The established loader remains the default until the
-  // matching gateway flags have been enabled and validated in TEST.
-  const HEX_MAP_STATION_HISTORY_LOADER_ENABLED = parseBooleanFlag(
-    params.get("station_history_loader"),
-    false,
-  ) && Boolean(window.UkAqStationHistoryLoader);
-  const HEX_MAP_STATION_HISTORY_CACHE_CONTRACT = "hex-map-station-history-v2";
   const aqiHistoryBaseUrl = resolveAqiHistoryBaseUrl(params.get("aqi_history_base"));
   const AQI_HISTORY_BASE_PLACEHOLDER = "https://cic-test.chronicillnesschannel.co.uk/api/aq/aqi-history";
   const configuredAqiHistoryBase = AQI_HISTORY_BASE_PLACEHOLDER.includes("__UK_AQ_AQI_HISTORY_BASE_URL__")
@@ -17072,9 +17063,6 @@
   // key: `${timeseriesId}|station:${stationId}|connector:${connectorId}|pollutant:${pollutantKey}`
   // value: { points: AqiPoint[], coveredRanges: [], failedRanges: [], partialRanges: [], malformedRanges: [], unknownRanges: [], rangeStates: [], lastResponseMeta: object|null }
   const aqiBandCache    = new Map();
-  // Deliberately separate from the legacy cache: a legacy range must never be
-  // mistaken for a station-series head or rendered ahead of a fresh head.
-  const stationHistoryCache = new Map();
   const seriesChunkInFlight = new Map();
   const aqiChunkInFlight = new Map();
   let websiteDebugSession = null;
@@ -20073,13 +20061,6 @@
   }
 
   async function loadChartData(reason = "sensor-change") {
-    if (HEX_MAP_STATION_HISTORY_LOADER_ENABLED) {
-      return loadStationHistoryChartData(reason);
-    }
-    return loadLegacyChartData(reason);
-  }
-
-  async function loadLegacyChartData(reason = "sensor-change") {
     if (!state.isChartMode) return;
     const websiteDebugLoadStartedAt = performance.now();
 
@@ -20621,317 +20602,6 @@
       if (pendingReason && state.isChartMode) {
         queueMicrotask(() => loadChartData(pendingReason));
       }
-    }
-  }
-
-  function buildStationHistoryCacheKey(entry) {
-    return `${HEX_MAP_STATION_HISTORY_CACHE_CONTRACT}|${buildSeriesCacheKey(entry)}`;
-  }
-
-  function getStationHistoryRecord(entry) {
-    const key = buildStationHistoryCacheKey(entry);
-    if (!key) return null;
-    const loader = window.UkAqStationHistoryLoader;
-    const existing = stationHistoryCache.get(key);
-    const record = loader.createCacheRecord(existing);
-    record.current_observation_next_chunk_end_utc = existing?.current_observation_next_chunk_end_utc || null;
-    record.current_failed = existing?.current_failed === true;
-    record.contract_version = HEX_MAP_STATION_HISTORY_CACHE_CONTRACT;
-    stationHistoryCache.set(key, record);
-    return record;
-  }
-
-  function parseStationSeriesAqiPoints(section) {
-    const loader = window.UkAqStationHistoryLoader;
-    return (Array.isArray(section?.rows) ? section.rows : [])
-      .map((row) => {
-        const point = loader.normalizeAqiPoint(row, {
-          daqiField: "daqi_index_level",
-          eaqiField: "eaqi_index_level",
-        });
-        return point ? {
-          ...point,
-          daqi_missing_reason: normalizeAqiMissingReason(row?.daqi_missing_reason),
-          eaqi_missing_reason: normalizeAqiMissingReason(row?.eaqi_missing_reason),
-        } : null;
-      })
-      .filter(Boolean);
-  }
-
-  function parseStationSeriesObservationPoints(section) {
-    const loader = window.UkAqStationHistoryLoader;
-    return (Array.isArray(section?.rows) ? section.rows : [])
-      .map((row) => loader.normalizeObservationPoint(row))
-      .filter(Boolean);
-  }
-
-  function stationHistoryIsComplete(section) {
-    return section?.response_complete === true && section?.has_gap !== true;
-  }
-
-  function stationHistoryNextBoundary(section) {
-    const value = String(section?.next_chunk_end_utc || section?.next_older_chunk_end_utc || "").trim();
-    return Number.isFinite(Date.parse(value)) ? value : null;
-  }
-
-  async function fetchStationSeriesBundle(entry, range, windowValue, includeAqi, signal) {
-    const connectorId = getEntryConnectorId(entry);
-    if (!stationSeriesUrl || !entry?.timeseriesId || !connectorId) {
-      throw new Error("station_series_request_identity_missing");
-    }
-    const url = new URL(stationSeriesUrl);
-    url.searchParams.set("timeseries_id", String(entry.timeseriesId));
-    url.searchParams.set("connector_id", connectorId);
-    url.searchParams.set("pollutant", normalizeAqiSupportedPollutant(entry?.pollutant || getCurrentContext()?.pollutant || "") || "");
-    url.searchParams.set("start_utc", range.startIso);
-    url.searchParams.set("end_utc", range.endIso);
-    url.searchParams.set("window", windowValue);
-    url.searchParams.set("format", "objects");
-    url.searchParams.set("include_aqi", includeAqi ? "true" : "false");
-    const init = { credentials: "include", headers: { Accept: "application/json" }, signal };
-    const cacheFetch = getCacheFetch();
-    const response = cacheFetch ? await cacheFetch(url.toString(), init) : await fetch(url.toString(), init);
-    if (!response.ok) {
-      const body = await response.text().catch(() => "");
-      recordWebsiteFetchFailure("station-series", url.toString(), response, body, {
-        timeseries_id: entry.timeseriesId,
-        connector_id: connectorId,
-        include_aqi: includeAqi,
-      });
-      const error = new Error(`Station-series request failed: ${response.status}`);
-      error.ukAqHttpStatus = response.status;
-      throw error;
-    }
-    const payload = await response.json();
-    recordWebsiteDebugEvent("station_series_response", {
-      route: "station-series",
-      timeseries_id: entry.timeseriesId,
-      connector_id: connectorId,
-      include_aqi: includeAqi,
-      aqi_complete: payload?.aqi?.response_complete ?? null,
-      observations_complete: payload?.observations?.response_complete ?? null,
-      aqi_rows: Array.isArray(payload?.aqi?.rows) ? payload.aqi.rows.length : 0,
-      observation_rows: Array.isArray(payload?.observations?.rows) ? payload.observations.rows.length : 0,
-    });
-    return payload;
-  }
-
-  async function fetchStationHistoryChunk(kind, entry, range, stableHeadStartUtc, signal) {
-    const connectorId = getEntryConnectorId(entry);
-    const baseUrl = kind === "aqi" ? cacheAqiHistoryBase : seriesUrl;
-    if (!baseUrl || !entry?.timeseriesId || !connectorId || !stableHeadStartUtc) {
-      throw new Error("station_history_chunk_identity_missing");
-    }
-    const url = new URL(baseUrl);
-    url.searchParams.set("timeseries_id", String(entry.timeseriesId));
-    url.searchParams.set("connector_id", connectorId);
-    url.searchParams.set("pollutant", normalizeAqiSupportedPollutant(entry?.pollutant || getCurrentContext()?.pollutant || "") || "");
-    url.searchParams.set("start_utc", range.start_utc);
-    url.searchParams.set("end_utc", range.end_utc);
-    url.searchParams.set("stable_head_start_utc", stableHeadStartUtc);
-    url.searchParams.set("format", "objects");
-    if (kind === "observations") url.searchParams.set("limit", "5000");
-    const init = { credentials: "include", headers: { Accept: "application/json" }, signal };
-    const cacheFetch = getCacheFetch();
-    const response = cacheFetch ? await cacheFetch(url.toString(), init) : await fetch(url.toString(), init);
-    if (!response.ok) {
-      const error = new Error(`${kind} history request failed: ${response.status}`);
-      error.ukAqHttpStatus = response.status;
-      throw error;
-    }
-    return response.json();
-  }
-
-  function renderStationHistoryChart(dom, entries, range, units, primaryEntry, aqiLoading, observationsLoading) {
-    const primaryRecord = getStationHistoryRecord(primaryEntry);
-    const pointsMap = new Map();
-    entries.forEach((entry) => {
-      const record = getStationHistoryRecord(entry);
-      pointsMap.set(entry.stationId, getPointsInRange(record?.observation_points || [], range));
-    });
-    const selectedIds = getSelectedSensorIdsOrdered();
-    const sourceSymbolIndex = Math.max(0, selectedIds.indexOf(primaryEntry.stationId));
-    updateChart(dom, pointsMap, entries, range, null, units, getPointsInRange(primaryRecord?.aqi_points || [], range), {
-      aqiLoading,
-      yAxisLoading: observationsLoading,
-      aqiSourceSymbolIndex: sourceSymbolIndex,
-      aqiCacheKey: buildStationHistoryCacheKey(primaryEntry),
-    });
-  }
-
-  async function loadStationHistoryOlderChunks(kind, entry, record, range, stableHeadStartUtc, initialCursorEndUtc, windowValue, render, signal, token) {
-    const loader = window.UkAqStationHistoryLoader;
-    let cursorEndUtc = initialCursorEndUtc;
-    const spanMs = getChunkSpanMs(windowValue);
-    let complete = !cursorEndUtc;
-    while (cursorEndUtc && token === state.loadToken && !signal.aborted) {
-      const chunk = loader.nextChunkRange(range.startIso, cursorEndUtc, spanMs);
-      if (!chunk) {
-        complete = true;
-        break;
-      }
-      const key = loader.chunkKey(kind, chunk);
-      if (record.completed_chunks[key]) {
-        cursorEndUtc = chunk.start_utc;
-        continue;
-      }
-      try {
-        const payload = await fetchStationHistoryChunk(kind, entry, chunk, stableHeadStartUtc, signal);
-        const sectionRows = kind === "aqi" ? { rows: payload?.points } : { rows: payload?.rows };
-        if (payload?.response_complete !== true || payload?.has_gap === true) {
-          throw new Error(`${kind}_history_incomplete`);
-        }
-        if (kind === "aqi") {
-          const incoming = parseStationSeriesAqiPoints(sectionRows);
-          const merged = loader.mergeAqiWithoutReplacement(record.aqi_points, incoming);
-          record.aqi_points = merged.points;
-          if (merged.conflicts.length) {
-            record.failed_chunks[key] = { chunk, reason: "aqi_replacement_contract_error", conflicts: merged.conflicts.length };
-            recordWebsiteDebugEvent("aqi_replacement_contract_error", { route: "aqi-history", chunk, conflicts: merged.conflicts.length });
-          } else {
-            record.completed_chunks[key] = chunk;
-            delete record.failed_chunks[key];
-          }
-        } else {
-          record.observation_points = loader.mergeObservationPoints(record.observation_points, parseStationSeriesObservationPoints(sectionRows));
-          record.completed_chunks[key] = chunk;
-          delete record.failed_chunks[key];
-        }
-        record.updated_at = new Date().toISOString();
-        render();
-        const upstreamNext = stationHistoryNextBoundary(payload?.chunk);
-        cursorEndUtc = upstreamNext && Date.parse(upstreamNext) < Date.parse(cursorEndUtc) ? upstreamNext : chunk.start_utc;
-      } catch (error) {
-        record.failed_chunks[key] = { chunk, reason: error instanceof Error ? error.message : String(error) };
-        recordWebsiteDebugEvent(`${kind}_chunk_failed`, { route: kind === "aqi" ? "aqi-history" : "timeseries", chunk, error: serializeDebugError(error) });
-        // Continue backwards: the successfully rendered head and any completed
-        // chunks remain visible; this exact chunk is retried on the next load.
-        cursorEndUtc = chunk.start_utc;
-        complete = false;
-      }
-    }
-    if (kind === "aqi") record.aqi_complete = complete && Object.keys(record.failed_chunks).filter((key) => key.startsWith("aqi:")).length === 0;
-    else record.observations_complete = complete && Object.keys(record.failed_chunks).filter((key) => key.startsWith("observations:")).length === 0;
-  }
-
-  async function loadStationHistoryChartData(reason = "sensor-change") {
-    if (!state.isChartMode) return;
-    if (state.loadInFlight) {
-      state.pendingLoadReason = reason;
-      state.loadAbortController?.abort();
-      return;
-    }
-    state.loadInFlight = true;
-    const abortController = new AbortController();
-    state.loadAbortController = abortController;
-    const signal = abortController.signal;
-    const token = ++state.loadToken;
-    let dom = null;
-    try {
-      const selectedIds = getSelectedSensorIdsOrdered();
-      const entriesById = new Map(state.visibleEntries.map((entry) => [entry.stationId, entry]));
-      const entries = selectedIds.map((id) => entriesById.get(id)).filter((entry) => entry?.timeseriesId && getEntryConnectorId(entry));
-      if (!entries.length) {
-        renderEmptyChart(NO_SELECTED_SENSOR_CHART_MESSAGE);
-        return;
-      }
-      const primary = entries.find((entry) => entry.stationId === state.selectedAqiSensorId) || entries[0];
-      state.selectedAqiSensorId = primary.stationId;
-      const windowValue = normalizeChartRangeValue(state.chartModeTimeRange);
-      const range = resolveRange(windowValue);
-      const units = entries[0]?.units || getCurrentContext()?.units || "";
-      dom = domByMap[state.mapKey];
-      if (!dom?.svg?.node()) return;
-      const svg = dom.svg.node();
-      const existing = dom.chartFrame;
-      const frameValid = Boolean(existing && existing.areaCode === state.chartModeAreaCode && existing.sessionIdentity === state.chartModeSessionIdentity && existing.mapKey === state.mapKey && existing.width === (svg.clientWidth || 960) && existing.height === (svg.clientHeight || 390));
-      if (!frameValid) initChartFrame(dom, range, MAX_SELECTED_SENSORS);
-      // Never seed this render from a legacy cache. The axis is fixed before
-      // any response and the first data-bearing repaint is the fresh AQI head.
-      renderStationHistoryChart(dom, entries, range, units, primary, true, true);
-      setLoading(true);
-      const primaryRecord = getStationHistoryRecord(primary);
-      let primaryPayload;
-      try {
-        primaryPayload = await fetchStationSeriesBundle(primary, range, windowValue, true, signal);
-      } catch (error) {
-        if (signal.aborted || token !== state.loadToken) return;
-        const staleAqi = getPointsInRange(primaryRecord.aqi_points, range);
-        const staleObservations = getPointsInRange(primaryRecord.observation_points, range);
-        if (staleAqi.length || staleObservations.length) {
-          renderStationHistoryChart(dom, entries, range, units, primary, false, false);
-          setMessage("Current recent data is unavailable. Cached historical data is shown as stale.", { error: true });
-          return;
-        }
-        throw error;
-      }
-      if (signal.aborted || token !== state.loadToken) return;
-      // AQI is intentionally parsed and painted before this response's
-      // observations. This is the first visible data layer for the new path.
-      const headMerge = window.UkAqStationHistoryLoader.mergeAqiWithoutReplacement(primaryRecord.aqi_points, parseStationSeriesAqiPoints(primaryPayload.aqi));
-      primaryRecord.aqi_points = headMerge.points;
-      primaryRecord.aqi_complete = stationHistoryIsComplete(primaryPayload.aqi) && !stationHistoryNextBoundary(primaryPayload.aqi);
-      primaryRecord.updated_at = new Date().toISOString();
-      renderStationHistoryChart(dom, entries, range, units, primary, true, true);
-      if (headMerge.conflicts.length) recordWebsiteDebugEvent("aqi_replacement_contract_error", { route: "station-series", conflicts: headMerge.conflicts.length });
-
-      primaryRecord.observation_points = window.UkAqStationHistoryLoader.mergeObservationPoints(primaryRecord.observation_points, parseStationSeriesObservationPoints(primaryPayload.observations));
-      primaryRecord.observations_complete = stationHistoryIsComplete(primaryPayload.observations) && !stationHistoryNextBoundary(primaryPayload.observations);
-      renderStationHistoryChart(dom, entries, range, units, primary, true, true);
-
-      // Secondary lines are observations-only: no AQI calculation, no R2 AQI
-      // head request, and no duplicated primary-ingest request.
-      await runChunkQueueWithConcurrency(entries.filter((entry) => entry.stationId !== primary.stationId), ADDITIONAL_OBSERVATION_CONCURRENCY, async (entry) => {
-        const record = getStationHistoryRecord(entry);
-        try {
-          const payload = await fetchStationSeriesBundle(entry, range, windowValue, false, signal);
-          if (signal.aborted || token !== state.loadToken) return;
-          record.observation_points = window.UkAqStationHistoryLoader.mergeObservationPoints(record.observation_points, parseStationSeriesObservationPoints(payload.observations));
-          record.observations_complete = stationHistoryIsComplete(payload.observations) && !stationHistoryNextBoundary(payload.observations);
-          record.current_observation_next_chunk_end_utc = stationHistoryNextBoundary(payload.observations);
-          renderStationHistoryChart(dom, entries, range, units, primary, true, true);
-        } catch (error) {
-          record.current_failed = true;
-          recordWebsiteDebugEvent("station_series_secondary_failed", { route: "station-series", timeseries_id: entry.timeseriesId, error: serializeDebugError(error) });
-        }
-      });
-      if (signal.aborted || token !== state.loadToken) return;
-
-      const aqiHeadStart = stationHistoryNextBoundary(primaryPayload.aqi);
-      const observationHeads = new Map(entries.map((entry) => [entry.stationId, entry.stationId === primary.stationId
-        ? stationHistoryNextBoundary(primaryPayload.observations)
-        : getStationHistoryRecord(entry).current_observation_next_chunk_end_utc]));
-      const render = () => {
-        if (token === state.loadToken && !signal.aborted) renderStationHistoryChart(dom, entries, range, units, primary, Boolean(aqiHeadStart), true);
-      };
-      // Start AQI work first, then observations. They progress independently;
-      // an observation failure can never remove a rendered AQI head.
-      const aqiPromise = aqiHeadStart
-        ? loadStationHistoryOlderChunks("aqi", primary, primaryRecord, range, aqiHeadStart, aqiHeadStart, windowValue, render, signal, token)
-        : Promise.resolve();
-      const observationPromises = entries.map((entry) => {
-        const cursor = observationHeads.get(entry.stationId);
-        return cursor
-          ? loadStationHistoryOlderChunks("observations", entry, getStationHistoryRecord(entry), range, cursor, cursor, windowValue, render, signal, token)
-          : Promise.resolve();
-      });
-      await Promise.all([aqiPromise, ...observationPromises]);
-      if (signal.aborted || token !== state.loadToken) return;
-      renderStationHistoryChart(dom, entries, range, units, primary, false, false);
-      setMessage("");
-    } catch (error) {
-      if (!signal.aborted && token === state.loadToken) {
-        console.warn("Could not load station-history chart data.", error);
-        renderEmptyChart("Could not load chart data. Try Refresh.");
-        setMessage("Could not load chart data. Try Refresh.", { error: true });
-      }
-    } finally {
-      if (state.loadAbortController === abortController) state.loadAbortController = null;
-      state.loadInFlight = false;
-      if (token === state.loadToken) setLoading(false);
-      const pendingReason = state.pendingLoadReason;
-      state.pendingLoadReason = null;
-      if (pendingReason && state.isChartMode) queueMicrotask(() => loadChartData(pendingReason));
     }
   }
 

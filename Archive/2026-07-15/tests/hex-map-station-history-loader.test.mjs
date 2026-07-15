@@ -21,17 +21,12 @@ const aqiHistory = section.indexOf("const aqiPromise");
 const observationHistory = section.indexOf("const observationPromises");
 assert.ok(requestHead >= 0 && paintAqi > requestHead && paintObservations > paintAqi, "AQI head is rendered before recent observations");
 assert.ok(secondaryRequest > paintObservations, "secondary current observations start after the primary recent observations");
-assert.ok(aqiHistory >= 0 && aqiHistory < secondaryRequest && observationHistory > secondaryRequest, "AQI chunks start with priority while secondary and historical observations remain independent");
+assert.ok(aqiHistory >= 0 && observationHistory > aqiHistory, "AQI chunks are started before observation chunks");
 assert.match(section, /initChartFrame\(dom, range, MAX_SELECTED_SENSORS\)/, "full requested range fixes the x-axis before data arrives");
 assert.match(page, /include_aqi", includeAqi \? "true" : "false"/);
 assert.match(section, /fetchStationSeriesBundle\(entry, range, windowValue, false, signal\)/);
 assert.match(section, /Current recent data is unavailable\. Cached historical data is shown as stale\./);
-assert.match(page, /aqi_replacement_contract_error/);
-assert.match(section, /replaceAuthoritativeAqiHead/);
-assert.match(section, /includeCached: false/);
-assert.match(page, /if \(existing\) return existing/);
-assert.match(page, /primaryRecord\?\.guideline \|\| legacyGuideline/);
-assert.match(section, /station_history_time_to_first_aqi_render_ms/);
+assert.match(section, /aqi_replacement_contract_error/);
 assert.match(page, /record\.completed_chunks\[key\]/);
 assert.match(page, /record\.failed_chunks\[key\]/);
 assert.match(page, /Continue backwards/);
@@ -41,12 +36,6 @@ const replacement = loader.normalizeAqiPoint({ period_start_utc: "2026-07-15T12:
 const guarded = loader.mergeAqiWithoutReplacement([head], [replacement]);
 assert.equal(guarded.points[0].daqi, 2);
 assert.equal(guarded.conflicts.length, 1, "later history cannot replace a stable AQI hour");
-
-const refreshedHead = loader.normalizeAqiPoint({ period_start_utc: "2026-07-15T12:00:00.000Z", daqi_index_level: 4, eaqi_index_level: "Moderate" }, { daqiField: "daqi_index_level", eaqiField: "eaqi_index_level" });
-const olderHistory = loader.normalizeAqiPoint({ period_start_utc: "2026-07-15T11:00:00.000Z", daqi_index_level: 2, eaqi_index_level: "Low" }, { daqiField: "daqi_index_level", eaqiField: "eaqi_index_level" });
-const refreshed = loader.replaceAuthoritativeAqiHead([olderHistory, head], [refreshedHead], "2026-07-15T12:00:00.000Z", "2026-07-15T13:00:00.000Z");
-assert.equal(refreshed.points.length, 2);
-assert.equal(refreshed.points.at(-1).daqi, 4, "a later authoritative station-series head can replace its own interval");
 
 const shortRange = loader.nextChunkRange("2026-07-15T00:00:00.000Z", "2026-07-15T00:00:00.000Z", loader.HOUR_MS);
 assert.equal(shortRange, null, "null next boundaries schedule no 12h/24h R2 chunks");

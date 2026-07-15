@@ -75,23 +75,6 @@
     };
   }
 
-  // A newly fetched station-series head is authoritative for its own interval.
-  // This is deliberately separate from history merging: it lets a later chart
-  // refresh adopt an updated R2 value while still protecting that new head from
-  // any older chunk received during the same load.
-  function replaceAuthoritativeAqiHead(existingPoints, headPoints, headStartUtc, headEndUtc) {
-    const startMs = Date.parse(String(headStartUtc || ""));
-    const endMs = Date.parse(String(headEndUtc || ""));
-    if (!Number.isFinite(startMs) || !Number.isFinite(endMs) || endMs <= startMs) {
-      return mergeAqiWithoutReplacement(existingPoints, headPoints);
-    }
-    const retained = (Array.isArray(existingPoints) ? existingPoints : []).filter(function (point) {
-      const key = hourKey(point?.date);
-      return key === null || key < startMs || key >= endMs;
-    });
-    return mergeAqiWithoutReplacement(retained, headPoints);
-  }
-
   function mergeObservationPoints(existingPoints, incomingPoints) {
     const byTimestamp = new Map();
     (Array.isArray(existingPoints) ? existingPoints : []).forEach(function (point) {
@@ -150,7 +133,6 @@
         : {},
       aqi_complete: value.aqi_complete === true,
       observations_complete: value.observations_complete === true,
-      guideline: value.guideline && typeof value.guideline === "object" ? value.guideline : null,
       updated_at: typeof value.updated_at === "string" ? value.updated_at : null,
     };
   }
@@ -160,7 +142,6 @@
     normalizeAqiPoint,
     normalizeObservationPoint,
     mergeAqiWithoutReplacement,
-    replaceAuthoritativeAqiHead,
     mergeObservationPoints,
     isOlderChunk,
     nextChunkRange,

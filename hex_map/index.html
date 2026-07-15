@@ -17055,6 +17055,7 @@
     chartModeSessionIdentity: null,
     lastChartModeSessionIdentity: null,
     chartModeSelectedSensors: new Set(),
+    selectedEntries: new Map(),
     chartModeTimeRange: "24h",
     visibleEntries: [],
     loadToken: 0,
@@ -17259,14 +17260,48 @@
     return Array.from(state.chartModeSelectedSensors);
   }
 
+  function rememberSelectedEntry(entry) {
+    const normalized = normalizeEntry(entry);
+    if (!normalized?.stationId) return null;
+    state.selectedEntries.set(normalized.stationId, normalized);
+    return normalized;
+  }
+
+  function rememberVisibleSelectedEntries(entries = state.visibleEntries) {
+    (Array.isArray(entries) ? entries : []).forEach((entry) => {
+      const stationId = String(entry?.stationId || "").trim();
+      if (stationId && state.chartModeSelectedSensors.has(stationId)) rememberSelectedEntry(entry);
+    });
+  }
+
+  function resolveSelectedChartEntries() {
+    const loader = window.UkAqStationHistoryLoader;
+    const selectedIds = getSelectedSensorIdsOrdered();
+    if (loader?.resolveSelectedStationEntries) {
+      return loader.resolveSelectedStationEntries(selectedIds, state.visibleEntries, state.selectedEntries);
+    }
+    const visibleByStationId = new Map((state.visibleEntries || []).map((entry) => [String(entry?.stationId || "").trim(), entry]));
+    const entries = [];
+    const unresolvedIds = [];
+    selectedIds.forEach((stationId) => {
+      const entry = visibleByStationId.get(stationId) || state.selectedEntries.get(stationId);
+      if (entry) entries.push(entry);
+      else unresolvedIds.push(stationId);
+    });
+    return { entries, unresolvedIds };
+  }
+
   function syncAqiSourceWithSelectedSensors() {
     const selectedIds = getSelectedSensorIdsOrdered();
     if (!selectedIds.length) {
       state.selectedAqiSensorId = null;
       return null;
     }
-    if (!state.selectedAqiSensorId || !selectedIds.includes(state.selectedAqiSensorId)) {
+    const selectedAqiSensorId = String(state.selectedAqiSensorId || "").trim();
+    if (!selectedAqiSensorId || !selectedIds.includes(selectedAqiSensorId)) {
       state.selectedAqiSensorId = selectedIds[0];
+    } else {
+      state.selectedAqiSensorId = selectedAqiSensorId;
     }
     return state.selectedAqiSensorId;
   }
@@ -17293,7 +17328,8 @@
     const selectedAqiSensorId = syncAqiSourceWithSelectedSensors();
     const adapter = getAdapter(state.mapKey);
     const chipsHtml = selectedIds.map((stationId, index) => {
-      const entry = state.visibleEntries.find((candidate) => candidate.stationId === stationId);
+      const entry = state.visibleEntries.find((candidate) => candidate.stationId === stationId)
+        || state.selectedEntries.get(stationId);
       if (!entry) return "";
       const symbolMarkup = getChartSymbolMarkup(index, {
         className: "hex-chart-symbol-svg chart-mode-sensor-symbol-svg",
@@ -18046,6 +18082,57 @@
     return String(value).trim() || null;
   }
 
+  function hasStationHistoryRequestIdentity(entry) {
+    const timeseriesId = String(entry?.timeseriesId ?? "").trim();
+    const connectorId = getEntryConnectorId(entry);
+    return /^\d+$/.test(timeseriesId) && Number(timeseriesId) > 0
+      && /^\d+$/.test(String(connectorId || "")) && Number(connectorId) > 0;
+  }
+
+  function reportUnresolvedSelectedChartEntries(resolution, route) {
+    const unresolvedIds = Array.isArray(resolution?.unresolvedIds) ? resolution.unresolvedIds : [];
+    const invalidEntries = Array.isArray(resolution?.invalidEntries) ? resolution.invalidEntries : [];
+    const message = unresolvedIds.length
+      ? "A selected sensor cannot be resolved for chart data. Refresh the sensor list and try again."
+      : "A selected sensor is missing its timeseries or connector identity.";
+    const availableEntries = (state.visibleEntries || []).map((entry) => ({
+      station_id: getEntryStationId(entry),
+      timeseries_id: entry?.timeseriesId ?? null,
+      connector_id: getEntryConnectorId(entry),
+    }));
+    const invalidSelectedEntries = invalidEntries.map((entry) => ({
+      station_id: getEntryStationId(entry),
+      timeseries_id: entry?.timeseriesId ?? null,
+      connector_id: getEntryConnectorId(entry),
+    }));
+    recordWebsiteDebugEvent("station_history_selected_entry_unresolved", {
+      route,
+      selected_ids: getSelectedSensorIdsOrdered(),
+      unresolved_selected_ids: unresolvedIds,
+      invalid_selected_entries: invalidSelectedEntries,
+      available_entries: availableEntries,
+    });
+    console.warn("Selected chart entry could not be resolved.", {
+      route,
+      selectedIds: getSelectedSensorIdsOrdered(),
+      unresolvedIds,
+      invalidSelectedEntries,
+      availableEntries,
+    });
+    renderEmptyChart(message);
+    setMessage(message, { error: true });
+  }
+
+  function resolveChartableSelectedEntries(route) {
+    const selectedResolution = resolveSelectedChartEntries();
+    const invalidEntries = selectedResolution.entries.filter((entry) => !hasStationHistoryRequestIdentity(entry));
+    if (selectedResolution.unresolvedIds.length || invalidEntries.length) {
+      reportUnresolvedSelectedChartEntries({ ...selectedResolution, invalidEntries }, route);
+      return null;
+    }
+    return selectedResolution.entries;
+  }
+
   function normalizeDebugRanges(ranges = []) {
     return (Array.isArray(ranges) ? ranges : [])
       .filter((segment) => Number.isFinite(segment?.startMs) && Number.isFinite(segment?.endMs))
@@ -18791,8 +18878,12 @@
         }
       }
       if (nextSelectedSet.size === state.chartModeSelectedSensors.size) return false;
-      const orderedSelected = orderedIds.filter((stationId) => nextSelectedSet.has(stationId));
+      const orderedSelected = [
+        ...Array.from(state.chartModeSelectedSensors),
+        ...orderedIds.filter((stationId) => !state.chartModeSelectedSensors.has(stationId) && nextSelectedSet.has(stationId)),
+      ];
       state.chartModeSelectedSensors = new Set(orderedSelected);
+      rememberVisibleSelectedEntries();
       if (!state.chartModeSelectedSensors.has(state.selectedPrimaryId)) {
         state.selectedPrimaryId = orderedSelected[0] || null;
       }
@@ -18808,6 +18899,8 @@
       const selectedOnlyTop = state.chartModeSelectedSensors.size === 1 && state.chartModeSelectedSensors.has(topSensorId);
       if (selectedOnlyTop) return false;
       state.chartModeSelectedSensors = new Set([topSensorId]);
+      state.selectedEntries = new Map();
+      rememberSelectedEntry(state.visibleEntries.find((entry) => entry.stationId === topSensorId));
       state.selectedPrimaryId = topSensorId;
       state.selectedAqiSensorId = topSensorId;
       renderSensorList(getCurrentContext() || {});
@@ -18820,9 +18913,21 @@
 
   function normalizeEntry(entry) {
     if (!entry) return null;
-    const stationId = String(entry.stationId || entry.stationName || "").trim();
+    const stationId = getEntryStationId(entry) || String(entry.stationName || "").trim();
     if (!stationId) return null;
-    return { ...entry, stationId, timeseriesId: entry.timeseriesId === null || entry.timeseriesId === undefined ? null : String(entry.timeseriesId) };
+    const timeseriesId = entry.timeseriesId
+      ?? entry.timeseries_id
+      ?? entry.time_series_id
+      ?? entry.row?.timeseries_id
+      ?? entry.row?.time_series_id
+      ?? entry.row?.timeseries?.id
+      ?? null;
+    return {
+      ...entry,
+      stationId,
+      timeseriesId: timeseriesId === null || timeseriesId === undefined ? null : String(timeseriesId).trim() || null,
+      connectorId: getEntryConnectorId(entry),
+    };
   }
 
   function syncChartSortHeaders(context = null) {
@@ -18893,6 +18998,8 @@
       ? requestedSensorId
       : entries[0]?.stationId || null;
     state.chartModeSelectedSensors = new Set(initialSensorId ? [initialSensorId] : []);
+    state.selectedEntries = new Map();
+    if (initialSensorId) rememberSelectedEntry(entries.find((entry) => entry.stationId === initialSensorId));
     state.selectedPrimaryId = initialSensorId;
     state.selectedAqiSensorId = initialSensorId;
     syncPanels();
@@ -18909,6 +19016,7 @@
     state.chartModeAreaCode = null;
     state.chartModeSessionIdentity = null;
     state.chartModeSelectedSensors.clear();
+    state.selectedEntries.clear();
     state.selectedAqiSensorId = null;
     state.visibleEntries = [];
     state.loadToken += 1;
@@ -18937,10 +19045,12 @@
       return;
     }
     const entries = (context.entries || []).map(normalizeEntry).filter(Boolean);
-    const visibleIds = new Set(entries.map((entry) => entry.stationId));
     state.visibleEntries = entries;
-    state.chartModeSelectedSensors = new Set(Array.from(state.chartModeSelectedSensors).filter((id) => visibleIds.has(id)));
-    if (!state.chartModeSelectedSensors.size && entries.length) state.chartModeSelectedSensors.add(entries[0].stationId);
+    rememberVisibleSelectedEntries(entries);
+    if (!state.chartModeSelectedSensors.size && entries.length) {
+      state.chartModeSelectedSensors.add(entries[0].stationId);
+      rememberSelectedEntry(entries[0]);
+    }
     if (!state.chartModeSelectedSensors.has(state.selectedPrimaryId)) state.selectedPrimaryId = Array.from(state.chartModeSelectedSensors)[0] || null;
     syncAqiSourceWithSelectedSensors();
     renderSensorList(context);
@@ -19067,7 +19177,7 @@
     if (dom.reading) dom.reading.innerHTML = header.readingHtml || "";
     syncChartSortHeaders(context);
     syncInlineTableModeControls(state.mapKey);
-    if (!state.visibleEntries.length) {
+    if (!state.visibleEntries.length && !state.chartModeSelectedSensors.size) {
       setMessage(NO_SELECTED_SENSOR_CHART_MESSAGE);
       renderEmptyChart(NO_SELECTED_SENSOR_CHART_MESSAGE);
       return;
@@ -19077,20 +19187,26 @@
 
   function toggleSensor(stationId) {
     if (!stationId) return;
-    if (state.chartModeSelectedSensors.has(stationId)) {
+    const normalizedId = String(stationId || "").trim();
+    if (!normalizedId) return;
+    if (state.chartModeSelectedSensors.has(normalizedId)) {
       if (state.chartModeSelectedSensors.size <= 1) {
         setMessage("Keep at least 1 sensor selected.");
         return;
       }
-      state.chartModeSelectedSensors.delete(stationId);
-      if (state.selectedPrimaryId === stationId) state.selectedPrimaryId = Array.from(state.chartModeSelectedSensors)[0] || null;
+      state.chartModeSelectedSensors.delete(normalizedId);
+      state.selectedEntries.delete(normalizedId);
+      if (state.selectedPrimaryId === normalizedId) state.selectedPrimaryId = Array.from(state.chartModeSelectedSensors)[0] || null;
     } else {
       if (state.chartModeSelectedSensors.size >= MAX_SELECTED_SENSORS) {
         setMessage("You can compare up to 4 sensors.");
         return;
       }
-      state.chartModeSelectedSensors.add(stationId);
-      state.selectedPrimaryId = state.selectedPrimaryId || stationId;
+      const entry = state.visibleEntries.find((candidate) => candidate.stationId === normalizedId);
+      if (!entry) return;
+      state.chartModeSelectedSensors.add(normalizedId);
+      rememberSelectedEntry(entry);
+      state.selectedPrimaryId = state.selectedPrimaryId || normalizedId;
     }
     syncAqiSourceWithSelectedSensors();
     renderSensorList(getCurrentContext() || {});
@@ -19110,6 +19226,8 @@
       return true;
     }
     state.chartModeSelectedSensors = new Set([normalizedId]);
+    state.selectedEntries = new Map();
+    rememberSelectedEntry(state.visibleEntries.find((entry) => entry.stationId === normalizedId));
     state.selectedPrimaryId = normalizedId;
     state.selectedAqiSensorId = normalizedId;
     renderSensorList(getCurrentContext() || {});
@@ -19981,8 +20099,7 @@
 
   function clearCacheForCurrentSensors() {
     const tidSet = new Set();
-    Array.from(state.chartModeSelectedSensors).forEach((id) => {
-      const entry = state.visibleEntries.find((e) => e.stationId === id);
+    resolveSelectedChartEntries().entries.forEach((entry) => {
       if (entry?.timeseriesId) tidSet.add(String(entry.timeseriesId));
     });
     seriesDataCache.forEach((_v, key) => { if (tidSet.has(key.split("|")[0])) seriesDataCache.delete(key); });
@@ -20103,9 +20220,12 @@
 
       // Build ordered usableEntries by Set insertion order (consistent symbol indices).
       const selectedIds = getSelectedSensorIdsOrdered();
-      const entryById = new Map(state.visibleEntries.map((entry) => [entry.stationId, entry]));
-      const selectedEntries = selectedIds.map((id) => entryById.get(id)).filter(Boolean);
-
+      const selectedResolution = resolveSelectedChartEntries();
+      if (selectedResolution.unresolvedIds.length) {
+        reportUnresolvedSelectedChartEntries({ ...selectedResolution, invalidEntries: [] }, "legacy-chart");
+        return;
+      }
+      const selectedEntries = selectedResolution.entries;
       if (!selectedEntries.length) {
         renderEmptyChart(NO_SELECTED_SENSOR_CHART_MESSAGE);
         setMessage(NO_SELECTED_SENSOR_CHART_MESSAGE);
@@ -20864,10 +20984,11 @@
     let dom = null;
     try {
       const selectedIds = getSelectedSensorIdsOrdered();
-      const entriesById = new Map(state.visibleEntries.map((entry) => [entry.stationId, entry]));
-      const entries = selectedIds.map((id) => entriesById.get(id)).filter((entry) => entry?.timeseriesId && getEntryConnectorId(entry));
+      const entries = resolveChartableSelectedEntries("station-history");
+      if (!entries) return;
       if (!entries.length) {
         renderEmptyChart(NO_SELECTED_SENSOR_CHART_MESSAGE);
+        setMessage(NO_SELECTED_SENSOR_CHART_MESSAGE);
         return;
       }
       const primary = entries.find((entry) => entry.stationId === state.selectedAqiSensorId) || entries[0];

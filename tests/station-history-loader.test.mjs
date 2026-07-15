@@ -57,6 +57,16 @@ const observation = loader.normalizeObservationPoint({
 });
 assert.equal(loader.mergeObservationPoints([observation], [observation]).length, 1);
 
+const retainedEntry = { stationId: "42", timeseriesId: "420", connectorId: "2" };
+const selectedResolution = loader.resolveSelectedStationEntries(
+  [7, "42", "missing"],
+  [{ stationId: "7", timeseriesId: "70", connectorId: "1" }],
+  new Map([["42", retainedEntry]]),
+);
+assert.deepEqual(selectedResolution.entries.map((entry) => String(entry.stationId)), ["7", "42"], "numeric selected IDs resolve against string entry IDs in selected order");
+assert.equal(selectedResolution.entries[1], retainedEntry, "a retained selected entry remains chartable outside the current visible filter");
+assert.deepEqual(selectedResolution.unresolvedIds, ["missing"]);
+
 const cachedObservation = loader.normalizeObservationPoint({
   observed_at: "2026-07-15T10:15:00.000Z",
   value: 12.5,

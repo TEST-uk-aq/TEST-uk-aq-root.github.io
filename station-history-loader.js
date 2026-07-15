@@ -154,6 +154,43 @@
     return `${kind}:${range?.start_utc || ""}:${range?.end_utc || ""}`;
   }
 
+  function normalizeStationIdentity(value) {
+    if (value === null || value === undefined) return "";
+    return String(value).trim();
+  }
+
+  function stationEntryMap(entries) {
+    const byStationId = new Map();
+    (Array.isArray(entries) ? entries : []).forEach(function (entry) {
+      const stationId = normalizeStationIdentity(entry?.stationId ?? entry?.station_id);
+      if (stationId && !byStationId.has(stationId)) byStationId.set(stationId, entry);
+    });
+    return byStationId;
+  }
+
+  // The active table is only a view. A selected chart entry must continue to
+  // resolve from its retained selected-series snapshot after a filter refresh
+  // removes it from that view. Visible entries win when available so fresh
+  // identity metadata is used without changing selected order.
+  function resolveSelectedStationEntries(selectedIds, visibleEntries, retainedEntries) {
+    const visibleByStationId = stationEntryMap(visibleEntries);
+    const retainedByStationId = retainedEntries instanceof Map
+      ? retainedEntries
+      : stationEntryMap(retainedEntries);
+    const entries = [];
+    const unresolvedIds = [];
+    const seen = new Set();
+    (Array.isArray(selectedIds) ? selectedIds : []).forEach(function (selectedId) {
+      const stationId = normalizeStationIdentity(selectedId);
+      if (!stationId || seen.has(stationId)) return;
+      seen.add(stationId);
+      const entry = visibleByStationId.get(stationId) || retainedByStationId.get(stationId);
+      if (entry) entries.push(entry);
+      else unresolvedIds.push(stationId);
+    });
+    return { entries, unresolvedIds };
+  }
+
   function createCacheRecord(raw) {
     const value = raw && typeof raw === "object" ? raw : {};
     return {
@@ -184,6 +221,8 @@
     isOlderChunk,
     nextChunkRange,
     chunkKey,
+    normalizeStationIdentity,
+    resolveSelectedStationEntries,
     createCacheRecord,
   };
 });

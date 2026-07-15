@@ -14,12 +14,14 @@ assert.match(page, /<script src="\/station-history-loader\.js"><\/script>/);
 assert.match(page, /return loadLegacyChartData\(reason\)/, "legacy loader remains available for TEST rollback");
 
 const requestHead = section.indexOf("primaryPayload = await fetchStationSeriesBundle");
+const resolveSelectedEntries = section.indexOf("resolveChartableSelectedEntries(\"station-history\")");
 const paintAqi = section.indexOf("primaryRecord.aqi_points = headMerge.points");
 const paintObservations = section.indexOf("primaryRecord.observation_points = window.UkAqStationHistoryLoader.replaceAuthoritativeObservationHead");
 const secondaryRequest = section.indexOf("fetchStationSeriesBundle(entry, range, windowValue, false");
 const aqiHistory = section.indexOf("const aqiPromise");
 const observationHistory = section.indexOf("const observationPromises");
 assert.ok(requestHead >= 0 && paintAqi > requestHead && paintObservations > paintAqi, "AQI head is rendered before recent observations");
+assert.ok(resolveSelectedEntries >= 0 && resolveSelectedEntries < requestHead, "a resolved selected entry reaches fetchStationSeriesBundle before any fallback can occur");
 assert.ok(secondaryRequest > paintObservations, "secondary current observations start after the primary recent observations");
 assert.ok(aqiHistory >= 0 && aqiHistory < secondaryRequest && observationHistory > secondaryRequest, "AQI chunks start with priority while secondary and historical observations remain independent");
 assert.match(section, /initChartFrame\(dom, range, MAX_SELECTED_SENSORS\)/, "full requested range fixes the x-axis before data arrives");
@@ -29,6 +31,11 @@ assert.match(section, /Current recent data is unavailable\. Cached historical da
 assert.match(page, /aqi_replacement_contract_error/);
 assert.match(section, /replaceAuthoritativeAqiHead/);
 assert.match(section, /replaceAuthoritativeObservationHead/);
+assert.match(section, /resolveChartableSelectedEntries\("station-history"\)/);
+assert.match(page, /station_history_selected_entry_unresolved/);
+assert.match(page, /selectedEntries: new Map\(\)/);
+assert.match(page, /resolveSelectedStationEntries/);
+assert.match(page, /rememberVisibleSelectedEntries\(entries\)/);
 assert.match(section, /includeCached: false/);
 assert.match(section, /forceClearAqi: true/);
 assert.match(page, /renderOptions\.forceClearAqi === true/);
@@ -65,5 +72,11 @@ assert.deepEqual(freshObservations.map((point) => point.date.toISOString()), ["2
 
 const shortRange = loader.nextChunkRange("2026-07-15T00:00:00.000Z", "2026-07-15T00:00:00.000Z", loader.HOUR_MS);
 assert.equal(shortRange, null, "null next boundaries schedule no 12h/24h R2 chunks");
+
+const visiblePrimary = { stationId: "7", timeseriesId: "70", connectorId: "1" };
+const retainedSecondary = { stationId: "8", timeseriesId: "80", connectorId: "2" };
+const resolvedSelected = loader.resolveSelectedStationEntries([7, 8], [visiblePrimary], new Map([["8", retainedSecondary]]));
+assert.deepEqual(resolvedSelected.entries, [visiblePrimary, retainedSecondary], "selected order and primary identity survive a visible-filter refresh");
+assert.equal(resolvedSelected.entries[0].timeseriesId, "70", "the selected primary retains its request identity for fetchStationSeriesBundle");
 
 console.log("Hex Map station-history loader harness passed");

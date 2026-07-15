@@ -154,6 +154,128 @@
     return `${kind}:${range?.start_utc || ""}:${range?.end_utc || ""}`;
   }
 
+  function intervalBounds(range) {
+    const startMs = Number.isFinite(Number(range?.startMs))
+      ? Number(range.startMs)
+      : Date.parse(String(range?.start_utc || range?.startUtc || ""));
+    const endMs = Number.isFinite(Number(range?.endMs))
+      ? Number(range.endMs)
+      : Date.parse(String(range?.end_utc || range?.endUtc || ""));
+    return Number.isFinite(startMs) && Number.isFinite(endMs) && endMs > startMs
+      ? { startMs, endMs }
+      : null;
+  }
+
+  function normalizeIntervals(intervals) {
+    const sorted = (Array.isArray(intervals) ? intervals : [])
+      .map(intervalBounds)
+      .filter(Boolean)
+      .sort(function (left, right) { return left.startMs - right.startMs || left.endMs - right.endMs; });
+    const merged = [];
+    sorted.forEach(function (interval) {
+      const tail = merged[merged.length - 1];
+      if (tail && interval.startMs <= tail.endMs) {
+        tail.endMs = Math.max(tail.endMs, interval.endMs);
+      } else {
+        merged.push({ ...interval });
+      }
+    });
+    return merged;
+  }
+
+  function subtractCoveredIntervals(range, coveredIntervals) {
+    const requested = intervalBounds(range);
+    if (!requested) return [];
+    let missing = [requested];
+    normalizeIntervals(coveredIntervals).forEach(function (covered) {
+      missing = missing.flatMap(function (candidate) {
+        if (covered.endMs <= candidate.startMs || covered.startMs >= candidate.endMs) return [candidate];
+        const remaining = [];
+        if (covered.startMs > candidate.startMs) {
+          remaining.push({ startMs: candidate.startMs, endMs: Math.min(covered.startMs, candidate.endMs) });
+        }
+        if (covered.endMs < candidate.endMs) {
+          remaining.push({ startMs: Math.max(covered.endMs, candidate.startMs), endMs: candidate.endMs });
+        }
+        return remaining;
+      });
+    });
+    return missing
+      .filter(function (interval) { return interval.endMs > interval.startMs; })
+      .sort(function (left, right) { return right.endMs - left.endMs; })
+      .map(function (interval) {
+        return {
+          startMs: interval.startMs,
+          endMs: interval.endMs,
+          start_utc: new Date(interval.startMs).toISOString(),
+          end_utc: new Date(interval.endMs).toISOString(),
+        };
+      });
+  }
+
+  function normalizeCoverageSection(section) {
+    const value = section && typeof section === "object" ? section : {};
+    return {
+      covered_intervals: normalizeIntervals(value.covered_intervals),
+      interval_states: (Array.isArray(value.interval_states) ? value.interval_states : [])
+        .map(function (entry) {
+          const bounds = intervalBounds(entry);
+          return bounds ? {
+            ...bounds,
+            state: ["complete", "partial", "failed", "stale"].includes(entry?.state) ? entry.state : "failed",
+            partial_reasons: Array.isArray(entry?.partial_reasons) ? entry.partial_reasons.map(String) : [],
+            recorded_at_utc: typeof entry?.recorded_at_utc === "string" ? entry.recorded_at_utc : null,
+          } : null;
+        })
+        .filter(Boolean),
+    };
+  }
+
+  function coverageSection(record, kind) {
+    if (!record.coverage || typeof record.coverage !== "object") record.coverage = {};
+    record.coverage[kind] = normalizeCoverageSection(record.coverage[kind]);
+    return record.coverage[kind];
+  }
+
+  function recordCoverageInterval(record, kind, range, state, details) {
+    const bounds = intervalBounds(range);
+    if (!record || !["aqi", "observations"].includes(kind) || !bounds) return record;
+    const section = coverageSection(record, kind);
+    section.interval_states = section.interval_states.flatMap(function (entry) {
+      if (entry.endMs <= bounds.startMs || entry.startMs >= bounds.endMs) return [entry];
+      const retained = [];
+      if (entry.startMs < bounds.startMs) retained.push({ ...entry, endMs: bounds.startMs });
+      if (entry.endMs > bounds.endMs) retained.push({ ...entry, startMs: bounds.endMs });
+      return retained;
+    });
+    section.interval_states.push({
+      ...bounds,
+      state: ["complete", "partial", "failed", "stale"].includes(state) ? state : "failed",
+      partial_reasons: Array.isArray(details?.partial_reasons) ? details.partial_reasons.map(String) : [],
+      recorded_at_utc: new Date().toISOString(),
+    });
+    section.interval_states.sort(function (left, right) {
+      return left.startMs - right.startMs || left.endMs - right.endMs;
+    });
+    if (state === "complete") {
+      section.covered_intervals = normalizeIntervals([...section.covered_intervals, bounds]);
+    } else {
+      section.covered_intervals = section.covered_intervals.flatMap(function (covered) {
+        if (covered.endMs <= bounds.startMs || covered.startMs >= bounds.endMs) return [covered];
+        const retained = [];
+        if (covered.startMs < bounds.startMs) retained.push({ startMs: covered.startMs, endMs: bounds.startMs });
+        if (covered.endMs > bounds.endMs) retained.push({ startMs: bounds.endMs, endMs: covered.endMs });
+        return retained;
+      });
+    }
+    return record;
+  }
+
+  function getUncoveredRanges(record, kind, range) {
+    const section = coverageSection(record, kind);
+    return subtractCoveredIntervals(range, section.covered_intervals);
+  }
+
   function normalizeStationIdentity(value) {
     if (value === null || value === undefined) return "";
     return String(value).trim();
@@ -239,6 +361,10 @@
       failed_chunks: value.failed_chunks && typeof value.failed_chunks === "object"
         ? value.failed_chunks
         : {},
+      coverage: {
+        aqi: normalizeCoverageSection(value.coverage?.aqi),
+        observations: normalizeCoverageSection(value.coverage?.observations),
+      },
       aqi_complete: value.aqi_complete === true,
       observations_complete: value.observations_complete === true,
       identity: resolveAuthoritativeIdentity({ identity: value.identity }) || null,
@@ -249,6 +375,17 @@
 
   function inspectObservationChunk(payload) {
     const rows = Array.isArray(payload?.rows) ? payload.rows : [];
+    const complete = payload?.response_complete === true && payload?.has_gap !== true;
+    return {
+      rows,
+      complete,
+      retryable: !complete,
+      partial_reasons: Array.isArray(payload?.partial_reasons) ? payload.partial_reasons.map(String) : [],
+    };
+  }
+
+  function inspectAqiChunk(payload) {
+    const rows = Array.isArray(payload?.points) ? payload.points : [];
     const complete = payload?.response_complete === true && payload?.has_gap !== true;
     return {
       rows,
@@ -269,11 +406,16 @@
     isOlderChunk,
     nextChunkRange,
     chunkKey,
+    normalizeIntervals,
+    subtractCoveredIntervals,
+    recordCoverageInterval,
+    getUncoveredRanges,
     normalizeStationIdentity,
     hasPositiveTimeseriesIdentity,
     resolveAuthoritativeIdentity,
     resolveSelectedStationEntries,
     createCacheRecord,
+    inspectAqiChunk,
     inspectObservationChunk,
   };
 });

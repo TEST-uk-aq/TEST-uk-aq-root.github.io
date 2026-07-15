@@ -48,6 +48,84 @@ assert.equal(record.completed_chunks[retryKey].end_utc, range.end_utc);
 assert.equal(record.contract_version, "station-history-v1");
 assert.equal(record.identity, null);
 
+loader.recordCoverageInterval(record, "aqi", {
+  start_utc: "2026-07-08T00:00:00.000Z",
+  end_utc: "2026-07-15T00:00:00.000Z",
+}, "complete");
+assert.deepEqual(
+  loader.getUncoveredRanges(record, "aqi", {
+    start_utc: "2026-07-01T00:00:00.000Z",
+    end_utc: "2026-07-15T00:00:00.000Z",
+  }).map((interval) => [interval.start_utc, interval.end_utc]),
+  [["2026-07-01T00:00:00.000Z", "2026-07-08T00:00:00.000Z"]],
+  "a 24h-to-7d style expansion requests only the uncovered interval",
+);
+loader.recordCoverageInterval(record, "aqi", {
+  start_utc: "2026-06-14T00:00:00.000Z",
+  end_utc: "2026-07-08T00:00:00.000Z",
+}, "complete");
+assert.equal(loader.getUncoveredRanges(record, "aqi", {
+  start_utc: "2026-06-14T00:00:00.000Z",
+  end_utc: "2026-07-15T00:00:00.000Z",
+}).length, 0, "changed chunk boundaries do not refetch covered 31d data");
+assert.equal(loader.getUncoveredRanges(record, "aqi", {
+  start_utc: "2026-07-08T00:00:00.000Z",
+  end_utc: "2026-07-15T00:00:00.000Z",
+}).length, 0, "contracting to a covered 7d range makes no request");
+
+const neighbouringCoverage = loader.createCacheRecord();
+loader.recordCoverageInterval(neighbouringCoverage, "aqi", {
+  start_utc: "2026-07-01T00:00:00.000Z",
+  end_utc: "2026-07-15T00:00:00.000Z",
+}, "complete");
+loader.recordCoverageInterval(neighbouringCoverage, "aqi", {
+  start_utc: "2026-07-07T00:00:00.000Z",
+  end_utc: "2026-07-08T00:00:00.000Z",
+}, "failed");
+assert.deepEqual(
+  neighbouringCoverage.coverage.aqi.covered_intervals,
+  [
+    { startMs: Date.parse("2026-07-01T00:00:00.000Z"), endMs: Date.parse("2026-07-07T00:00:00.000Z") },
+    { startMs: Date.parse("2026-07-08T00:00:00.000Z"), endMs: Date.parse("2026-07-15T00:00:00.000Z") },
+  ],
+  "a failed interval does not remove successful neighbouring coverage",
+);
+assert.deepEqual(
+  loader.getUncoveredRanges(neighbouringCoverage, "aqi", {
+    start_utc: "2026-06-30T00:00:00.000Z",
+    end_utc: "2026-07-16T00:00:00.000Z",
+  }).map((interval) => [interval.start_utc, interval.end_utc]),
+  [
+    ["2026-07-15T00:00:00.000Z", "2026-07-16T00:00:00.000Z"],
+    ["2026-07-07T00:00:00.000Z", "2026-07-08T00:00:00.000Z"],
+    ["2026-06-30T00:00:00.000Z", "2026-07-01T00:00:00.000Z"],
+  ],
+  "uncovered intervals are returned newest first",
+);
+
+const partialAqiChunk = loader.inspectAqiChunk({
+  response_complete: false,
+  has_gap: true,
+  partial_reasons: ["missing_expected_aqi_hours"],
+  points: [{ period_start_utc: hour, daqi_index_level: 3, eaqi_index_level: 2 }],
+});
+assert.equal(partialAqiChunk.rows.length, 1);
+assert.equal(partialAqiChunk.complete, false);
+assert.equal(partialAqiChunk.retryable, true);
+const partialPoint = loader.normalizeAqiPoint(partialAqiChunk.rows[0], {
+  daqiField: "daqi_index_level",
+  eaqiField: "eaqi_index_level",
+});
+assert.equal(loader.mergeAqiWithoutReplacement([head], [partialPoint]).points[0], head, "a partial history row cannot replace the stable head");
+loader.recordCoverageInterval(record, "observations", {
+  start_utc: "2026-07-14T00:00:00.000Z",
+  end_utc: "2026-07-15T00:00:00.000Z",
+}, "partial", { partial_reasons: ["missing_parquet"] });
+assert.equal(loader.getUncoveredRanges(record, "observations", {
+  start_utc: "2026-07-14T00:00:00.000Z",
+  end_utc: "2026-07-15T00:00:00.000Z",
+}).length, 1, "partial observation intervals remain retryable");
+
 const authoritativeIdentity = loader.resolveAuthoritativeIdentity({
   request: { timeseries_id: 420, connector_id: 2, station_id: 42, pollutant: "no2" },
 }, { timeseriesId: "420", pollutant: "NO2" });

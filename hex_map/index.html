@@ -17007,7 +17007,7 @@
     params.get("station_history_loader"),
     false,
   ) && Boolean(window.UkAqStationHistoryLoader);
-  const HEX_MAP_STATION_HISTORY_CACHE_CONTRACT = "hex-map-station-history-v2";
+  const HEX_MAP_STATION_HISTORY_CACHE_CONTRACT = "hex-map-station-history-v3";
   const aqiHistoryBaseUrl = resolveAqiHistoryBaseUrl(params.get("aqi_history_base"));
   const AQI_HISTORY_BASE_PLACEHOLDER = "https://cic-test.chronicillnesschannel.co.uk/api/aq/aqi-history";
   const configuredAqiHistoryBase = AQI_HISTORY_BASE_PLACEHOLDER.includes("__UK_AQ_AQI_HISTORY_BASE_URL__")
@@ -18672,8 +18672,8 @@
       .sort((a, b) => a.date.getTime() - b.date.getTime());
   }
 
-  function resolveRange(windowValue) {
-    const endDate = new Date();
+  function resolveRange(windowValue, endMsOverride) {
+    const endDate = Number.isFinite(Number(endMsOverride)) ? new Date(Number(endMsOverride)) : new Date();
     const windowMs = windowValue === "12h" ? 12 * HOUR_MS : windowValue === "7d" ? 7 * DAY_MS : windowValue === "31d" ? 31 * DAY_MS : windowValue === "90d" ? 90 * DAY_MS : DAY_MS;
     const startDate = new Date(endDate.getTime() - windowMs);
     return { startDate, endDate, startMs: startDate.getTime(), endMs: endDate.getTime(), startIso: startDate.toISOString(), endIso: endDate.toISOString() };
@@ -20918,6 +20918,30 @@
     });
   }
 
+  function stageCachedStationHistoryForDomainAnimation(dom, entries, range, units, primaryEntry) {
+    const cf = dom?.chartFrame;
+    if (!cf) return;
+    const pointsMap = new Map(entries.map((entry) => [
+      entry.stationId,
+      getPointsInRange(getStationHistoryRecord(entry)?.observation_points || [], range),
+    ]));
+    const primaryRecord = getStationHistoryRecord(primaryEntry);
+    const selectedIds = getSelectedSensorIdsOrdered();
+    cf.currentSeriesData = {
+      entries,
+      pointsMap,
+      seriesSegments: entries.map((entry) => ChartCore.buildSegments(pointsMap.get(entry.stationId) || [])),
+      units,
+    };
+    cf.currentGuideline = primaryRecord?.guideline
+      || seriesDataCache.get(buildSeriesCacheKey(primaryEntry))?.guideline
+      || primaryEntry?.guideline
+      || null;
+    cf.currentAqiPoints = getPointsInRange(primaryRecord?.aqi_points || [], range);
+    cf.currentAqiKey = buildStationHistoryCacheKey(primaryEntry);
+    cf.currentAqiSourceSymbolIndex = Math.max(0, selectedIds.indexOf(primaryEntry.stationId));
+  }
+
   async function loadStationHistoryOlderChunks(kind, entry, record, range, stableHeadStartUtc, initialCursorEndUtc, windowValue, render, signal, token) {
     const loader = window.UkAqStationHistoryLoader;
     let cursorEndUtc = initialCursorEndUtc;
@@ -20929,55 +20953,86 @@
         complete = true;
         break;
       }
-      const key = loader.chunkKey(kind, chunk);
-      if (record.completed_chunks[key]) {
+      const uncovered = loader.getUncoveredRanges(record, kind, chunk);
+      if (!uncovered.length) {
         cursorEndUtc = chunk.start_utc;
         continue;
       }
-      try {
-        const payload = await fetchStationHistoryChunk(kind, entry, record, chunk, stableHeadStartUtc, signal);
-        const sectionRows = kind === "aqi" ? { rows: payload?.points } : { rows: payload?.rows };
-        if (kind === "aqi" && (payload?.response_complete !== true || payload?.has_gap === true)) {
-          throw new Error(`${kind}_history_incomplete`);
-        }
-        if (kind === "aqi") {
-          const incoming = parseStationSeriesAqiPoints(sectionRows);
-          const merged = loader.mergeAqiWithoutReplacement(record.aqi_points, incoming);
-          record.aqi_points = merged.points;
-          if (merged.conflicts.length) {
-            record.failed_chunks[key] = { chunk, reason: "aqi_replacement_contract_error", conflicts: merged.conflicts.length };
-            recordWebsiteDebugEvent("aqi_replacement_contract_error", { route: "aqi-history", chunk, conflicts: merged.conflicts.length });
+      for (const requestRange of uncovered) {
+        if (token !== state.loadToken || signal.aborted) break;
+        const key = loader.chunkKey(kind, requestRange);
+        try {
+          const payload = await fetchStationHistoryChunk(kind, entry, record, requestRange, stableHeadStartUtc, signal);
+          if (kind === "aqi") {
+            const aqiChunk = loader.inspectAqiChunk(payload);
+            const incoming = parseStationSeriesAqiPoints({ rows: aqiChunk.rows });
+            const merged = loader.mergeAqiWithoutReplacement(record.aqi_points, incoming);
+            record.aqi_points = merged.points;
+            const state = aqiChunk.complete && !merged.conflicts.length ? "complete" : "partial";
+            loader.recordCoverageInterval(record, kind, requestRange, state, { partial_reasons: aqiChunk.partial_reasons });
+            if (state === "complete") {
+              record.completed_chunks[key] = requestRange;
+              delete record.failed_chunks[key];
+              Object.keys(record.failed_chunks).forEach((failedKey) => {
+                const failed = record.failed_chunks[failedKey];
+                if (failedKey.startsWith(`${kind}:`) && failed?.chunk
+                    && !loader.getUncoveredRanges(record, kind, failed.chunk).length) {
+                  delete record.failed_chunks[failedKey];
+                }
+              });
+            } else {
+              record.failed_chunks[key] = {
+                chunk: requestRange,
+                reason: merged.conflicts.length ? "aqi_replacement_contract_error" : "aqi_history_incomplete",
+                conflicts: merged.conflicts.length,
+                partial_reasons: aqiChunk.partial_reasons,
+              };
+              complete = false;
+              recordWebsiteDebugEvent("aqi_chunk_partial", { route: "aqi-history", chunk: requestRange, retained_rows: incoming.length, conflicts: merged.conflicts.length, partial_reasons: aqiChunk.partial_reasons });
+            }
+            if (merged.conflicts.length) {
+              recordWebsiteDebugEvent("aqi_replacement_contract_error", { route: "aqi-history", chunk: requestRange, conflicts: merged.conflicts.length });
+            }
           } else {
-            record.completed_chunks[key] = chunk;
-            delete record.failed_chunks[key];
+            const observationChunk = loader.inspectObservationChunk(payload);
+            record.observation_points = loader.mergeObservationPoints(record.observation_points, parseStationSeriesObservationPoints({ rows: observationChunk.rows }));
+            const state = observationChunk.complete ? "complete" : "partial";
+            loader.recordCoverageInterval(record, kind, requestRange, state, { partial_reasons: observationChunk.partial_reasons });
+            if (observationChunk.complete) {
+              record.completed_chunks[key] = requestRange;
+              delete record.failed_chunks[key];
+              Object.keys(record.failed_chunks).forEach((failedKey) => {
+                const failed = record.failed_chunks[failedKey];
+                if (failedKey.startsWith(`${kind}:`) && failed?.chunk
+                    && !loader.getUncoveredRanges(record, kind, failed.chunk).length) {
+                  delete record.failed_chunks[failedKey];
+                }
+              });
+            } else {
+              record.failed_chunks[key] = { chunk: requestRange, reason: "observations_history_incomplete", partial_reasons: observationChunk.partial_reasons };
+              recordWebsiteDebugEvent("observations_chunk_partial", { route: "timeseries", chunk: requestRange, retained_rows: observationChunk.rows.length, partial_reasons: observationChunk.partial_reasons });
+              complete = false;
+            }
           }
-        } else {
-          const observationChunk = loader.inspectObservationChunk(payload);
-          record.observation_points = loader.mergeObservationPoints(record.observation_points, parseStationSeriesObservationPoints({ rows: observationChunk.rows }));
-          if (observationChunk.complete) {
-            record.completed_chunks[key] = chunk;
-            delete record.failed_chunks[key];
-          } else {
-            record.failed_chunks[key] = { chunk, reason: "observations_history_incomplete", partial_reasons: observationChunk.partial_reasons };
-            recordWebsiteDebugEvent("observations_chunk_partial", { route: "timeseries", chunk, retained_rows: observationChunk.rows.length, partial_reasons: observationChunk.partial_reasons });
-            complete = false;
-          }
+          record.updated_at = new Date().toISOString();
+          render();
+        } catch (error) {
+          loader.recordCoverageInterval(record, kind, requestRange, "failed");
+          record.failed_chunks[key] = { chunk: requestRange, reason: error instanceof Error ? error.message : String(error) };
+          recordWebsiteDebugEvent(`${kind}_chunk_failed`, { route: kind === "aqi" ? "aqi-history" : "timeseries", chunk: requestRange, error: serializeDebugError(error) });
+          // Continue backwards: successful head and neighbouring intervals
+          // remain visible; this exact uncovered interval stays retryable.
+          complete = false;
         }
-        record.updated_at = new Date().toISOString();
-        render();
-        const upstreamNext = stationHistoryNextBoundary(payload?.chunk);
-        cursorEndUtc = upstreamNext && Date.parse(upstreamNext) < Date.parse(cursorEndUtc) ? upstreamNext : chunk.start_utc;
-      } catch (error) {
-        record.failed_chunks[key] = { chunk, reason: error instanceof Error ? error.message : String(error) };
-        recordWebsiteDebugEvent(`${kind}_chunk_failed`, { route: kind === "aqi" ? "aqi-history" : "timeseries", chunk, error: serializeDebugError(error) });
-        // Continue backwards: the successfully rendered head and any completed
-        // chunks remain visible; this exact chunk is retried on the next load.
-        cursorEndUtc = chunk.start_utc;
-        complete = false;
       }
+      cursorEndUtc = chunk.start_utc;
     }
-    if (kind === "aqi") record.aqi_complete = complete && Object.keys(record.failed_chunks).filter((key) => key.startsWith("aqi:")).length === 0;
-    else record.observations_complete = complete && Object.keys(record.failed_chunks).filter((key) => key.startsWith("observations:")).length === 0;
+    const rangeCovered = loader.getUncoveredRanges(record, kind, {
+      start_utc: range.startIso,
+      end_utc: initialCursorEndUtc || range.endIso,
+    }).length === 0;
+    if (kind === "aqi") record.aqi_complete = complete && rangeCovered;
+    else record.observations_complete = complete && rangeCovered;
   }
 
   async function loadStationHistoryChartData(reason = "sensor-change") {
@@ -20998,6 +21053,7 @@
     const currentObservationStationIds = new Set();
     const failedCurrentObservationStationIds = new Set();
     let dom = null;
+    let continuityContext = null;
     try {
       const selectedIds = getSelectedSensorIdsOrdered();
       const entries = resolveChartableSelectedEntries("station-history");
@@ -21009,9 +21065,18 @@
       }
       const primary = entries.find((entry) => entry.stationId === state.selectedAqiSensorId) || entries[0];
       state.selectedAqiSensorId = primary.stationId;
+      dom = domByMap[state.mapKey];
+      if (!dom?.svg?.node()) return;
+      const svg = dom.svg.node();
+      const existing = dom.chartFrame;
+      const frameValid = Boolean(existing && existing.areaCode === state.chartModeAreaCode && existing.sessionIdentity === state.chartModeSessionIdentity && existing.mapKey === state.mapKey && existing.width === (svg.clientWidth || 960) && existing.height === (svg.clientHeight || 390));
       const windowValue = normalizeChartRangeValue(state.chartModeTimeRange);
-      const range = resolveRange(windowValue);
+      const retainedWindowEndMs = reason === "window-change" && frameValid
+        ? existing.frame?.endMs
+        : null;
+      const range = resolveRange(windowValue, retainedWindowEndMs);
       const units = entries[0]?.units || getCurrentContext()?.units || "";
+      continuityContext = { entries, range, units, primary };
       startWebsiteDebugSession({
         reason,
         loader: "station_history",
@@ -21032,17 +21097,120 @@
         loader: "station_history",
         selected_series_count: entries.length,
       });
-      dom = domByMap[state.mapKey];
-      if (!dom?.svg?.node()) return;
-      const svg = dom.svg.node();
-      const existing = dom.chartFrame;
-      const frameValid = Boolean(existing && existing.areaCode === state.chartModeAreaCode && existing.sessionIdentity === state.chartModeSessionIdentity && existing.mapKey === state.mapKey && existing.width === (svg.clientWidth || 960) && existing.height === (svg.clientHeight || 390));
       if (!frameValid) initChartFrame(dom, range, MAX_SELECTED_SENSORS);
-      // Never seed this render from a legacy cache. The axis is fixed before
-      // any response and the first data-bearing repaint is the fresh AQI head.
-      renderStationHistoryChart(dom, entries, range, units, primary, true, true, { includeCached: false, forceClearAqi: true, currentObservationStationIds });
+      const preserveExistingFrame = frameValid && ["window-change", "refresh"].includes(reason);
+      if (preserveExistingFrame) {
+        // Reuse the legacy transition: stage all intersecting station-history
+        // cache points into the existing frame, then stretch/compress its
+        // paths, AQI bands and overlays to the new domain without blanking.
+        stageCachedStationHistoryForDomainAnimation(dom, entries, range, units, primary);
+        animateChartDomains(dom.chartFrame, range, dom.chartFrame.yScale.domain(), token, () => {
+          if (token === state.loadToken && !signal.aborted) {
+            renderStationHistoryChart(dom, entries, range, units, primary, state.loadInFlight, state.loadInFlight);
+          }
+        });
+      } else {
+        // AQI-first applies to an initially empty/new chart frame. No legacy
+        // cache is imported into the separate station-history cache contract.
+        renderStationHistoryChart(dom, entries, range, units, primary, true, true, {
+          includeCached: false,
+          forceClearAqi: !frameValid,
+          currentObservationStationIds,
+        });
+      }
       setLoading(true);
       const primaryRecord = getStationHistoryRecord(primary);
+      const loader = window.UkAqStationHistoryLoader;
+      const requestedRange = { start_utc: range.startIso, end_utc: range.endIso };
+      const requestedRangeCovered = reason === "window-change"
+        && loader.getUncoveredRanges(primaryRecord, "aqi", requestedRange).length === 0
+        && entries.every((entry) => loader.getUncoveredRanges(
+          getStationHistoryRecord(entry),
+          "observations",
+          requestedRange,
+        ).length === 0);
+      if (requestedRangeCovered) {
+        entries.forEach((entry) => currentObservationStationIds.add(entry.stationId));
+        renderStationHistoryChart(dom, entries, range, units, primary, false, false, { currentObservationStationIds });
+        recordWebsiteDebugEvent("station_history_window_cache_hit", {
+          route: "chart",
+          range_start_utc: range.startIso,
+          range_end_utc: range.endIso,
+          request_count: 0,
+        });
+        setMessage("");
+        return;
+      }
+
+      const cachedAqiCursor = primaryRecord.stable_head_start_utc;
+      const cachedObservationCursors = new Map(entries.map((entry) => [
+        entry.stationId,
+        getStationHistoryRecord(entry).current_observation_next_chunk_end_utc,
+      ]));
+      const cachedHeadsReusable = reason === "window-change"
+        && primaryRecord.identity
+        && Number.isFinite(Date.parse(cachedAqiCursor))
+        && loader.getUncoveredRanges(primaryRecord, "aqi", {
+          start_utc: cachedAqiCursor,
+          end_utc: range.endIso,
+        }).length === 0
+        && entries.every((entry) => {
+          const record = getStationHistoryRecord(entry);
+          const cursor = cachedObservationCursors.get(entry.stationId);
+          return record.identity
+            && Number.isFinite(Date.parse(cursor))
+            && loader.getUncoveredRanges(record, "observations", {
+              start_utc: cursor,
+              end_utc: range.endIso,
+            }).length === 0;
+        });
+      if (cachedHeadsReusable) {
+        entries.forEach((entry) => currentObservationStationIds.add(entry.stationId));
+        const renderCachedExtension = () => {
+          if (token === state.loadToken && !signal.aborted) {
+            renderStationHistoryChart(dom, entries, range, units, primary, true, true, { currentObservationStationIds });
+          }
+        };
+        const cachedAqiPromise = loadStationHistoryOlderChunks(
+          "aqi",
+          primary,
+          primaryRecord,
+          range,
+          cachedAqiCursor,
+          cachedAqiCursor,
+          windowValue,
+          renderCachedExtension,
+          signal,
+          token,
+        );
+        const cachedObservationPromises = entries.map((entry) => {
+          const cursor = cachedObservationCursors.get(entry.stationId);
+          return loadStationHistoryOlderChunks(
+            "observations",
+            entry,
+            getStationHistoryRecord(entry),
+            range,
+            cursor,
+            cursor,
+            windowValue,
+            renderCachedExtension,
+            signal,
+            token,
+          );
+        });
+        await Promise.all([cachedAqiPromise, ...cachedObservationPromises]);
+        if (signal.aborted || token !== state.loadToken) return;
+        renderStationHistoryChart(dom, entries, range, units, primary, false, false, { currentObservationStationIds });
+        recordWebsiteDebugEvent("station_history_window_cache_extended", {
+          route: "chart",
+          range_start_utc: range.startIso,
+          range_end_utc: range.endIso,
+          primary_request_count: 0,
+          secondary_request_count: 0,
+        });
+        setMessage("");
+        return;
+      }
       let primaryPayload;
       try {
         primaryRequestCount += 1;
@@ -21056,7 +21224,8 @@
         if (signal.aborted || token !== state.loadToken) return;
         if (String(error?.ukAqContractCode || "").startsWith("station_history_") || error?.message === "station_series_authoritative_identity_invalid") {
           const message = "Current data identity could not be resolved for the selected sensor.";
-          renderEmptyChart(message);
+          if (frameValid) renderStationHistoryChart(dom, entries, range, units, primary, false, false);
+          else renderEmptyChart(message);
           setMessage(message, { error: true });
           return;
         }
@@ -21084,7 +21253,16 @@
       primaryRecord.stable_head_start_utc = headBounds?.startUtc || null;
       primaryRecord.stable_head_end_utc = headBounds?.endUtc || null;
       primaryRecord.updated_at = new Date().toISOString();
-      renderStationHistoryChart(dom, entries, range, units, primary, true, true, { includeCachedObservations: false, currentObservationStationIds });
+      window.UkAqStationHistoryLoader.recordCoverageInterval(
+        primaryRecord,
+        "aqi",
+        { start_utc: headBounds?.startUtc, end_utc: headBounds?.endUtc },
+        stationHistoryIsComplete(primaryPayload.aqi) ? "complete" : "partial",
+        { partial_reasons: primaryPayload?.aqi?.partial_reasons },
+      );
+      renderStationHistoryChart(dom, entries, range, units, primary, true, true, preserveExistingFrame
+        ? {}
+        : { includeCachedObservations: false, currentObservationStationIds });
       recordWebsiteDebugTiming("station_history_time_to_first_aqi_render_ms", performance.now() - stationHistoryLoadStartedAt);
       recordWebsiteDebugEvent("station_series_head_rendered", {
         route: "station-series",
@@ -21102,6 +21280,14 @@
       );
       primaryRecord.observations_complete = stationHistoryIsComplete(primaryPayload.observations) && !stationHistoryNextBoundary(primaryPayload.observations);
       primaryRecord.guideline = primaryPayload?.observations?.guideline || primaryRecord.guideline || null;
+      primaryRecord.current_observation_next_chunk_end_utc = headBounds?.startUtc || null;
+      window.UkAqStationHistoryLoader.recordCoverageInterval(
+        primaryRecord,
+        "observations",
+        { start_utc: headBounds?.startUtc, end_utc: headBounds?.endUtc },
+        stationHistoryIsComplete(primaryPayload.observations) ? "complete" : "partial",
+        { partial_reasons: primaryPayload?.observations?.partial_reasons },
+      );
       currentObservationStationIds.add(primary.stationId);
       renderStationHistoryChart(dom, entries, range, units, primary, true, true, { currentObservationStationIds });
 
@@ -21139,8 +21325,15 @@
             observationHeadBounds?.endUtc,
           );
           record.observations_complete = stationHistoryIsComplete(payload.observations) && !stationHistoryNextBoundary(payload.observations);
-          record.current_observation_next_chunk_end_utc = stationHistoryNextBoundary(payload.observations);
+          record.current_observation_next_chunk_end_utc = observationHeadBounds?.startUtc || null;
           record.current_failed = false;
+          window.UkAqStationHistoryLoader.recordCoverageInterval(
+            record,
+            "observations",
+            { start_utc: observationHeadBounds?.startUtc, end_utc: observationHeadBounds?.endUtc },
+            stationHistoryIsComplete(payload.observations) ? "complete" : "partial",
+            { partial_reasons: payload?.observations?.partial_reasons },
+          );
           currentObservationStationIds.add(entry.stationId);
           renderStationHistoryChart(dom, entries, range, units, primary, true, true, { currentObservationStationIds });
         } catch (error) {
@@ -21172,7 +21365,19 @@
     } catch (error) {
       if (!signal.aborted && token === state.loadToken) {
         console.warn("Could not load station-history chart data.", error);
-        renderEmptyChart("Could not load chart data. Try Refresh.");
+        if (dom?.chartFrame && continuityContext) {
+          renderStationHistoryChart(
+            dom,
+            continuityContext.entries,
+            continuityContext.range,
+            continuityContext.units,
+            continuityContext.primary,
+            false,
+            false,
+          );
+        } else {
+          renderEmptyChart("Could not load chart data. Try Refresh.");
+        }
         setMessage("Could not load chart data. Try Refresh.", { error: true });
       }
     } finally {

@@ -70,6 +70,17 @@ const observation = loader.normalizeObservationPoint({
 });
 assert.equal(loader.mergeObservationPoints([observation], [observation]).length, 1);
 
+const partialObservationChunk = loader.inspectObservationChunk({
+  response_complete: false,
+  has_gap: true,
+  partial_reasons: ["missing_parquet"],
+  rows: [{ observed_at: "2026-07-15T10:15:00.000Z", value: 12.5 }],
+});
+assert.equal(partialObservationChunk.rows.length, 1, "valid rows survive a partial observation chunk");
+assert.equal(partialObservationChunk.complete, false);
+assert.equal(partialObservationChunk.retryable, true);
+assert.equal(loader.mergeObservationPoints([observation], partialObservationChunk.rows.map(loader.normalizeObservationPoint)).length, 1, "a successful retry deduplicates retained partial rows");
+
 const retainedEntry = { stationId: "42", timeseriesId: "420", connectorId: "2" };
 const selectedResolution = loader.resolveSelectedStationEntries(
   [7, "42", "missing"],

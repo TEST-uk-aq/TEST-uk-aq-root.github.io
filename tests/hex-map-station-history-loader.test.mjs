@@ -48,6 +48,8 @@ assert.match(page, /primaryRecord\?\.guideline \|\| legacyGuideline/);
 assert.match(section, /station_history_time_to_first_aqi_render_ms/);
 assert.match(page, /record\.completed_chunks\[key\]/);
 assert.match(page, /record\.failed_chunks\[key\]/);
+assert.match(page, /observations_chunk_partial/);
+assert.match(page, /retained_rows: observationChunk\.rows\.length/);
 assert.match(page, /Continue backwards/);
 assert.match(section, /primaryRecord\.identity = window\.UkAqStationHistoryLoader\.resolveAuthoritativeIdentity/);
 assert.match(section, /record\.identity = window\.UkAqStationHistoryLoader\.resolveAuthoritativeIdentity/);

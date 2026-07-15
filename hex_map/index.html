@@ -20937,7 +20937,7 @@
       try {
         const payload = await fetchStationHistoryChunk(kind, entry, record, chunk, stableHeadStartUtc, signal);
         const sectionRows = kind === "aqi" ? { rows: payload?.points } : { rows: payload?.rows };
-        if (payload?.response_complete !== true || payload?.has_gap === true) {
+        if (kind === "aqi" && (payload?.response_complete !== true || payload?.has_gap === true)) {
           throw new Error(`${kind}_history_incomplete`);
         }
         if (kind === "aqi") {
@@ -20952,9 +20952,16 @@
             delete record.failed_chunks[key];
           }
         } else {
-          record.observation_points = loader.mergeObservationPoints(record.observation_points, parseStationSeriesObservationPoints(sectionRows));
-          record.completed_chunks[key] = chunk;
-          delete record.failed_chunks[key];
+          const observationChunk = loader.inspectObservationChunk(payload);
+          record.observation_points = loader.mergeObservationPoints(record.observation_points, parseStationSeriesObservationPoints({ rows: observationChunk.rows }));
+          if (observationChunk.complete) {
+            record.completed_chunks[key] = chunk;
+            delete record.failed_chunks[key];
+          } else {
+            record.failed_chunks[key] = { chunk, reason: "observations_history_incomplete", partial_reasons: observationChunk.partial_reasons };
+            recordWebsiteDebugEvent("observations_chunk_partial", { route: "timeseries", chunk, retained_rows: observationChunk.rows.length, partial_reasons: observationChunk.partial_reasons });
+            complete = false;
+          }
         }
         record.updated_at = new Date().toISOString();
         render();

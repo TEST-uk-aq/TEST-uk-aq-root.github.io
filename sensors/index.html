@@ -4630,11 +4630,20 @@
               break;
             }
           } else {
+            const observationChunk = loader.inspectObservationChunk(payload);
             record.observationPoints = loader.mergeObservationPoints(
               record.observationPoints,
-              parseStationSeriesObservationPoints(payload?.rows),
+              parseStationSeriesObservationPoints(observationChunk.rows),
             );
             renderStationHistoryObservations(record, meta, windowValue, fullRange, loadId, "Loading chart data…");
+            if (!observationChunk.complete) {
+              record.failedChunks[key] = { reason: "incomplete_response", partial_reasons: observationChunk.partial_reasons, retry_at: new Date().toISOString() };
+              record.updatedAt = new Date().toISOString();
+              persistStationHistoryCacheToStorage();
+              cursorEndUtc = chunk.start_utc;
+              complete = false;
+              continue;
+            }
           }
           if (payload?.response_complete !== true) {
             record.failedChunks[key] = { reason: "incomplete_response", retry_at: new Date().toISOString() };

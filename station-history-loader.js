@@ -247,6 +247,17 @@
     };
   }
 
+  function inspectObservationChunk(payload) {
+    const rows = Array.isArray(payload?.rows) ? payload.rows : [];
+    const complete = payload?.response_complete === true && payload?.has_gap !== true;
+    return {
+      rows,
+      complete,
+      retryable: !complete,
+      partial_reasons: Array.isArray(payload?.partial_reasons) ? payload.partial_reasons.map(String) : [],
+    };
+  }
+
   return {
     HOUR_MS,
     normalizeAqiPoint,
@@ -263,5 +274,6 @@
     resolveAuthoritativeIdentity,
     resolveSelectedStationEntries,
     createCacheRecord,
+    inspectObservationChunk,
   };
 });

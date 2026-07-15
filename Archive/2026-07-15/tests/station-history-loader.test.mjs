@@ -57,22 +57,6 @@ const observation = loader.normalizeObservationPoint({
 });
 assert.equal(loader.mergeObservationPoints([observation], [observation]).length, 1);
 
-const cachedObservation = loader.normalizeObservationPoint({
-  observed_at: "2026-07-15T10:15:00.000Z",
-  value: 12.5,
-});
-const freshObservation = loader.normalizeObservationPoint({
-  observed_at: "2026-07-15T11:15:00.000Z",
-  value: 13.5,
-});
-const replacedObservations = loader.replaceAuthoritativeObservationHead(
-  [cachedObservation, freshObservation],
-  [freshObservation],
-  "2026-07-15T10:00:00.000Z",
-  "2026-07-15T11:00:00.000Z",
-);
-assert.deepEqual(replacedObservations.map((point) => point.date.toISOString()), ["2026-07-15T11:15:00.000Z"]);
-
 const page = fs.readFileSync(new URL("../sensors/index.html", import.meta.url), "utf8");
 const stationHead = page.indexOf('"station_series_head"');
 const headRender = page.indexOf('applyAqiContextState(record.aqiPoints, context);', stationHead);

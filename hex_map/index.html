@@ -20765,17 +20765,25 @@
   function renderStationHistoryChart(dom, entries, range, units, primaryEntry, aqiLoading, observationsLoading, options = {}) {
     const primaryRecord = getStationHistoryRecord(primaryEntry);
     const includeCached = options.includeCached !== false;
+    const includeCachedAqi = options.includeCachedAqi ?? includeCached;
+    const includeCachedObservations = options.includeCachedObservations ?? includeCached;
+    const currentObservationStationIds = options.currentObservationStationIds instanceof Set
+      ? options.currentObservationStationIds
+      : null;
     const pointsMap = new Map();
     entries.forEach((entry) => {
       const record = getStationHistoryRecord(entry);
-      pointsMap.set(entry.stationId, includeCached ? getPointsInRange(record?.observation_points || [], range) : []);
+      const mayRenderObservations = includeCachedObservations
+        && (!currentObservationStationIds || currentObservationStationIds.has(entry.stationId));
+      pointsMap.set(entry.stationId, mayRenderObservations ? getPointsInRange(record?.observation_points || [], range) : []);
     });
     const selectedIds = getSelectedSensorIdsOrdered();
     const sourceSymbolIndex = Math.max(0, selectedIds.indexOf(primaryEntry.stationId));
     const legacyGuideline = seriesDataCache.get(buildSeriesCacheKey(primaryEntry))?.guideline || null;
-    updateChart(dom, pointsMap, entries, range, primaryRecord?.guideline || legacyGuideline || primaryEntry?.guideline || null, units, includeCached ? getPointsInRange(primaryRecord?.aqi_points || [], range) : [], {
+    updateChart(dom, pointsMap, entries, range, primaryRecord?.guideline || legacyGuideline || primaryEntry?.guideline || null, units, includeCachedAqi ? getPointsInRange(primaryRecord?.aqi_points || [], range) : [], {
       aqiLoading,
       yAxisLoading: observationsLoading,
+      forceClearAqi: options.forceClearAqi === true,
       aqiSourceSymbolIndex: sourceSymbolIndex,
       aqiCacheKey: buildStationHistoryCacheKey(primaryEntry),
     });
@@ -20851,6 +20859,8 @@
     state.loadAbortController = abortController;
     const signal = abortController.signal;
     const token = ++state.loadToken;
+    const currentObservationStationIds = new Set();
+    const failedCurrentObservationStationIds = new Set();
     let dom = null;
     try {
       const selectedIds = getSelectedSensorIdsOrdered();
@@ -20893,7 +20903,7 @@
       if (!frameValid) initChartFrame(dom, range, MAX_SELECTED_SENSORS);
       // Never seed this render from a legacy cache. The axis is fixed before
       // any response and the first data-bearing repaint is the fresh AQI head.
-      renderStationHistoryChart(dom, entries, range, units, primary, true, true, { includeCached: false });
+      renderStationHistoryChart(dom, entries, range, units, primary, true, true, { includeCached: false, forceClearAqi: true, currentObservationStationIds });
       setLoading(true);
       const primaryRecord = getStationHistoryRecord(primary);
       let primaryPayload;
@@ -20926,7 +20936,7 @@
       primaryRecord.stable_head_start_utc = headBounds?.startUtc || null;
       primaryRecord.stable_head_end_utc = headBounds?.endUtc || null;
       primaryRecord.updated_at = new Date().toISOString();
-      renderStationHistoryChart(dom, entries, range, units, primary, true, true);
+      renderStationHistoryChart(dom, entries, range, units, primary, true, true, { includeCachedObservations: false, currentObservationStationIds });
       recordWebsiteDebugTiming("station_history_time_to_first_aqi_render_ms", performance.now() - stationHistoryLoadStartedAt);
       recordWebsiteDebugEvent("station_series_head_rendered", {
         route: "station-series",
@@ -20936,15 +20946,21 @@
         discarded_cached_head_rows: headMerge.conflicts.length,
       });
 
-      primaryRecord.observation_points = window.UkAqStationHistoryLoader.mergeObservationPoints(primaryRecord.observation_points, parseStationSeriesObservationPoints(primaryPayload.observations));
+      primaryRecord.observation_points = window.UkAqStationHistoryLoader.replaceAuthoritativeObservationHead(
+        primaryRecord.observation_points,
+        parseStationSeriesObservationPoints(primaryPayload.observations),
+        headBounds?.startUtc,
+        headBounds?.endUtc,
+      );
       primaryRecord.observations_complete = stationHistoryIsComplete(primaryPayload.observations) && !stationHistoryNextBoundary(primaryPayload.observations);
       primaryRecord.guideline = primaryPayload?.observations?.guideline || primaryRecord.guideline || null;
-      renderStationHistoryChart(dom, entries, range, units, primary, true, true);
+      currentObservationStationIds.add(primary.stationId);
+      renderStationHistoryChart(dom, entries, range, units, primary, true, true, { currentObservationStationIds });
 
       const aqiHeadStart = stationHistoryNextBoundary(primaryPayload.aqi);
       const render = () => {
         if (token === state.loadToken && !signal.aborted) {
-          renderStationHistoryChart(dom, entries, range, units, primary, Boolean(aqiHeadStart), true);
+          renderStationHistoryChart(dom, entries, range, units, primary, Boolean(aqiHeadStart), true, { currentObservationStationIds });
         }
       };
       // AQI history receives priority immediately after the primary head and
@@ -20962,12 +20978,21 @@
           secondaryRequestCount += 1;
           const payload = await fetchStationSeriesBundle(entry, range, windowValue, false, signal);
           if (signal.aborted || token !== state.loadToken) return;
-          record.observation_points = window.UkAqStationHistoryLoader.mergeObservationPoints(record.observation_points, parseStationSeriesObservationPoints(payload.observations));
+          const observationHeadBounds = stationSeriesHeadBounds(payload, range);
+          record.observation_points = window.UkAqStationHistoryLoader.replaceAuthoritativeObservationHead(
+            record.observation_points,
+            parseStationSeriesObservationPoints(payload.observations),
+            observationHeadBounds?.startUtc,
+            observationHeadBounds?.endUtc,
+          );
           record.observations_complete = stationHistoryIsComplete(payload.observations) && !stationHistoryNextBoundary(payload.observations);
           record.current_observation_next_chunk_end_utc = stationHistoryNextBoundary(payload.observations);
-          renderStationHistoryChart(dom, entries, range, units, primary, true, true);
+          record.current_failed = false;
+          currentObservationStationIds.add(entry.stationId);
+          renderStationHistoryChart(dom, entries, range, units, primary, true, true, { currentObservationStationIds });
         } catch (error) {
           record.current_failed = true;
+          failedCurrentObservationStationIds.add(entry.stationId);
           recordWebsiteDebugEvent("station_series_secondary_failed", { route: "station-series", timeseries_id: entry.timeseriesId, error: serializeDebugError(error) });
         }
       });
@@ -20984,8 +21009,13 @@
       });
       await Promise.all([aqiPromise, ...observationPromises]);
       if (signal.aborted || token !== state.loadToken) return;
-      renderStationHistoryChart(dom, entries, range, units, primary, false, false);
-      setMessage("");
+      renderStationHistoryChart(dom, entries, range, units, primary, false, false, { currentObservationStationIds });
+      if (failedCurrentObservationStationIds.size) {
+        const count = failedCurrentObservationStationIds.size;
+        setMessage(`Current data is unavailable for ${count} selected sensor${count === 1 ? "" : "s"}. Cached line${count === 1 ? " is" : "s are"} hidden.`, { error: true });
+      } else {
+        setMessage("");
+      }
     } catch (error) {
       if (!signal.aborted && token === state.loadToken) {
         console.warn("Could not load station-history chart data.", error);
@@ -21460,7 +21490,9 @@
     if (!renderOptions.skipAqiRepaint) {
       if (aqiPoints !== undefined) {
         const nextAqiKey = renderOptions.aqiCacheKey || null;
-        if (Array.isArray(aqiPoints)) {
+        if (renderOptions.forceClearAqi === true) {
+          cf.currentAqiPoints = [];
+        } else if (Array.isArray(aqiPoints)) {
           if (aqiPoints.length > 0) {
             cf.currentAqiPoints = aqiPoints;
           } else if (nextAqiKey && cf.currentAqiKey && nextAqiKey !== cf.currentAqiKey) {

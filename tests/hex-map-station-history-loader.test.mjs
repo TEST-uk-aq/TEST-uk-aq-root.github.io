@@ -15,7 +15,7 @@ assert.match(page, /return loadLegacyChartData\(reason\)/, "legacy loader remain
 
 const requestHead = section.indexOf("primaryPayload = await fetchStationSeriesBundle");
 const paintAqi = section.indexOf("primaryRecord.aqi_points = headMerge.points");
-const paintObservations = section.indexOf("primaryRecord.observation_points = window.UkAqStationHistoryLoader.mergeObservationPoints");
+const paintObservations = section.indexOf("primaryRecord.observation_points = window.UkAqStationHistoryLoader.replaceAuthoritativeObservationHead");
 const secondaryRequest = section.indexOf("fetchStationSeriesBundle(entry, range, windowValue, false");
 const aqiHistory = section.indexOf("const aqiPromise");
 const observationHistory = section.indexOf("const observationPromises");
@@ -28,7 +28,12 @@ assert.match(section, /fetchStationSeriesBundle\(entry, range, windowValue, fals
 assert.match(section, /Current recent data is unavailable\. Cached historical data is shown as stale\./);
 assert.match(page, /aqi_replacement_contract_error/);
 assert.match(section, /replaceAuthoritativeAqiHead/);
+assert.match(section, /replaceAuthoritativeObservationHead/);
 assert.match(section, /includeCached: false/);
+assert.match(section, /forceClearAqi: true/);
+assert.match(page, /renderOptions\.forceClearAqi === true/);
+assert.match(section, /currentObservationStationIds/);
+assert.match(section, /Cached line\$\{count === 1 \? " is" : "s are"\} hidden/);
 assert.match(page, /if \(existing\) return existing/);
 assert.match(page, /primaryRecord\?\.guideline \|\| legacyGuideline/);
 assert.match(section, /station_history_time_to_first_aqi_render_ms/);
@@ -47,6 +52,16 @@ const olderHistory = loader.normalizeAqiPoint({ period_start_utc: "2026-07-15T11
 const refreshed = loader.replaceAuthoritativeAqiHead([olderHistory, head], [refreshedHead], "2026-07-15T12:00:00.000Z", "2026-07-15T13:00:00.000Z");
 assert.equal(refreshed.points.length, 2);
 assert.equal(refreshed.points.at(-1).daqi, 4, "a later authoritative station-series head can replace its own interval");
+
+const cachedObservation = loader.normalizeObservationPoint({ observed_at: "2026-07-15T12:15:00.000Z", value: 12 });
+const retainedObservation = loader.normalizeObservationPoint({ observed_at: "2026-07-15T13:15:00.000Z", value: 13 });
+const freshObservations = loader.replaceAuthoritativeObservationHead(
+  [cachedObservation, retainedObservation],
+  [retainedObservation],
+  "2026-07-15T12:00:00.000Z",
+  "2026-07-15T13:00:00.000Z",
+);
+assert.deepEqual(freshObservations.map((point) => point.date.toISOString()), ["2026-07-15T13:15:00.000Z"], "a fresh observation head removes cached rows from its interval");
 
 const shortRange = loader.nextChunkRange("2026-07-15T00:00:00.000Z", "2026-07-15T00:00:00.000Z", loader.HOUR_MS);
 assert.equal(shortRange, null, "null next boundaries schedule no 12h/24h R2 chunks");

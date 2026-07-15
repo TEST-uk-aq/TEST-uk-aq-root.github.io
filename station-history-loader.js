@@ -107,6 +107,24 @@
     });
   }
 
+  // A fresh station-series observation response is authoritative for its
+  // output interval. Replacing that interval (rather than only deduping it)
+  // ensures a newly reported gap is visible instead of being hidden by an
+  // older cached point at the same timestamp.
+  function replaceAuthoritativeObservationHead(existingPoints, headPoints, headStartUtc, headEndUtc) {
+    const startMs = Date.parse(String(headStartUtc || ""));
+    const endMs = Date.parse(String(headEndUtc || ""));
+    if (!Number.isFinite(startMs) || !Number.isFinite(endMs) || endMs <= startMs) {
+      return mergeObservationPoints(existingPoints, headPoints);
+    }
+    const retained = (Array.isArray(existingPoints) ? existingPoints : []).filter(function (point) {
+      const date = toDate(point?.date);
+      const timestampMs = date?.getTime();
+      return !Number.isFinite(timestampMs) || timestampMs < startMs || timestampMs >= endMs;
+    });
+    return mergeObservationPoints(retained, headPoints);
+  }
+
   function isOlderChunk(startUtc, endUtc, stableHeadStartUtc) {
     const startMs = Date.parse(String(startUtc || ""));
     const endMs = Date.parse(String(endUtc || ""));
@@ -162,6 +180,7 @@
     mergeAqiWithoutReplacement,
     replaceAuthoritativeAqiHead,
     mergeObservationPoints,
+    replaceAuthoritativeObservationHead,
     isOlderChunk,
     nextChunkRange,
     chunkKey,

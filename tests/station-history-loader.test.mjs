@@ -103,6 +103,76 @@ assert.deepEqual(
   "uncovered intervals are returned newest first",
 );
 
+const queuedRecord = loader.createCacheRecord();
+loader.recordCoverageInterval(queuedRecord, "aqi", {
+  start_utc: "2026-07-02T00:00:00.000Z",
+  end_utc: "2026-07-03T00:00:00.000Z",
+}, "complete");
+const queuedWork = loader.buildMissingChunkWorkList(
+  queuedRecord,
+  "aqi",
+  "2026-07-01T00:00:00.000Z",
+  "2026-07-04T00:00:00.000Z",
+  24 * loader.HOUR_MS,
+);
+assert.deepEqual(
+  queuedWork.map((item) => [item.sequence, item.range.start_utc, item.range.end_utc]),
+  [
+    [0, "2026-07-03T00:00:00.000Z", "2026-07-04T00:00:00.000Z"],
+    [1, "2026-07-01T00:00:00.000Z", "2026-07-02T00:00:00.000Z"],
+  ],
+  "the work list is newest first and excludes complete covered intervals",
+);
+
+const queuedObservationWork = loader.buildMissingChunkWorkList(
+  loader.createCacheRecord(),
+  "observations",
+  "2026-07-01T00:00:00.000Z",
+  "2026-07-04T00:00:00.000Z",
+  24 * loader.HOUR_MS,
+);
+assert.deepEqual(
+  queuedObservationWork.map((item) => [item.kind, item.sequence, item.range.start_utc, item.range.end_utc]),
+  [
+    ["observations", 0, "2026-07-03T00:00:00.000Z", "2026-07-04T00:00:00.000Z"],
+    ["observations", 1, "2026-07-02T00:00:00.000Z", "2026-07-03T00:00:00.000Z"],
+    ["observations", 2, "2026-07-01T00:00:00.000Z", "2026-07-02T00:00:00.000Z"],
+  ],
+  "observation work is also derived newest first before bounded fetching",
+);
+
+const commitOrder = [];
+const orderedSettlements = loader.createOrderedSettlementBuffer(1);
+await orderedSettlements.settle(2, { state: "complete", id: "older" }, async (value) => commitOrder.push(value.id));
+assert.deepEqual(commitOrder, [], "an older out-of-order response waits for the preceding range");
+await orderedSettlements.settle(1, { state: "failed", id: "newer-failed" }, async (value) => commitOrder.push(value.id));
+await orderedSettlements.flush();
+assert.deepEqual(commitOrder, ["newer-failed", "older"], "a failed newer settlement records in order without blocking older success");
+assert.equal(orderedSettlements.pending_count, 0);
+
+const distinctHeadPayload = {
+  aqi: {
+    stable_head_start_utc: "2026-07-08T00:00:00.000Z",
+    stable_head_end_utc: "2026-07-15T00:00:00.000Z",
+  },
+  observations: {
+    stable_head_start_utc: "2026-07-12T00:00:00.000Z",
+    stable_head_end_utc: "2026-07-15T00:00:00.000Z",
+  },
+};
+assert.deepEqual(loader.resolveStationSeriesHeadBounds(distinctHeadPayload, "aqi"), {
+  startUtc: "2026-07-08T00:00:00.000Z",
+  endUtc: "2026-07-15T00:00:00.000Z",
+});
+assert.deepEqual(loader.resolveStationSeriesHeadBounds(distinctHeadPayload, "observations"), {
+  startUtc: "2026-07-12T00:00:00.000Z",
+  endUtc: "2026-07-15T00:00:00.000Z",
+}, "observation bounds remain independent from the older AQI head");
+assert.deepEqual(loader.resolveStationSeriesHeadBounds({ observations: distinctHeadPayload.observations }, "observations"), {
+  startUtc: "2026-07-12T00:00:00.000Z",
+  endUtc: "2026-07-15T00:00:00.000Z",
+}, "an observations-only response does not depend on an AQI section");
+
 const partialAqiChunk = loader.inspectAqiChunk({
   response_complete: false,
   has_gap: true,

@@ -276,6 +276,54 @@
     return subtractCoveredIntervals(range, section.covered_intervals);
   }
 
+  function buildMissingChunkWorkList(record, kind, rangeStartUtc, initialCursorEndUtc, spanMs) {
+    const work = [];
+    let cursorEndUtc = initialCursorEndUtc;
+    while (cursorEndUtc) {
+      const chunk = nextChunkRange(rangeStartUtc, cursorEndUtc, spanMs);
+      if (!chunk) break;
+      getUncoveredRanges(record, kind, chunk).forEach(function (requestRange) {
+        work.push({
+          kind,
+          range: requestRange,
+          key: chunkKey(kind, requestRange),
+          sequence: work.length,
+        });
+      });
+      cursorEndUtc = chunk.start_utc;
+    }
+    return work;
+  }
+
+  function createOrderedSettlementBuffer(firstSequence) {
+    let nextSequence = Number.isInteger(firstSequence) ? firstSequence : 0;
+    const pending = new Map();
+    let commitChain = Promise.resolve();
+    return {
+      settle(sequence, value, commit) {
+        pending.set(sequence, value);
+        commitChain = commitChain.then(async function () {
+          while (pending.has(nextSequence)) {
+            const settled = pending.get(nextSequence);
+            pending.delete(nextSequence);
+            nextSequence += 1;
+            await commit(settled);
+          }
+        });
+        return commitChain;
+      },
+      flush() {
+        return commitChain;
+      },
+      get next_sequence() {
+        return nextSequence;
+      },
+      get pending_count() {
+        return pending.size;
+      },
+    };
+  }
+
   function normalizeStationIdentity(value) {
     if (value === null || value === undefined) return "";
     return String(value).trim();
@@ -395,6 +443,17 @@
     };
   }
 
+  function resolveStationSeriesHeadBounds(payload, kind, fallbackRange) {
+    const section = kind === "aqi" ? payload?.aqi : payload?.observations;
+    const startUtc = String(section?.stable_head_start_utc || fallbackRange?.startIso || "").trim();
+    const endUtc = String(section?.stable_head_end_utc || fallbackRange?.endIso || "").trim();
+    const startMs = Date.parse(startUtc);
+    const endMs = Date.parse(endUtc);
+    return Number.isFinite(startMs) && Number.isFinite(endMs) && endMs > startMs
+      ? { startUtc: new Date(startMs).toISOString(), endUtc: new Date(endMs).toISOString() }
+      : null;
+  }
+
   return {
     HOUR_MS,
     normalizeAqiPoint,
@@ -410,6 +469,8 @@
     subtractCoveredIntervals,
     recordCoverageInterval,
     getUncoveredRanges,
+    buildMissingChunkWorkList,
+    createOrderedSettlementBuffer,
     normalizeStationIdentity,
     hasPositiveTimeseriesIdentity,
     resolveAuthoritativeIdentity,
@@ -417,5 +478,6 @@
     createCacheRecord,
     inspectAqiChunk,
     inspectObservationChunk,
+    resolveStationSeriesHeadBounds,
   };
 });

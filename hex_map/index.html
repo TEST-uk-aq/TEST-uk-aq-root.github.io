@@ -20971,7 +20971,7 @@
     };
   }
 
-  async function loadStationHistoryOlderChunks(kind, entry, record, range, stableHeadStartUtc, initialCursorEndUtc, windowValue, renderScheduler, signal, token, concurrency) {
+  async function loadStationHistoryOlderChunks(kind, entry, record, range, stableHeadStartUtc, initialCursorEndUtc, windowValue, renderScheduler, signal, token, concurrency, onWorkSettled = null) {
     const loader = window.UkAqStationHistoryLoader;
     const spanMs = getChunkSpanMs(windowValue);
     const work = loader.buildMissingChunkWorkList(record, kind, range.startIso, initialCursorEndUtc, spanMs);
@@ -21057,12 +21057,15 @@
     };
 
     if (work.length) {
-      await commit(await settle(work[0]));
+      const newestSettled = await settle(work[0]);
+      if (!newestSettled?.aborted && token === state.loadToken && !signal.aborted) onWorkSettled?.();
+      await commit(newestSettled);
       const olderWork = work.slice(1);
       if (olderWork.length && token === state.loadToken && !signal.aborted) {
         const ordered = loader.createOrderedSettlementBuffer(1);
         await runChunkQueueWithConcurrency(olderWork, concurrency, async (workItem) => {
           const settled = await settle(workItem);
+          if (!settled?.aborted && token === state.loadToken && !signal.aborted) onWorkSettled?.();
           await ordered.settle(workItem.sequence, settled, commit);
         });
         await ordered.flush();
@@ -21095,6 +21098,35 @@
     const failedCurrentObservationStationIds = new Set();
     let dom = null;
     let continuityContext = null;
+    let observationProgressBar = null;
+    let observationProgressTotal = 0;
+    let settledObservationChunks = 0;
+    const clearObservationProgress = () => {
+      if (observationProgressBar?.remove) observationProgressBar.remove();
+      if (dom?.chartFrame?.progressBar === observationProgressBar) {
+        dom.chartFrame.progressBar = null;
+      }
+      observationProgressBar = null;
+      observationProgressTotal = 0;
+      settledObservationChunks = 0;
+    };
+    const beginObservationProgress = (totalChunks) => {
+      if (!Number.isFinite(totalChunks) || totalChunks <= 0 || !dom?.chartFrame) return;
+      clearObservationProgress();
+      observationProgressTotal = totalChunks;
+      const progressFrame = {
+        margin: dom.chartFrame.margin,
+        width: dom.chartFrame.width,
+        height: dom.chartFrame.height,
+      };
+      observationProgressBar = ChartCore.renderProgressBar(dom.chartFrame.svgEl, progressFrame);
+      dom.chartFrame.progressBar = observationProgressBar;
+    };
+    const settleObservationProgress = () => {
+      if (!observationProgressBar || observationProgressTotal <= 0) return;
+      settledObservationChunks = Math.min(observationProgressTotal, settledObservationChunks + 1);
+      observationProgressBar.update(settledObservationChunks / observationProgressTotal);
+    };
     try {
       const selectedIds = getSelectedSensorIdsOrdered();
       const entries = resolveChartableSelectedEntries("station-history");
@@ -21108,6 +21140,8 @@
       state.selectedAqiSensorId = primary.stationId;
       dom = domByMap[state.mapKey];
       if (!dom?.svg?.node()) return;
+      if (dom.chartFrame?.progressBar?.remove) dom.chartFrame.progressBar.remove();
+      if (dom?.chartFrame) dom.chartFrame.progressBar = null;
       const svg = dom.svg.node();
       const existing = dom.chartFrame;
       const frameValid = Boolean(existing && existing.areaCode === state.chartModeAreaCode && existing.sessionIdentity === state.chartModeSessionIdentity && existing.mapKey === state.mapKey && existing.width === (svg.clientWidth || 960) && existing.height === (svg.clientHeight || 390));
@@ -21224,7 +21258,21 @@
           token,
           STATION_HISTORY_AQI_CHUNK_CONCURRENCY,
         );
-        const cachedObservationPromise = runChunkQueueWithConcurrency(
+        await cachedAqiPromise;
+        if (signal.aborted || token !== state.loadToken) return;
+        const cachedObservationChunkCount = entries.reduce((count, entry) => {
+          const record = getStationHistoryRecord(entry);
+          const cursor = cachedObservationCursors.get(entry.stationId);
+          return count + loader.buildMissingChunkWorkList(
+            record,
+            "observations",
+            range.startIso,
+            cursor,
+            getChunkSpanMs(windowValue),
+          ).length;
+        }, 0);
+        beginObservationProgress(cachedObservationChunkCount);
+        await runChunkQueueWithConcurrency(
           entries,
           STATION_HISTORY_OBSERVATION_STREAM_CONCURRENCY,
           async (entry) => {
@@ -21241,10 +21289,11 @@
               signal,
               token,
               STATION_HISTORY_OBSERVATION_CHUNK_CONCURRENCY,
+              settleObservationProgress,
             );
           },
         );
-        await Promise.all([cachedAqiPromise, cachedObservationPromise]);
+        clearObservationProgress();
         await historyRenderScheduler.flush();
         if (signal.aborted || token !== state.loadToken) return;
         renderStationHistoryChart(dom, entries, range, units, primary, false, false, { currentObservationStationIds });
@@ -21343,8 +21392,9 @@
 
       const aqiHeadStart = stationHistoryNextBoundary(primaryPayload.aqi, "aqi");
       // AQI history receives priority immediately after the primary head and
-      // recent observations paint; secondary current observations continue in
-      // parallel rather than serially delaying the AQI extension.
+      // recent observations paint. Secondary station-series calls below fetch
+      // current observations only; no historical observation request starts
+      // until this AQI phase has settled.
       const aqiPromise = aqiHeadStart
         ? loadStationHistoryOlderChunks("aqi", primary, primaryRecord, range, aqiHeadBounds?.startUtc, aqiHeadStart, windowValue, historyRenderScheduler, signal, token, STATION_HISTORY_AQI_CHUNK_CONCURRENCY)
         : Promise.resolve();
@@ -21391,10 +21441,26 @@
       });
       if (signal.aborted || token !== state.loadToken) return;
 
+      // A complete, partial, or failed AQI chunk settles the AQI phase. Only
+      // then may the historical observation phase make network requests.
+      await aqiPromise;
+      if (signal.aborted || token !== state.loadToken) return;
+
       const observationHeads = new Map(entries.map((entry) => [entry.stationId, entry.stationId === primary.stationId
         ? stationHistoryNextBoundary(primaryPayload.observations, "observations")
         : getStationHistoryRecord(entry).current_observation_next_chunk_end_utc]));
-      const observationPromise = runChunkQueueWithConcurrency(
+      const observationChunkCount = entries.reduce((count, entry) => {
+        const cursor = observationHeads.get(entry.stationId);
+        return count + loader.buildMissingChunkWorkList(
+          getStationHistoryRecord(entry),
+          "observations",
+          range.startIso,
+          cursor,
+          getChunkSpanMs(windowValue),
+        ).length;
+      }, 0);
+      beginObservationProgress(observationChunkCount);
+      await runChunkQueueWithConcurrency(
         entries,
         STATION_HISTORY_OBSERVATION_STREAM_CONCURRENCY,
         async (entry) => {
@@ -21412,10 +21478,11 @@
             signal,
             token,
             STATION_HISTORY_OBSERVATION_CHUNK_CONCURRENCY,
+            settleObservationProgress,
           );
         },
       );
-      await Promise.all([aqiPromise, observationPromise]);
+      clearObservationProgress();
       await historyRenderScheduler.flush();
       if (signal.aborted || token !== state.loadToken) return;
       renderStationHistoryChart(dom, entries, range, units, primary, false, false, { currentObservationStationIds });
@@ -21444,6 +21511,7 @@
         setMessage("Could not load chart data. Try Refresh.", { error: true });
       }
     } finally {
+      clearObservationProgress();
       recordWebsiteDebugTiming("station_history_load_chart_data_ms", performance.now() - stationHistoryLoadStartedAt);
       recordWebsiteDebugEvent("station_history_load_finished", {
         route: "chart",

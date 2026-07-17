@@ -645,8 +645,6 @@
     const seriesGuidelineByKey = new Map();
     const stationHistoryCacheByKey = new Map();
     const SERIES_CACHE_STORAGE_KEY = `uk_aq_series_cache_v4:${projectRef || "unknown"}`;
-    // Stored AQI dates are canonical hour-ending endpoints. Explicit period
-    // bounds are derived from that unambiguous value when cache records load.
     const STATION_HISTORY_CACHE_STORAGE_KEY = `uk_aq_station_history_cache_v1:${projectRef || "unknown"}`;
     const STATION_HISTORY_CACHE_MAX_KEYS = 30;
     const STATION_HISTORY_AQI_CHUNK_HOURS = 31 * 24;
@@ -666,8 +664,6 @@
     const AQI_MUTABLE_HOURS_PLACEHOLDER = "120";
     const AQI_BAND_MUTABLE_HOURS = resolveAqiMutableHours(AQI_MUTABLE_HOURS_PLACEHOLDER);
     const AQI_BAND_MUTABLE_WINDOW_MS = AQI_BAND_MUTABLE_HOURS * HOUR_MS;
-    // AQI cache records also store the canonical endpoint date, so this key
-    // remains compatible while Phase 2 derives explicit interval bounds.
     const AQI_BAND_CACHE_KEY_PREFIX = "aqi_v2";
     const CHART_TRANSITION_MS = 240;
     const CHART_TRANSITION_COALESCE_MS = 60;
@@ -2514,7 +2510,6 @@
       }
       const dataFormat = String(payload?.data_format || "").toLowerCase();
       const columns = Array.isArray(payload?.columns) ? payload.columns : [];
-      const periodEndIndex = columns.indexOf("period_end_utc");
       const periodStartIndex = columns.indexOf("period_start_utc");
       const timestampHourIndex = columns.indexOf("timestamp_hour_utc");
       const observedAtIndex = columns.indexOf("observed_at");
@@ -2527,44 +2522,30 @@
           : [];
       const mapped = rawPoints.map((row) => {
         if (dataFormat === "compact" && Array.isArray(row)) {
-          const endpoint = periodEndIndex >= 0
-            ? row[periodEndIndex]
+          const observedAt = periodStartIndex >= 0
+            ? row[periodStartIndex]
             : timestampHourIndex >= 0
               ? row[timestampHourIndex]
-              : periodStartIndex >= 0
-                ? row[periodStartIndex]
-                : observedAtIndex >= 0
-                  ? row[observedAtIndex]
-                  : row[0];
+              : observedAtIndex >= 0
+                ? row[observedAtIndex]
+                : row[0];
           const daqiRaw = daqiIndex >= 0 ? row[daqiIndex] : null;
           const eaqiRaw = eaqiIndex >= 0 ? row[eaqiIndex] : null;
-          return createAqiIntervalPoint(endpoint, daqiRaw, eaqiRaw);
+          return {
+            date: new Date(observedAt),
+            daqi: normalizeAqiBandLevel(daqiRaw, false),
+            eaqi: normalizeAqiBandLevel(eaqiRaw, true),
+          };
         }
-        return createAqiIntervalPoint(
-          row?.period_end_utc || row?.timestamp_hour_utc || row?.period_start_utc || row?.observed_at,
-          row?.[fieldMapping.daqiField],
-          row?.[fieldMapping.eaqiField],
-        );
+        return {
+          date: new Date(row?.period_start_utc || row?.timestamp_hour_utc || row?.observed_at),
+          daqi: normalizeAqiBandLevel(row?.[fieldMapping.daqiField], false),
+          eaqi: normalizeAqiBandLevel(row?.[fieldMapping.eaqiField], true),
+        };
       });
       return mapped.filter((row) =>
-        row && Number.isFinite(row.date?.getTime()) && (row.daqi !== null || row.eaqi !== null)
+        Number.isFinite(row.date?.getTime()) && (row.daqi !== null || row.eaqi !== null)
       ).sort((a, b) => a.date.getTime() - b.date.getTime());
-    }
-
-    function createAqiIntervalPoint(endpointValue, daqiValue, eaqiValue) {
-      const periodEnd = new Date(endpointValue);
-      const daqi = normalizeAqiBandLevel(daqiValue, false);
-      const eaqi = normalizeAqiBandLevel(eaqiValue, true);
-      if (!Number.isFinite(periodEnd.getTime()) || (daqi === null && eaqi === null)) {
-        return null;
-      }
-      return {
-        date: periodEnd,
-        periodStart: new Date(periodEnd.getTime() - HOUR_MS),
-        periodEnd,
-        daqi,
-        eaqi,
-      };
     }
 
     function isAqiHistoryPayloadComplete(payload) {
@@ -2654,7 +2635,7 @@
               if (!Number.isFinite(date.getTime()) || (daqi === null && eaqi === null)) {
                 return null;
               }
-              return createAqiIntervalPoint(date, daqi, eaqi);
+              return { date, daqi, eaqi };
             })
             .filter(Boolean);
           if (restored.length) {
@@ -2764,11 +2745,7 @@
           merged.set(key, point);
         }
       });
-      return Array.from(merged.values()).map((point) => createAqiIntervalPoint(
-        point?.periodEnd instanceof Date ? point.periodEnd : point?.date,
-        point?.daqi,
-        point?.eaqi,
-      )).filter(Boolean).sort((a, b) => a.date.getTime() - b.date.getTime());
+      return Array.from(merged.values()).sort((a, b) => a.date.getTime() - b.date.getTime());
     }
 
     function pruneSeriesPointsToWindow(points, windowLabel, endIso = null) {
@@ -2985,29 +2962,47 @@
       if (!domain || domain.length < 2) return;
       const [domainStart, domainEnd] = domain;
 
-      const aqiPointByEndpointMs = new Map();
+      // Determine hour segments across the viewing window
+      const totalHours = Math.max(1, (domainEnd - domainStart) / HOUR_MS);
+      const cellWidth = Math.max(1, (chartState.width - chartState.margin.left - chartState.margin.right) / totalHours);
+
+      const slots = [];
+      let current = new Date(domainStart);
+      current.setMinutes(0, 0, 0); // floor to hour
+      while (current < domainEnd) {
+        slots.push(new Date(current));
+        current = new Date(current.getTime() + HOUR_MS);
+      }
+
+      const aqiPointByHourMs = new Map();
       if (Array.isArray(chartState.aqiPoints)) {
         chartState.aqiPoints.forEach((point) => {
-          const endpointMs = point?.periodEnd instanceof Date
-            ? point.periodEnd.getTime()
-            : point?.date?.getTime?.();
-          if (!Number.isFinite(endpointMs)) {
+          const hourStartMs = floorToHourStartMs(point?.date);
+          if (!Number.isFinite(hourStartMs)) {
             return;
           }
-          const existing = aqiPointByEndpointMs.get(endpointMs);
+          const existing = aqiPointByHourMs.get(hourStartMs);
           if (!existing) {
-            aqiPointByEndpointMs.set(endpointMs, point);
+            aqiPointByHourMs.set(hourStartMs, point);
             return;
           }
-          aqiPointByEndpointMs.set(endpointMs, {
-            date: point?.date instanceof Date ? point.date : existing.date,
-            periodStart: point?.periodStart instanceof Date ? point.periodStart : existing.periodStart,
-            periodEnd: point?.periodEnd instanceof Date ? point.periodEnd : existing.periodEnd,
+          const existingDate = existing?.date instanceof Date ? existing.date : null;
+          const incomingDate = point?.date instanceof Date ? point.date : null;
+          const mergedDate = incomingDate && (!existingDate || incomingDate > existingDate)
+            ? incomingDate
+            : existingDate;
+          aqiPointByHourMs.set(hourStartMs, {
+            date: mergedDate,
             daqi: point?.daqi !== null && point?.daqi !== undefined ? point.daqi : existing.daqi,
             eaqi: point?.eaqi !== null && point?.eaqi !== undefined ? point.eaqi : existing.eaqi,
           });
         });
       }
+
+      const getPointForSlot = (slotTime) => {
+        const hourStartMs = floorToHourStartMs(slotTime);
+        return Number.isFinite(hourStartMs) ? (aqiPointByHourMs.get(hourStartMs) || null) : null;
+      };
 
       const drawBand = (group, labelGroup, bandLayer, yOffset, valueKey, colorsMap, label) => {
         group.attr("transform", `translate(0, ${yOffset})`);
@@ -3026,12 +3021,9 @@
           .style("fill", "var(--ink-soft)")
           .text(label);
 
-        Array.from(aqiPointByEndpointMs.values()).sort((left, right) => {
-          const leftMs = left?.periodEnd instanceof Date ? left.periodEnd.getTime() : left?.date?.getTime?.() || 0;
-          const rightMs = right?.periodEnd instanceof Date ? right.periodEnd.getTime() : right?.date?.getTime?.() || 0;
-          return leftMs - rightMs;
-        }).forEach(point => {
-          const val = point?.[valueKey];
+        slots.forEach(slot => {
+          const point = getPointForSlot(slot);
+          const val = point ? point[valueKey] : null;
           const color = (val !== null && val !== undefined && val !== 0 && colorsMap[val])
             ? colorsMap[val]
             : null;
@@ -3039,27 +3031,26 @@
             return;
           }
 
-          const endpointMs = point?.periodEnd instanceof Date ? point.periodEnd.getTime() : point?.date?.getTime?.();
-          const periodStartMs = point?.periodStart instanceof Date ? point.periodStart.getTime() : endpointMs - HOUR_MS;
-          if (!Number.isFinite(endpointMs) || !Number.isFinite(periodStartMs)) {
-            return;
-          }
-          const clippedStartMs = Math.max(domainStart.getTime(), periodStartMs);
-          const clippedEndMs = Math.min(domainEnd.getTime(), endpointMs);
-          if (clippedEndMs <= clippedStartMs) {
-            return;
-          }
-          const xPos = Math.max(chartState.margin.left, chartState.xScale(new Date(clippedStartMs)));
-          const endX = Math.min(chartState.width - chartState.margin.right, chartState.xScale(new Date(clippedEndMs)));
-          const width = Math.max(0, endX - xPos);
-          if (width > 0) {
-            bandLayer.append("rect")
-              .attr("x", xPos)
-              .attr("y", 0)
-              .attr("width", width)
-              .attr("height", bandHeight)
-              .attr("fill", color)
-              .style("stroke", "none");
+          const xPos = chartState.xScale(slot);
+          // Must overlap or clip within bounds
+          if (xPos > chartState.margin.left - cellWidth && xPos < chartState.width - chartState.margin.right) {
+            const safeX = Math.max(chartState.margin.left, xPos);
+            let safeW = cellWidth;
+            if (xPos < chartState.margin.left) {
+              safeW = cellWidth - (chartState.margin.left - xPos);
+            }
+            if (safeX + safeW > chartState.width - chartState.margin.right) {
+              safeW = (chartState.width - chartState.margin.right) - safeX;
+            }
+            if (safeW > 0) {
+              bandLayer.append("rect")
+                .attr("x", safeX)
+                .attr("y", 0)
+                .attr("width", safeW)
+                .attr("height", bandHeight)
+                .attr("fill", color)
+                .style("stroke", "none");
+            }
           }
         });
       };
@@ -4383,7 +4374,7 @@
           const daqi = normalizeAqiBandLevel(row[1], false);
           const eaqi = normalizeAqiBandLevel(row[2], true);
           return Number.isFinite(date.getTime()) && (daqi !== null || eaqi !== null)
-            ? createAqiIntervalPoint(date, daqi, eaqi)
+            ? { date, daqi, eaqi }
             : null;
         }
         const date = new Date(row[0]);
@@ -4614,7 +4605,7 @@
             const stableHeadStartMs = Date.parse(stableHeadStartUtc);
             const chunkPoints = parseStationSeriesAqiPoints(payload?.points, context.pollutantKey);
             const stableHeadOverlap = chunkPoints.filter((point) =>
-              Number.isFinite(stableHeadStartMs) && point.date.getTime() > stableHeadStartMs
+              Number.isFinite(stableHeadStartMs) && point.date.getTime() >= stableHeadStartMs
             );
             if (stableHeadOverlap.length) {
               console.error("[uk-aq station-history] AQI history response overlaps stable head", {
@@ -4752,7 +4743,7 @@
       // AQI is intentionally processed and painted before the observation section.
       applyAqiContextState(record.aqiPoints, context);
       const cachedOlderAqiPoints = cachedAqiPoints.filter((point) =>
-        !Number.isFinite(stableHeadStartMs) || point.date.getTime() <= stableHeadStartMs
+        !Number.isFinite(stableHeadStartMs) || point.date.getTime() < stableHeadStartMs
       );
       if (cachedOlderAqiPoints.length) {
         mergeStationHistoryAqi(record, cachedOlderAqiPoints, loadId, "cached_history_after_head");

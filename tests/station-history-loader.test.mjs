@@ -9,10 +9,15 @@ const fields = {
 const hour = "2026-07-15T10:00:00.000Z";
 
 const head = loader.normalizeAqiPoint({
-  period_start_utc: hour,
+  period_end_utc: hour,
+  timestamp_hour_utc: "2026-07-15T09:00:00.000Z",
+  period_start_utc: "2026-07-15T08:00:00.000Z",
   daqi_pm25_rolling24h_index_level: 3,
   eaqi_pm25_index_level: "Moderate",
 }, fields);
+assert.equal(head.date.toISOString(), hour, "period_end_utc is the canonical endpoint");
+assert.equal(head.periodEnd.toISOString(), hour);
+assert.equal(head.periodStart.toISOString(), "2026-07-15T09:00:00.000Z");
 const conflictingHistory = loader.normalizeAqiPoint({
   period_start_utc: hour,
   daqi_pm25_rolling24h_index_level: 7,
@@ -22,6 +27,28 @@ const guarded = loader.mergeAqiWithoutReplacement([head], [conflictingHistory]);
 assert.equal(guarded.points.length, 1);
 assert.equal(guarded.points[0].daqi, 3);
 assert.equal(guarded.conflicts.length, 1);
+
+const endpointAtHeadStart = loader.normalizeAqiPoint({
+  period_end_utc: "2026-07-15T12:00:00.000Z",
+  daqi_pm25_rolling24h_index_level: 1,
+  eaqi_pm25_index_level: "Good",
+}, fields);
+const endpointInsideHead = loader.normalizeAqiPoint({
+  period_end_utc: "2026-07-15T13:00:00.000Z",
+  daqi_pm25_rolling24h_index_level: 5,
+  eaqi_pm25_index_level: "Poor",
+}, fields);
+const endpointHeadReplacement = loader.replaceAuthoritativeAqiHead(
+  [endpointAtHeadStart, endpointInsideHead],
+  [],
+  "2026-07-15T12:00:00.000Z",
+  "2026-07-15T13:00:00.000Z",
+);
+assert.deepEqual(
+  endpointHeadReplacement.points.map((point) => point.date.toISOString()),
+  ["2026-07-15T12:00:00.000Z"],
+  "an endpoint equal to the stable-head start remains in the preceding interval",
+);
 
 const matchingHistory = loader.normalizeAqiPoint({
   period_start_utc: hour,
@@ -266,5 +293,11 @@ assert.match(page, /Current recent data is unavailable\. Cached historical data 
 assert.match(page, /aqi_replacement_contract_error/);
 assert.match(page, /AQI history response overlaps stable head/);
 assert.match(page, /retained completed chunks after failure/);
+assert.match(page, /const periodEndIndex = columns\.indexOf\("period_end_utc"\)/);
+assert.match(page, /return createAqiIntervalPoint\(endpoint, daqiRaw, eaqiRaw\)/);
+assert.match(page, /const clippedStartMs = Math\.max\(domainStart\.getTime\(\), periodStartMs\)/);
+assert.match(page, /const clippedEndMs = Math\.min\(domainEnd\.getTime\(\), endpointMs\)/);
+assert.match(page, /point\.date\.getTime\(\) > stableHeadStartMs/);
+assert.match(page, /point\.date\.getTime\(\) <= stableHeadStartMs/);
 
 console.log("station-history loader harness passed");

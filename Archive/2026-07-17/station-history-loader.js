@@ -22,28 +22,14 @@
   }
 
   function normalizeAqiPoint(row, fields) {
-    // date remains the canonical endpoint for identity and cache compatibility.
-    // period_start_utc is a temporary legacy endpoint alias until the final
-    // API contract correction, so it is deliberately the last AQI fallback.
-    const periodEnd = toDate(
-      row?.period_end_utc
-      || row?.timestamp_hour_utc
-      || row?.period_start_utc
-      || row?.observed_at,
-    );
-    if (!periodEnd) return null;
+    const date = toDate(row?.period_start_utc || row?.timestamp_hour_utc || row?.observed_at);
+    if (!date) return null;
     const daqi = row?.[fields.daqiField];
     const eaqi = row?.[fields.eaqiField];
     if (daqi === null || daqi === undefined) {
       if (eaqi === null || eaqi === undefined) return null;
     }
-    return {
-      date: periodEnd,
-      periodStart: new Date(periodEnd.getTime() - HOUR_MS),
-      periodEnd,
-      daqi,
-      eaqi,
-    };
+    return { date, daqi, eaqi };
   }
 
   function normalizeObservationPoint(row) {
@@ -101,9 +87,7 @@
     }
     const retained = (Array.isArray(existingPoints) ? existingPoints : []).filter(function (point) {
       const key = hourKey(point?.date);
-      // AQI request bounds are represented intervals: S < endpoint <= E.
-      // An endpoint exactly at S belongs to the preceding older interval.
-      return key === null || key <= startMs || key > endMs;
+      return key === null || key < startMs || key >= endMs;
     });
     return mergeAqiWithoutReplacement(retained, headPoints);
   }

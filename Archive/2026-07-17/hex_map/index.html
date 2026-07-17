@@ -18652,30 +18652,23 @@
     if (!normalizeAqiSupportedPollutant(pollutantKey)) return [];
     const dataFormat = String(payload?.data_format || "").toLowerCase();
     const columns = Array.isArray(payload?.columns) ? payload.columns : [];
-    const periodEndIndex = columns.indexOf("period_end_utc");
     const periodStartIndex = columns.indexOf("period_start_utc");
     const timestampHourIndex = columns.indexOf("timestamp_hour_utc");
     const observedAtIndex = columns.indexOf("observed_at");
     const rawPoints = getAqiPayloadRows(payload);
     return rawPoints.map((row) => {
       if (dataFormat === "compact" && Array.isArray(row)) {
-        const endpoint = periodEndIndex >= 0 ? row[periodEndIndex] : timestampHourIndex >= 0 ? row[timestampHourIndex] : periodStartIndex >= 0 ? row[periodStartIndex] : observedAtIndex >= 0 ? row[observedAtIndex] : row[0];
-        const periodEnd = new Date(endpoint);
+        const observedAt = periodStartIndex >= 0 ? row[periodStartIndex] : timestampHourIndex >= 0 ? row[timestampHourIndex] : observedAtIndex >= 0 ? row[observedAtIndex] : row[0];
         return {
-          date: periodEnd,
-          periodStart: new Date(periodEnd.getTime() - HOUR_MS),
-          periodEnd,
+          date: new Date(observedAt),
           daqi: normalizeAqiBandLevel(getAqiPayloadRowField(row, columns, "daqi_index_level"), false),
           eaqi: normalizeAqiBandLevel(getAqiPayloadRowField(row, columns, "eaqi_index_level"), true),
           daqi_missing_reason: normalizeAqiMissingReason(getAqiPayloadRowField(row, columns, "daqi_missing_reason")),
           eaqi_missing_reason: normalizeAqiMissingReason(getAqiPayloadRowField(row, columns, "eaqi_missing_reason")),
         };
       }
-      const periodEnd = new Date(row?.period_end_utc || row?.timestamp_hour_utc || row?.period_start_utc || row?.observed_at);
       return {
-        date: periodEnd,
-        periodStart: new Date(periodEnd.getTime() - HOUR_MS),
-        periodEnd,
+        date: new Date(row?.period_start_utc || row?.timestamp_hour_utc || row?.observed_at),
         daqi: normalizeAqiBandLevel(getAqiPayloadRowField(row, columns, "daqi_index_level"), false),
         eaqi: normalizeAqiBandLevel(getAqiPayloadRowField(row, columns, "eaqi_index_level"), true),
         daqi_missing_reason: normalizeAqiMissingReason(getAqiPayloadRowField(row, columns, "daqi_missing_reason")),
@@ -21623,18 +21616,18 @@
     const daqiColors = { 1: "#1DB100", 2: "#61D836", 3: "#34FF00", 4: "#FFFB00", 5: "#FFCE04", 6: "#FF9300", 7: "#FF6464", 8: "#FF2600", 9: "#A50026", 10: "#672C7F" };
     const eaqiColors = { "Good": "#1DB100", "Fair": "#FFFB00", "Moderate": "#FF9300", "Poor": "#FF2600", "Very poor": "#A50026", "Extremely poor": "#672C7F", 1: "#1DB100", 2: "#FFFB00", 3: "#FF9300", 4: "#FF2600", 5: "#A50026", 6: "#672C7F" };
     const hasAqiPoints = Array.isArray(aqiPoints) && aqiPoints.length > 0;
-    const pointByEndpoint = new Map();
+    const pointByHour = new Map();
     if (hasAqiPoints) {
       aqiPoints.forEach((point) => {
-        const endpointMs = point?.periodEnd instanceof Date
-          ? point.periodEnd.getTime()
-          : point?.date?.getTime?.();
-        if (Number.isFinite(endpointMs)) pointByEndpoint.set(endpointMs, point);
+        const hourMs = new Date(point.date).setMinutes(0, 0, 0);
+        if (Number.isFinite(hourMs)) pointByHour.set(hourMs, point);
       });
     }
     const bandHeight = 22;
     const gap = 4;
+    const slotWidth = Math.max(1, (frame.width - frame.margin.left - frame.margin.right) / Math.max(1, (frame.endMs - frame.startMs) / HOUR_MS));
     const renderedCounts = { daqi_segment_count: 0, eaqi_segment_count: 0 };
+    const carryForwardLevels = { daqi: null, eaqi: null };
     const drawBand = (label, y, key, colors) => {
       const group = svg.append("g")
         .attr("transform", `translate(0, ${y})`)
@@ -21649,23 +21642,30 @@
       if (!hasAqiPoints) {
         return;
       }
-      Array.from(pointByEndpoint.values()).sort((left, right) => {
-        const leftMs = left?.periodEnd instanceof Date ? left.periodEnd.getTime() : left?.date?.getTime?.() || 0;
-        const rightMs = right?.periodEnd instanceof Date ? right.periodEnd.getTime() : right?.date?.getTime?.() || 0;
-        return leftMs - rightMs;
-      }).forEach((point) => {
+      for (let t = new Date(frame.startMs).setMinutes(0, 0, 0); t < frame.endMs; t += HOUR_MS) {
+        const point = pointByHour.get(t);
+        if (!point) {
+          carryForwardLevels[key] = null;
+          continue;
+        }
         const level = point[key];
-        const color = level !== null && level !== undefined ? colors[level] : null;
-        if (!color) return;
-        const endpointMs = point?.periodEnd instanceof Date ? point.periodEnd.getTime() : point?.date?.getTime?.();
-        const periodStartMs = point?.periodStart instanceof Date ? point.periodStart.getTime() : endpointMs - HOUR_MS;
-        if (!Number.isFinite(endpointMs) || !Number.isFinite(periodStartMs)) return;
-        const clippedStartMs = Math.max(frame.startMs, periodStartMs);
-        const clippedEndMs = Math.min(frame.endMs, endpointMs);
-        if (clippedEndMs <= clippedStartMs) return;
-        const x = Math.max(frame.margin.left, xScale(new Date(clippedStartMs)));
-        const endX = Math.min(frame.width - frame.margin.right, xScale(new Date(clippedEndMs)));
-        const width = Math.max(0, endX - x);
+        const missingReason = point[`${key}_missing_reason`];
+        let resolvedLevel = null;
+        if (level !== null && level !== undefined) {
+          resolvedLevel = level;
+          carryForwardLevels[key] = level;
+        } else if (missingReason) {
+          carryForwardLevels[key] = null;
+          continue;
+        } else {
+          resolvedLevel = carryForwardLevels[key];
+        }
+        const color = resolvedLevel !== null && resolvedLevel !== undefined ? colors[resolvedLevel] : null;
+        if (!color) continue;
+        const x = Math.max(frame.margin.left, xScale(new Date(t)));
+        const nextX = xScale(new Date(t + HOUR_MS));
+        const rawWidth = Number.isFinite(nextX) ? Math.max(0, nextX - x) : slotWidth;
+        const width = Math.max(2, Math.min(rawWidth || slotWidth, frame.width - frame.margin.right - x));
         if (width > 0) {
           group.append("rect")
             .attr("class", "aqi-band-segment")
@@ -21677,7 +21677,7 @@
           if (key === "daqi") renderedCounts.daqi_segment_count += 1;
           if (key === "eaqi") renderedCounts.eaqi_segment_count += 1;
         }
-      });
+      }
     };
     const bandTop = AQI_BAND_TOP_OFFSET_PX;
     const symbolIndex = Number.isInteger(options?.aqiSourceSymbolIndex) ? options.aqiSourceSymbolIndex : -1;

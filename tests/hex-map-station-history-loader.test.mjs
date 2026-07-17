@@ -10,6 +10,12 @@ const section = page.slice(start, end);
 assert.ok(start >= 0, "Hex Map progressive station-history loader exists");
 assert.match(page, /station_history_loader/);
 assert.match(page, /HEX_MAP_STATION_HISTORY_CACHE_CONTRACT = "hex-map-station-history-v3"/);
+assert.match(page, /const periodEndIndex = columns\.indexOf\("period_end_utc"\)/);
+assert.match(page, /periodEndIndex >= 0 \? row\[periodEndIndex\] : timestampHourIndex >= 0/);
+assert.match(page, /periodStart: new Date\(periodEnd\.getTime\(\) - HOUR_MS\)/);
+assert.match(page, /const clippedStartMs = Math\.max\(frame\.startMs, periodStartMs\)/);
+assert.match(page, /const clippedEndMs = Math\.min\(frame\.endMs, endpointMs\)/);
+assert.doesNotMatch(page, /carryForwardLevels/);
 assert.match(page, /<script src="\/station-history-loader\.js"><\/script>/);
 assert.match(page, /return loadLegacyChartData\(reason\)/, "legacy loader remains available for TEST rollback");
 assert.match(page, /A selected sensor is missing its timeseries identity\./, "missing timeseries retains a visible frontend diagnostic");
@@ -116,10 +122,10 @@ const guarded = loader.mergeAqiWithoutReplacement([head], [replacement]);
 assert.equal(guarded.points[0].daqi, 2);
 assert.equal(guarded.conflicts.length, 1, "later history cannot replace a stable AQI hour");
 
-const refreshedHead = loader.normalizeAqiPoint({ period_start_utc: "2026-07-15T12:00:00.000Z", daqi_index_level: 4, eaqi_index_level: "Moderate" }, { daqiField: "daqi_index_level", eaqiField: "eaqi_index_level" });
+const refreshedHead = loader.normalizeAqiPoint({ period_end_utc: "2026-07-15T13:00:00.000Z", daqi_index_level: 4, eaqi_index_level: "Moderate" }, { daqiField: "daqi_index_level", eaqiField: "eaqi_index_level" });
 const olderHistory = loader.normalizeAqiPoint({ period_start_utc: "2026-07-15T11:00:00.000Z", daqi_index_level: 2, eaqi_index_level: "Low" }, { daqiField: "daqi_index_level", eaqiField: "eaqi_index_level" });
 const refreshed = loader.replaceAuthoritativeAqiHead([olderHistory, head], [refreshedHead], "2026-07-15T12:00:00.000Z", "2026-07-15T13:00:00.000Z");
-assert.equal(refreshed.points.length, 2);
+assert.equal(refreshed.points.length, 3);
 assert.equal(refreshed.points.at(-1).daqi, 4, "a later authoritative station-series head can replace its own interval");
 
 const cachedObservation = loader.normalizeObservationPoint({ observed_at: "2026-07-15T12:15:00.000Z", value: 12 });

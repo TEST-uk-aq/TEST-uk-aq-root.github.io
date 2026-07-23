@@ -281,9 +281,30 @@
     if (size < originalSize) valueEl.classList.add("pollutant-value--fitted");
   }
 
+  function fitPollutantStationName(stationEl) {
+    if (!stationEl) return;
+    stationEl.style.fontSize = "";
+
+    const circle = stationEl.closest(".pollutant-circle");
+    if (!circle || circle.hidden || circle.classList.contains("pollutant-circle--inactive")
+      || circle.clientWidth <= 0 || !stationEl.textContent.trim()) return;
+
+    const originalSize = Number.parseFloat(window.getComputedStyle(stationEl).fontSize);
+    if (!Number.isFinite(originalSize) || originalSize <= 0) return;
+
+    const minimumSize = Math.max(12, originalSize * 0.78);
+    let size = originalSize;
+    while (stationEl.scrollHeight > stationEl.clientHeight + 1 && size > minimumSize) {
+      size = Math.max(minimumSize, size - 0.5);
+      stationEl.style.fontSize = `${size}px`;
+    }
+  }
+
   function fitAllPollutantValues() {
     document.querySelectorAll(".pollutant-circle:not([hidden]) .pollutant-value")
       .forEach(fitPollutantValue);
+    document.querySelectorAll(".pollutant-circle:not([hidden]) .pollutant-station")
+      .forEach(fitPollutantStationName);
   }
 
   function schedulePollutantValueFit() {

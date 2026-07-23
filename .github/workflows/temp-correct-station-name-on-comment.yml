@@ -1,0 +1,99 @@
+name: Apply dashboard station-name correction
+
+on:
+  issue_comment:
+    types:
+      - created
+
+permissions:
+  contents: write
+  pull-requests: read
+
+jobs:
+  apply-correction:
+    if: >-
+      github.event.issue.pull_request &&
+      github.event.comment.body == '/apply-station-name-fix'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out main
+        uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 0
+
+      - name: Replace ineffective flex overflow detector
+        shell: python
+        run: |
+          from pathlib import Path
+
+          path = Path("dashboard.js")
+          content = path.read_text(encoding="utf-8")
+
+          old = '''  function fitPollutantStationName(stationEl) {
+            if (!stationEl) return;
+            stationEl.style.fontSize = "";
+
+            const circle = stationEl.closest(".pollutant-circle");
+            if (!circle || circle.hidden || circle.classList.contains("pollutant-circle--inactive")
+              || circle.clientWidth <= 0 || !stationEl.textContent.trim()) return;
+
+            const originalSize = Number.parseFloat(window.getComputedStyle(stationEl).fontSize);
+            if (!Number.isFinite(originalSize) || originalSize <= 0) return;
+
+            const minimumSize = Math.max(12, originalSize * 0.78);
+            let size = originalSize;
+            while (stationEl.scrollHeight > stationEl.clientHeight + 1 && size > minimumSize) {
+              size = Math.max(minimumSize, size - 0.5);
+              stationEl.style.fontSize = `${size}px`;
+            }
+          }
+'''
+
+          new = '''  function renderedTextHeight(element) {
+            const range = document.createRange();
+            range.selectNodeContents(element);
+            return range.getBoundingClientRect().height;
+          }
+
+          function fitPollutantStationName(stationEl) {
+            if (!stationEl) return;
+            stationEl.style.fontSize = "";
+
+            const circle = stationEl.closest(".pollutant-circle");
+            if (!circle || circle.hidden || circle.classList.contains("pollutant-circle--inactive")
+              || circle.clientWidth <= 0 || !stationEl.textContent.trim()) return;
+
+            const computed = window.getComputedStyle(stationEl);
+            const originalSize = Number.parseFloat(computed.fontSize);
+            const computedLineHeight = Number.parseFloat(computed.lineHeight);
+            if (!Number.isFinite(originalSize) || originalSize <= 0) return;
+
+            const lineHeightRatio = Number.isFinite(computedLineHeight) && computedLineHeight > 0
+              ? computedLineHeight / originalSize
+              : 1.08;
+            const minimumSize = Math.max(11, originalSize * 0.68);
+            let size = originalSize;
+
+            while (size > minimumSize) {
+              const maximumTwoLineHeight = (size * lineHeightRatio * 2) + 1;
+              if (renderedTextHeight(stationEl) <= maximumTwoLineHeight) break;
+              size = Math.max(minimumSize, size - 0.5);
+              stationEl.style.fontSize = `${size}px`;
+            }
+          }
+'''
+
+          if old not in content:
+            raise SystemExit("Expected fitPollutantStationName block was not found")
+
+          path.write_text(content.replace(old, new, 1), encoding="utf-8")
+
+      - name: Remove one-off workflow and commit correction
+        run: |
+          rm .github/workflows/temp-correct-station-name-on-comment.yml
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add dashboard.js .github/workflows/temp-correct-station-name-on-comment.yml
+          git commit -m "Correct dashboard station name overflow detection"
+          git push origin HEAD:main

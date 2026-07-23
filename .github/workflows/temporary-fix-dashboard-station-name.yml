@@ -1,0 +1,83 @@
+name: Temporary dashboard station-name fix
+
+on:
+  push:
+    paths:
+      - .github/workflows/temporary-fix-dashboard-station-name.yml
+
+permissions:
+  contents: write
+
+jobs:
+  patch-dashboard:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Correct station-name overflow detection
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          path = Path("dashboard.js")
+          text = path.read_text(encoding="utf-8")
+          old = '''  function fitPollutantStationName(stationEl) {
+            if (!stationEl) return;
+            stationEl.style.fontSize = "";
+
+            const circle = stationEl.closest(".pollutant-circle");
+            if (!circle || circle.hidden || circle.classList.contains("pollutant-circle--inactive")
+              || circle.clientWidth <= 0 || !stationEl.textContent.trim()) return;
+
+            const originalSize = Number.parseFloat(window.getComputedStyle(stationEl).fontSize);
+            if (!Number.isFinite(originalSize) || originalSize <= 0) return;
+
+            const minimumSize = Math.max(12, originalSize * 0.78);
+            let size = originalSize;
+            while (stationEl.scrollHeight > stationEl.clientHeight + 1 && size > minimumSize) {
+              size = Math.max(minimumSize, size - 0.5);
+              stationEl.style.fontSize = `${size}px`;
+            }
+          }
+          '''
+          new = '''  function renderedTextHeight(element) {
+            const range = document.createRange();
+            range.selectNodeContents(element);
+            return range.getBoundingClientRect().height;
+          }
+
+          function fitPollutantStationName(stationEl) {
+            if (!stationEl) return;
+            stationEl.style.fontSize = "";
+
+            const circle = stationEl.closest(".pollutant-circle");
+            if (!circle || circle.hidden || circle.classList.contains("pollutant-circle--inactive")
+              || circle.clientWidth <= 0 || !stationEl.textContent.trim()) return;
+
+            const originalSize = Number.parseFloat(window.getComputedStyle(stationEl).fontSize);
+            if (!Number.isFinite(originalSize) || originalSize <= 0) return;
+
+            const minimumSize = Math.max(12, originalSize * 0.78);
+            let size = originalSize;
+            while (size > minimumSize) {
+              const lineHeight = Number.parseFloat(window.getComputedStyle(stationEl).lineHeight);
+              if (!Number.isFinite(lineHeight)
+                || renderedTextHeight(stationEl) <= (lineHeight * 2) + 1) break;
+              size = Math.max(minimumSize, size - 0.5);
+              stationEl.style.fontSize = `${size}px`;
+            }
+          }
+          '''
+          if old not in text:
+            raise SystemExit("Expected station-name fitting block was not found")
+          path.write_text(text.replace(old, new, 1), encoding="utf-8")
+          PY
+
+      - name: Commit corrected fitting logic
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add dashboard.js
+          git commit -m "Correct dashboard station name overflow detection"
+          git push

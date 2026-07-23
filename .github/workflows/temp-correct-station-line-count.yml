@@ -1,17 +1,19 @@
 name: Correct dashboard station-name line counting
 
 on:
-  push:
-    branches:
-      - main
-    paths:
-      - .github/workflows/temp-correct-station-line-count.yml
+  issue_comment:
+    types:
+      - created
 
 permissions:
   contents: write
+  pull-requests: read
 
 jobs:
   correct-station-line-count:
+    if: >-
+      github.event.issue.pull_request &&
+      github.event.comment.body == '/apply-station-line-count-fix'
     runs-on: ubuntu-latest
     steps:
       - name: Check out repository

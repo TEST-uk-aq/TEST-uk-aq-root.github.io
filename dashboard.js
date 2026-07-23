@@ -281,10 +281,18 @@
     if (size < originalSize) valueEl.classList.add("pollutant-value--fitted");
   }
 
-  function renderedTextHeight(element) {
+  function renderedTextLineCount(element) {
     const range = document.createRange();
     range.selectNodeContents(element);
-    return range.getBoundingClientRect().height;
+    const lineTops = [];
+
+    Array.from(range.getClientRects()).forEach((rect) => {
+      if (!lineTops.some((top) => Math.abs(top - rect.top) < 1)) {
+        lineTops.push(rect.top);
+      }
+    });
+
+    return lineTops.length;
   }
 
   function fitPollutantStationName(stationEl) {
@@ -295,20 +303,13 @@
     if (!circle || circle.hidden || circle.classList.contains("pollutant-circle--inactive")
       || circle.clientWidth <= 0 || !stationEl.textContent.trim()) return;
 
-    const computed = window.getComputedStyle(stationEl);
-    const originalSize = Number.parseFloat(computed.fontSize);
-    const computedLineHeight = Number.parseFloat(computed.lineHeight);
+    const originalSize = Number.parseFloat(window.getComputedStyle(stationEl).fontSize);
     if (!Number.isFinite(originalSize) || originalSize <= 0) return;
 
-    const lineHeightRatio = Number.isFinite(computedLineHeight) && computedLineHeight > 0
-      ? computedLineHeight / originalSize
-      : 1.08;
     const minimumSize = Math.max(11, originalSize * 0.68);
     let size = originalSize;
 
-    while (size > minimumSize) {
-      const maximumTwoLineHeight = (size * lineHeightRatio * 2) + 1;
-      if (renderedTextHeight(stationEl) <= maximumTwoLineHeight) break;
+    while (renderedTextLineCount(stationEl) > 2 && size > minimumSize) {
       size = Math.max(minimumSize, size - 0.5);
       stationEl.style.fontSize = `${size}px`;
     }

@@ -1,1 +1,1 @@
-Retry the temporary one-off Hex Map chart resize workflow after narrowing the guarded match.
+Trigger removal of the temporary Hex Map fix workflow, script, pull request and branch.

@@ -1,12 +1,9 @@
-name: One-off Hex Map chart resize fix
+name: One-off Hex Map chart fix cleanup
 
 on:
-  push:
-    branches:
-      - main
-    paths:
-      - .github/workflows/oneoff-hex-map-chart-resize-fix.yml
   pull_request:
+    types:
+      - synchronize
     branches:
       - main
     paths:
@@ -14,9 +11,11 @@ on:
 
 permissions:
   contents: write
+  pull-requests: write
 
 jobs:
-  patch:
+  cleanup:
+    if: github.event.pull_request.number == 3
     runs-on: ubuntu-latest
     steps:
       - name: Check out main
@@ -25,42 +24,21 @@ jobs:
           ref: main
           fetch-depth: 0
 
-      - name: Apply the final Hex Map chart fix
+      - name: Remove temporary fix tooling
         shell: bash
         run: |
           git pull --ff-only origin main
-          python .github/scripts/oneoff_patch_hex_map_chart_resize.py
-
-      - name: Validate inline JavaScript
-        shell: bash
-        run: |
-          python - <<'PY'
-          import re
-          import subprocess
-          from pathlib import Path
-
-          html = Path("hex_map/index.html").read_text(encoding="utf-8")
-          scripts = re.findall(r"<script([^>]*)>(.*?)</script>", html, flags=re.IGNORECASE | re.DOTALL)
-          checked = 0
-          for index, (attrs, body) in enumerate(scripts):
-              attrs_lower = attrs.lower()
-              if "src=" in attrs_lower or "application/json" in attrs_lower:
-                  continue
-              target = Path(f"/tmp/hex-map-inline-{index}.js")
-              target.write_text(body, encoding="utf-8")
-              subprocess.run(["node", "--check", str(target)], check=True)
-              checked += 1
-          if checked == 0:
-              raise SystemExit("no inline JavaScript blocks were validated")
-          print(f"Validated {checked} inline JavaScript blocks")
-          PY
-
-      - name: Commit the Hex Map fix
-        shell: bash
-        run: |
+          git rm .github/workflows/oneoff-hex-map-chart-resize-fix.yml
+          git rm .github/scripts/oneoff_patch_hex_map_chart_resize.py
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add hex_map/index.html
-          git diff --cached --check
-          git commit -m "Preserve Hex Map chart lines during resize"
+          git commit -m "Remove temporary Hex Map fix tooling"
           git push origin HEAD:main
+
+      - name: Close trigger pull request and delete branch
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+        shell: bash
+        run: gh pr close "$PR_NUMBER" --delete-branch --repo "$GH_REPO"

@@ -17266,6 +17266,46 @@
     return Array.from(state.chartModeSelectedSensors);
   }
 
+  function getChartFrame() {
+    return domByMap[state.mapKey]?.chartFrame || null;
+  }
+
+  function getChartVisualSlot(stationId, fallbackIndex = 0, options = {}) {
+    const normalizedId = String(stationId || "").trim();
+    const cf = getChartFrame();
+    if (!normalizedId || !cf?.stationStyles) return Math.max(0, Number(fallbackIndex) || 0);
+    if (cf.stationStyles.has(normalizedId)) return cf.stationStyles.get(normalizedId);
+    if (options.assign === false) return Math.max(0, Number(fallbackIndex) || 0);
+    return assignLayerSlotIndex(cf, normalizedId);
+  }
+
+  function syncChartStyleSlotsForSelection(previousIds = []) {
+    const cf = getChartFrame();
+    if (!cf?.stationStyles) return;
+    const selectedIds = getSelectedSensorIdsOrdered();
+    const selectedSet = new Set(selectedIds);
+    (Array.isArray(previousIds) ? previousIds : []).forEach((stationId) => {
+      if (!selectedSet.has(stationId)) cf.stationStyles.delete(stationId);
+    });
+    selectedIds.forEach((stationId, index) => {
+      getChartVisualSlot(stationId, index);
+    });
+  }
+
+  function buildChartSelectionDiff(cf, entries) {
+    const previousIds = new Set(
+      cf?.seriesLayers instanceof Map
+        ? cf.seriesLayers.keys()
+        : (cf?.currentSeriesData?.entries || []).map((entry) => String(entry?.stationId || "").trim()).filter(Boolean),
+    );
+    const nextIds = new Set((Array.isArray(entries) ? entries : []).map((entry) => String(entry?.stationId || "").trim()).filter(Boolean));
+    return {
+      addedStationIds: new Set(Array.from(nextIds).filter((stationId) => !previousIds.has(stationId))),
+      removedStationIds: new Set(Array.from(previousIds).filter((stationId) => !nextIds.has(stationId))),
+      retainedStationIds: new Set(Array.from(nextIds).filter((stationId) => previousIds.has(stationId))),
+    };
+  }
+
   function rememberSelectedEntry(entry) {
     const normalized = normalizeEntry(entry);
     if (!normalized?.stationId) return null;
@@ -17337,7 +17377,8 @@
       const entry = state.visibleEntries.find((candidate) => candidate.stationId === stationId)
         || state.selectedEntries.get(stationId);
       if (!entry) return "";
-      const symbolMarkup = getChartSymbolMarkup(index, {
+      const symbolSlot = getChartVisualSlot(stationId, index);
+      const symbolMarkup = getChartSymbolMarkup(symbolSlot, {
         className: "hex-chart-symbol-svg chart-mode-sensor-symbol-svg",
         sizePx: 22,
         area: 120,
@@ -17434,36 +17475,34 @@
     return nearestEndpoint ? nearestEndpoint.value : null;
   }
 
-  function setChartHoverSeries(cf, hoveredSeriesIndex) {
-    if (!cf) return;
-    const maxSeriesIndex = Array.isArray(cf.seriesPaths) ? cf.seriesPaths.length - 1 : -1;
-    const hasHover = Number.isInteger(hoveredSeriesIndex) && hoveredSeriesIndex >= 0 && hoveredSeriesIndex <= maxSeriesIndex;
-    cf.hoveredSeriesIndex = hasHover ? hoveredSeriesIndex : null;
+  function setChartHoverSeries(cf, hoveredSeries) {
+    if (!cf?.seriesLayers) return;
+    let hoveredStationId = null;
+    if (typeof hoveredSeries === "string") {
+      hoveredStationId = hoveredSeries;
+    } else if (Number.isInteger(hoveredSeries) && hoveredSeries >= 0) {
+      hoveredStationId = cf.currentSeriesData?.entries?.[hoveredSeries]?.stationId || null;
+    }
+    const hasHover = Boolean(hoveredStationId && cf.seriesLayers.has(hoveredStationId));
+    cf.hoveredStationId = hasHover ? hoveredStationId : null;
 
-    cf.seriesPaths?.forEach((pathSel, index) => {
-      if (!pathSel) return;
-      pathSel
-        .classed("is-hovered", hasHover && index === hoveredSeriesIndex)
-        .classed("is-dimmed", hasHover && index !== hoveredSeriesIndex);
-    });
-
-    cf.seriesSymbolGroups?.forEach((groupSel, index) => {
-      if (!groupSel) return;
-      const isHovered = hasHover && index === hoveredSeriesIndex;
-      const isDimmed = hasHover && index !== hoveredSeriesIndex;
-      groupSel
-        .classed("is-hovered", isHovered)
+    cf.seriesLayers.forEach((layer, stationId) => {
+      const isHovered = hasHover && stationId === hoveredStationId;
+      const isDimmed = hasHover && stationId !== hoveredStationId;
+      layer.path
+        ?.classed("is-hovered", isHovered)
         .classed("is-dimmed", isDimmed);
-      groupSel.selectAll("path.chart-series-symbol").each(function () {
+      layer.symbolGroup
+        ?.classed("is-hovered", isHovered)
+        .classed("is-dimmed", isDimmed);
+      layer.symbolGroup?.selectAll("path.chart-series-symbol").each(function () {
         const symbol = d3.select(this);
         const symbolX = Number(this.getAttribute("data-symbol-x"));
         const symbolY = Number(this.getAttribute("data-symbol-y"));
         const baseTransform = Number.isFinite(symbolX) && Number.isFinite(symbolY)
           ? `translate(${symbolX},${symbolY})`
           : null;
-        if (baseTransform) {
-          symbol.attr("transform", isHovered ? `${baseTransform} scale(1.12)` : baseTransform);
-        }
+        if (baseTransform) symbol.attr("transform", isHovered ? `${baseTransform} scale(1.12)` : baseTransform);
         symbol
           .classed("is-hovered", isHovered)
           .classed("is-dimmed", isDimmed)
@@ -18864,7 +18903,8 @@
         return;
       }
 
-      const symbolIndex = selected ? selectedIds.indexOf(stationId) : -1;
+      const selectedIndex = selected ? selectedIds.indexOf(stationId) : -1;
+      const symbolIndex = selected ? getChartVisualSlot(stationId, selectedIndex) : -1;
       const symbolMarkup = getChartSymbolMarkup(symbolIndex, {
         className: "hex-chart-symbol-svg chart-mode-sensor-symbol-svg",
         sizePx: 28,
@@ -18884,6 +18924,7 @@
     const orderedIds = getOrderedVisibleStationIds(mapKey);
     if (!orderedIds.length) return false;
     if (action === "select-fill") {
+      const previousSelectedIds = getSelectedSensorIdsOrdered();
       const nextSelectedSet = new Set(state.chartModeSelectedSensors);
       for (const stationId of orderedIds) {
         if (nextSelectedSet.size >= MAX_SELECTED_SENSORS) break;
@@ -18902,12 +18943,14 @@
         state.selectedPrimaryId = orderedSelected[0] || null;
       }
       syncAqiSourceWithSelectedSensors();
+      syncChartStyleSlotsForSelection(previousSelectedIds);
       renderSensorList(getCurrentContext() || {});
       notifySelectionChange();
       loadChartData("sensor-change");
       return true;
     }
     if (action === "keep-top") {
+      const previousSelectedIds = getSelectedSensorIdsOrdered();
       const topSensorId = orderedIds[0] || null;
       if (!topSensorId) return false;
       const selectedOnlyTop = state.chartModeSelectedSensors.size === 1 && state.chartModeSelectedSensors.has(topSensorId);
@@ -18917,6 +18960,7 @@
       rememberSelectedEntry(state.visibleEntries.find((entry) => entry.stationId === topSensorId));
       state.selectedPrimaryId = topSensorId;
       state.selectedAqiSensorId = topSensorId;
+      syncChartStyleSlotsForSelection(previousSelectedIds);
       renderSensorList(getCurrentContext() || {});
       notifySelectionChange();
       loadChartData("sensor-change");
@@ -19048,6 +19092,7 @@
 
   function syncFromMap(mapKey = state.mapKey, options = {}) {
     if (!state.isChartMode || state.mapKey !== mapKey) return;
+    const previousSelectedIds = getSelectedSensorIdsOrdered();
     const context = getCurrentContext(mapKey);
     const nextSession = resolveChartSessionIdentity(mapKey, context);
     if (!nextSession.identity || nextSession.identity !== state.chartModeSessionIdentity) {
@@ -19067,6 +19112,7 @@
     }
     if (!state.chartModeSelectedSensors.has(state.selectedPrimaryId)) state.selectedPrimaryId = Array.from(state.chartModeSelectedSensors)[0] || null;
     syncAqiSourceWithSelectedSensors();
+    syncChartStyleSlotsForSelection(previousSelectedIds);
     renderSensorList(context);
     notifySelectionChange();
     // updateChart: false lets the caller handle the chart refresh (e.g. delta-only refresh).
@@ -19161,7 +19207,7 @@
 
     const newYDomain = computeYDomainNiced(seriesPointsMap, usableEntries, primaryGuideline);
     const selectedIds = getSelectedSensorIdsOrdered();
-    const aqiSourceSymbolIndex = Math.max(0, selectedIds.indexOf(primaryId));
+    const aqiSourceSymbolIndex = getChartVisualSlot(primaryId, Math.max(0, selectedIds.indexOf(primaryId)));
 
     // Animate to the new time range, then redraw fully once animation completes.
     animateChartDomains(cf, newRange, newYDomain, token, () => {
@@ -19201,6 +19247,7 @@
 
   function toggleSensor(stationId) {
     if (!stationId) return;
+    const previousSelectedIds = getSelectedSensorIdsOrdered();
     const normalizedId = String(stationId || "").trim();
     if (!normalizedId) return;
     if (state.chartModeSelectedSensors.has(normalizedId)) {
@@ -19223,12 +19270,14 @@
       state.selectedPrimaryId = state.selectedPrimaryId || normalizedId;
     }
     syncAqiSourceWithSelectedSensors();
+    syncChartStyleSlotsForSelection(previousSelectedIds);
     renderSensorList(getCurrentContext() || {});
     notifySelectionChange();
     loadChartData("sensor-change");
   }
 
   function selectSensor(stationId, options = {}) {
+    const previousSelectedIds = getSelectedSensorIdsOrdered();
     const normalizedId = String(stationId || "").trim();
     if (!state.isChartMode || !normalizedId) return false;
     const mapKey = options.mapKey || null;
@@ -19244,6 +19293,7 @@
     rememberSelectedEntry(state.visibleEntries.find((entry) => entry.stationId === normalizedId));
     state.selectedPrimaryId = normalizedId;
     state.selectedAqiSensorId = normalizedId;
+    syncChartStyleSlotsForSelection(previousSelectedIds);
     renderSensorList(getCurrentContext() || {});
     notifySelectionChange();
     loadChartData("sensor-change");
@@ -20146,25 +20196,28 @@
   function animateChartDomains(cf, newRange, newYDomain, token, onComplete) {
     if (cf.animFrameId != null) cancelAnimationFrame(cf.animFrameId);
     cf.animFrameId = null;
-    // Hide symbols for the duration of the animation; updateChart redraws them on completion.
-    cf.seriesSymbolGroups?.forEach((g) => g.style("opacity", 0));
+    cf.seriesLayers?.forEach((layer) => layer.symbolGroup?.style("opacity", 0));
     const startX = cf.xScale.domain().map((d) => d.getTime());
     const startY = cf.yScale.domain().slice();
-    const endX   = [newRange.startDate.getTime(), newRange.endDate.getTime()];
-    const endY   = newYDomain;
+    const endX = [newRange.startDate.getTime(), newRange.endDate.getTime()];
+    const endY = newYDomain;
     const t0 = performance.now();
     const DURATION = 240;
     const rangeMs = newRange.endMs - newRange.startMs;
-    const lineFn  = d3.line().x((p) => cf.xScale(p.date)).y((p) => cf.yScale(p.value));
+    const lineFn = d3.line().x((point) => cf.xScale(point.date)).y((point) => cf.yScale(point.value));
 
     function frame(now) {
       if (token !== state.loadToken) return;
-      const raw  = Math.min(1, (now - t0) / DURATION);
+      const raw = Math.min(1, (now - t0) / DURATION);
       const ease = raw < 0.5 ? 2 * raw * raw : -1 + (4 - 2 * raw) * raw;
-
-      cf.xScale.domain([new Date(startX[0] + (endX[0] - startX[0]) * ease), new Date(startX[1] + (endX[1] - startX[1]) * ease)]);
-      cf.yScale.domain([startY[0] + (endY[0] - startY[0]) * ease, startY[1] + (endY[1] - startY[1]) * ease]);
-
+      cf.xScale.domain([
+        new Date(startX[0] + (endX[0] - startX[0]) * ease),
+        new Date(startX[1] + (endX[1] - startX[1]) * ease),
+      ]);
+      cf.yScale.domain([
+        startY[0] + (endY[0] - startY[0]) * ease,
+        startY[1] + (endY[1] - startY[1]) * ease,
+      ]);
       cf.xAxisGroup.call(buildChartXAxis(cf.xScale, rangeMs));
       cf.yAxisGroup.call(d3.axisLeft(cf.yScale).ticks(5).tickSizeOuter(0));
       const currentDomain = cf.xScale.domain();
@@ -20175,20 +20228,17 @@
         aqiLoading: cf.currentAqiLoading,
         aqiSourceSymbolIndex: cf.currentAqiSourceSymbolIndex,
       });
-
-      const csd = cf.currentSeriesData;
-      if (csd?.seriesSegments) {
-        csd.entries.forEach((entry, i) => {
-          const segs = csd.seriesSegments[i] || [];
-          if (cf.seriesPaths[i]) cf.seriesPaths[i].attr("d", segs.map((s) => lineFn(s)).join(" ") || null);
-        });
-      }
+      const current = cf.currentSeriesData;
+      current?.entries?.forEach((entry, index) => {
+        const layer = cf.seriesLayers?.get(entry.stationId);
+        const segments = current.seriesSegments?.[index] || [];
+        layer?.path?.attr("d", segments.map((segment) => lineFn(segment)).join(" ") || null);
+      });
       if (cf.currentGuideline && Number.isFinite(Number(cf.currentGuideline.limit_value))) {
         const gy = cf.yScale(Number(cf.currentGuideline.limit_value));
         cf.guidelineEl.attr("y1", gy).attr("y2", gy);
         cf.guidelineLabelEl.attr("y", Math.max(cf.margin.top + 12, gy - 6));
       }
-
       if (raw < 1) {
         cf.animFrameId = requestAnimationFrame(frame);
       } else {
@@ -20260,7 +20310,7 @@
         state.selectedAqiSensorId = aqiSourceId;
         renderSensorList(getCurrentContext() || {});
       }
-      const aqiSourceSymbolIndex = Math.max(0, selectedIds.indexOf(aqiSourceId));
+      const aqiSourceSymbolIndex = getChartVisualSlot(aqiSourceId, Math.max(0, selectedIds.indexOf(aqiSourceId)));
 
       const windowValue = normalizeChartRangeValue(state.chartModeTimeRange);
       const range = resolveRange(windowValue);
@@ -20909,7 +20959,8 @@
       pointsMap.set(entry.stationId, mayRenderObservations ? getPointsInRange(record?.observation_points || [], range) : []);
     });
     const selectedIds = getSelectedSensorIdsOrdered();
-    const sourceSymbolIndex = Math.max(0, selectedIds.indexOf(primaryEntry.stationId));
+    const sourceSelectedIndex = Math.max(0, selectedIds.indexOf(primaryEntry.stationId));
+    const sourceSymbolIndex = getChartVisualSlot(primaryEntry.stationId, sourceSelectedIndex);
     const legacyGuideline = seriesDataCache.get(buildSeriesCacheKey(primaryEntry))?.guideline || null;
     updateChart(dom, pointsMap, entries, range, primaryRecord?.guideline || legacyGuideline || primaryEntry?.guideline || null, units, includeCachedAqi ? getPointsInRange(primaryRecord?.aqi_points || [], range) : [], {
       aqiLoading,
@@ -20919,6 +20970,10 @@
       aqiCacheKey: buildStationHistoryCacheKey(primaryEntry),
       skipAqiRepaint: options.skipAqiRepaint,
       aqiChangeOnly: options.aqiChangeOnly,
+      aqiSourceStationId: primaryEntry.stationId,
+      selectionDiff: options.selectionDiff || null,
+      selectionChangeOnly: options.selectionChangeOnly === true,
+      changedStationIds: options.changedStationIds instanceof Set ? options.changedStationIds : null,
     });
   }
 
@@ -20943,7 +20998,8 @@
       || null;
     cf.currentAqiPoints = getPointsInRange(primaryRecord?.aqi_points || [], range);
     cf.currentAqiKey = buildStationHistoryCacheKey(primaryEntry);
-    cf.currentAqiSourceSymbolIndex = Math.max(0, selectedIds.indexOf(primaryEntry.stationId));
+    cf.currentAqiSourceSymbolIndex = getChartVisualSlot(primaryEntry.stationId, Math.max(0, selectedIds.indexOf(primaryEntry.stationId)));
+    cf.currentAqiSourceStationId = primaryEntry.stationId;
   }
 
   function createStationHistoryRenderScheduler(render, signal, token) {
@@ -21183,7 +21239,251 @@
         selected_series_count: entries.length,
       });
       if (!frameValid) initChartFrame(dom, range, MAX_SELECTED_SENSORS);
-      const preserveExistingFrame = frameValid && ["window-change", "refresh", "aqi-source-change"].includes(reason);
+
+      // Sensor selection and AQI-source changes keep the existing frame and use
+      // a targeted loading path. Retained observation series are never fetched
+      // or repainted unless a scale change makes new coordinates necessary.
+      if (frameValid && (reason === "sensor-change" || isAqiSourceChangeOnly)) {
+        const selectionDiff = reason === "sensor-change"
+          ? buildChartSelectionDiff(existing, entries)
+          : { addedStationIds: new Set(), removedStationIds: new Set(), retainedStationIds: new Set(entries.map((entry) => entry.stationId)) };
+        const addedEntries = entries.filter((entry) => selectionDiff.addedStationIds.has(entry.stationId));
+        const changedStationIds = new Set(selectionDiff.addedStationIds);
+        const currentObservationIds = new Set(entries.map((entry) => entry.stationId));
+        const nextAqiKey = buildStationHistoryCacheKey(primary);
+        const aqiSourceChanged = isAqiSourceChangeOnly
+          || (existing.currentAqiSourceStationId && existing.currentAqiSourceStationId !== primary.stationId)
+          || (existing.currentAqiKey && existing.currentAqiKey !== nextAqiKey);
+        const targetedRenderOptions = {
+          currentObservationStationIds: currentObservationIds,
+          selectionDiff,
+          selectionChangeOnly: true,
+          changedStationIds,
+          skipAqiRepaint: !aqiSourceChanged,
+          aqiChangeOnly: false,
+        };
+
+        renderStationHistoryChart(dom, entries, range, units, primary, aqiSourceChanged, addedEntries.length > 0, targetedRenderOptions);
+
+        if (!addedEntries.length && !aqiSourceChanged) {
+          setMessage("");
+          return;
+        }
+
+        setLoading(true);
+        const loader = window.UkAqStationHistoryLoader;
+        const payloadByStationId = new Map();
+        const failedAddedStationIds = new Set();
+        let sourcePayload = null;
+        let aqiSourceFailed = false;
+
+        const mergeAqiHead = (entry, record, payload) => {
+          record.identity = loader.resolveAuthoritativeIdentity(payload, {
+            timeseriesId: entry.timeseriesId,
+            pollutant: entry.pollutant || getCurrentContext()?.pollutant,
+          });
+          if (!record.identity) throw new Error("station_series_authoritative_identity_invalid");
+          const bounds = stationSeriesHeadBounds(payload, "aqi", range);
+          const merged = loader.replaceAuthoritativeAqiHead(
+            record.aqi_points,
+            parseStationSeriesAqiPoints(payload.aqi),
+            bounds?.startUtc,
+            bounds?.endUtc,
+          );
+          record.aqi_points = merged.points;
+          record.aqi_complete = stationHistoryIsComplete(payload.aqi) && !stationHistoryNextBoundary(payload.aqi, "aqi");
+          record.stable_head_start_utc = bounds?.startUtc || null;
+          record.stable_head_end_utc = bounds?.endUtc || null;
+          record.updated_at = new Date().toISOString();
+          loader.recordCoverageInterval(
+            record,
+            "aqi",
+            { start_utc: bounds?.startUtc, end_utc: bounds?.endUtc },
+            stationHistoryIsComplete(payload.aqi) ? "complete" : "partial",
+            { partial_reasons: payload?.aqi?.partial_reasons },
+          );
+          return { bounds, cursor: stationHistoryNextBoundary(payload.aqi, "aqi") };
+        };
+
+        const mergeObservationHead = (entry, record, payload) => {
+          if (!record.identity) {
+            record.identity = loader.resolveAuthoritativeIdentity(payload, {
+              timeseriesId: entry.timeseriesId,
+              pollutant: entry.pollutant || getCurrentContext()?.pollutant,
+            });
+          }
+          if (!record.identity) throw new Error("station_series_authoritative_identity_invalid");
+          const bounds = stationSeriesHeadBounds(payload, "observations", range);
+          record.observation_points = loader.replaceAuthoritativeObservationHead(
+            record.observation_points,
+            parseStationSeriesObservationPoints(payload.observations),
+            bounds?.startUtc,
+            bounds?.endUtc,
+          );
+          record.observations_complete = stationHistoryIsComplete(payload.observations)
+            && !stationHistoryNextBoundary(payload.observations, "observations");
+          record.guideline = payload?.observations?.guideline || record.guideline || null;
+          record.observation_head_start_utc = bounds?.startUtc || null;
+          record.observation_head_end_utc = bounds?.endUtc || null;
+          record.current_observation_next_chunk_end_utc = stationHistoryNextBoundary(payload.observations, "observations");
+          record.current_failed = false;
+          loader.recordCoverageInterval(
+            record,
+            "observations",
+            { start_utc: bounds?.startUtc, end_utc: bounds?.endUtc },
+            stationHistoryIsComplete(payload.observations) ? "complete" : "partial",
+            { partial_reasons: payload?.observations?.partial_reasons },
+          );
+          return { bounds, cursor: record.current_observation_next_chunk_end_utc };
+        };
+
+        let aqiHead = null;
+        if (aqiSourceChanged) {
+          try {
+            primaryRequestCount += 1;
+            sourcePayload = await fetchStationSeriesBundle(primary, range, windowValue, true, signal);
+            if (signal.aborted || token !== state.loadToken) return;
+            payloadByStationId.set(primary.stationId, sourcePayload);
+            aqiHead = mergeAqiHead(primary, getStationHistoryRecord(primary), sourcePayload);
+            if (selectionDiff.addedStationIds.has(primary.stationId)) {
+              mergeObservationHead(primary, getStationHistoryRecord(primary), sourcePayload);
+            }
+            renderStationHistoryChart(dom, entries, range, units, primary, true, addedEntries.length > 0, {
+              currentObservationStationIds: currentObservationIds,
+              selectionChangeOnly: true,
+              changedStationIds,
+              aqiChangeOnly: !selectionDiff.addedStationIds.has(primary.stationId),
+            });
+          } catch (error) {
+            if (signal.aborted || token !== state.loadToken) return;
+            aqiSourceFailed = true;
+            recordWebsiteDebugEvent("station_history_aqi_source_failed", {
+              route: "station-series",
+              timeseries_id: primary.timeseriesId,
+              error: serializeDebugError(error),
+            });
+            setMessage("AQI bands could not be updated for the selected sensor.", { error: true });
+          }
+        }
+
+        const remainingAddedEntries = addedEntries.filter((entry) => !payloadByStationId.has(entry.stationId));
+        await runChunkQueueWithConcurrency(remainingAddedEntries, ADDITIONAL_OBSERVATION_CONCURRENCY, async (entry) => {
+          const record = getStationHistoryRecord(entry);
+          try {
+            secondaryRequestCount += 1;
+            const payload = await fetchStationSeriesBundle(entry, range, windowValue, false, signal);
+            if (signal.aborted || token !== state.loadToken) return;
+            payloadByStationId.set(entry.stationId, payload);
+            mergeObservationHead(entry, record, payload);
+            renderStationHistoryChart(dom, entries, range, units, primary, aqiSourceChanged, true, {
+              currentObservationStationIds: currentObservationIds,
+              selectionChangeOnly: true,
+              changedStationIds: new Set([entry.stationId]),
+              skipAqiRepaint: true,
+            });
+          } catch (error) {
+            record.current_failed = true;
+            failedAddedStationIds.add(entry.stationId);
+            recordWebsiteDebugEvent("station_series_added_sensor_failed", {
+              route: "station-series",
+              timeseries_id: entry.timeseriesId,
+              error: serializeDebugError(error),
+            });
+          }
+        });
+        if (signal.aborted || token !== state.loadToken) return;
+
+        const aqiScheduler = createStationHistoryRenderScheduler(() => {
+          renderStationHistoryChart(dom, entries, range, units, primary, true, addedEntries.length > 0, {
+            currentObservationStationIds: currentObservationIds,
+            aqiChangeOnly: true,
+          });
+        }, signal, token);
+        if (aqiSourceChanged && aqiHead?.cursor) {
+          await loadStationHistoryOlderChunks(
+            "aqi",
+            primary,
+            getStationHistoryRecord(primary),
+            range,
+            aqiHead.bounds?.startUtc,
+            aqiHead.cursor,
+            windowValue,
+            aqiScheduler,
+            signal,
+            token,
+            STATION_HISTORY_AQI_CHUNK_CONCURRENCY,
+          );
+          await aqiScheduler.flush();
+        }
+        if (signal.aborted || token !== state.loadToken) return;
+
+        const observationWorkEntries = addedEntries.filter((entry) => {
+          const record = getStationHistoryRecord(entry);
+          return !failedAddedStationIds.has(entry.stationId) && record.current_observation_next_chunk_end_utc;
+        });
+        const observationChunkCount = observationWorkEntries.reduce((count, entry) => {
+          const record = getStationHistoryRecord(entry);
+          return count + loader.buildMissingChunkWorkList(
+            record,
+            "observations",
+            range.startIso,
+            record.current_observation_next_chunk_end_utc,
+            getChunkSpanMs(windowValue),
+          ).length;
+        }, 0);
+        beginObservationProgress(observationChunkCount);
+        const observationScheduler = createStationHistoryRenderScheduler(() => {
+          renderStationHistoryChart(dom, entries, range, units, primary, false, true, {
+            currentObservationStationIds: currentObservationIds,
+            selectionChangeOnly: true,
+            changedStationIds,
+            skipAqiRepaint: true,
+          });
+        }, signal, token);
+        await runChunkQueueWithConcurrency(
+          observationWorkEntries,
+          STATION_HISTORY_OBSERVATION_STREAM_CONCURRENCY,
+          async (entry) => {
+            const record = getStationHistoryRecord(entry);
+            await loadStationHistoryOlderChunks(
+              "observations",
+              entry,
+              record,
+              range,
+              record.observation_head_start_utc,
+              record.current_observation_next_chunk_end_utc,
+              windowValue,
+              observationScheduler,
+              signal,
+              token,
+              STATION_HISTORY_OBSERVATION_CHUNK_CONCURRENCY,
+              settleObservationProgress,
+            );
+          },
+        );
+        clearObservationProgress();
+        await observationScheduler.flush();
+        if (signal.aborted || token !== state.loadToken) return;
+
+        renderStationHistoryChart(dom, entries, range, units, primary, false, false, {
+          currentObservationStationIds: currentObservationIds,
+          selectionChangeOnly: true,
+          changedStationIds,
+          skipAqiRepaint: !aqiSourceChanged,
+          aqiChangeOnly: aqiSourceChanged && !addedEntries.length,
+        });
+        if (failedAddedStationIds.size) {
+          const count = failedAddedStationIds.size;
+          setMessage(`Current data is unavailable for ${count} added sensor${count === 1 ? "" : "s"}.`, { error: true });
+        } else if (aqiSourceFailed) {
+          setMessage("AQI bands could not be updated for the selected sensor.", { error: true });
+        } else {
+          setMessage("");
+        }
+        return;
+      }
+
+      const preserveExistingFrame = frameValid && ["window-change", "refresh"].includes(reason);
       if (preserveExistingFrame) {
         // Reuse the legacy transition: stage all intersecting station-history
         // cache points into the existing frame, then stretch/compress its
@@ -21812,6 +22112,7 @@
     // We now initialize an empty Map instead of static arrays.
     // Layers will be created incrementally by updateChart.
     const seriesLayers = new Map();
+    const stationStyles = new Map();
 
     const dot = dom.svg.append("circle").attr("class", "chart-dot").attr("r", 5).style("opacity", 0);
     const overlay = dom.svg.append("rect")
@@ -21864,12 +22165,14 @@
         setChartHoverSeries(cf, null);
         return;
       }
-      setChartHoverSeries(cf, closestSeriesIdx);
+      setChartHoverSeries(cf, closest.entry.stationId);
       const x = cf.xScale(closest.point.date);
       const y = cf.yScale(closest.point.value);
       cf.dot.attr("cx", x).attr("cy", y).style("opacity", 1);
       if (dom.tooltip) {
-        const symbolHtml = getChartSymbolMarkup(closestSeriesIdx, {
+        const symbolSlot = cf.seriesLayers?.get(closest.entry.stationId)?.slotIndex
+          ?? getChartVisualSlot(closest.entry.stationId, closestSeriesIdx);
+        const symbolHtml = getChartSymbolMarkup(symbolSlot, {
           className: "chart-tooltip-symbol",
           sizePx: 22,
           area: 72,
@@ -21923,7 +22226,7 @@
       yAxisLabelEl,
       aqiBandsContainer,
       guidelineEl, guidelineLabelEl,
-      seriesLayers, clipPathId,
+      seriesLayers, stationStyles, clipPathId,
       dot, overlay, progressBar: null,
       margin, width, height,
       frame: { width, height, margin, startMs: range.startMs, endMs: range.endMs },
@@ -21937,48 +22240,81 @@
       currentAqiKey: null,
       currentAqiLoading: false,
       currentAqiSourceSymbolIndex: -1,
-      hoveredSeriesIndex: null,
+      currentAqiSourceStationId: null,
+      hoveredStationId: null,
       emptyStateGroup: null,
     };
   }
 
-  function reconcileObservationSeriesLayers(cf, usableEntries) {
-    if (!cf || !cf.seriesLayers) return;
-    const currentIds = new Set(cf.seriesLayers.keys());
-    const newIds = new Set(usableEntries.map(e => e.stationId));
+  function assignLayerSlotIndex(cf, stationId) {
+    if (cf.stationStyles.has(stationId)) return cf.stationStyles.get(stationId);
+    const usedSlots = new Set(cf.stationStyles.values());
+    let slotIndex = 0;
+    while (usedSlots.has(slotIndex)) {
+      slotIndex++;
+    }
+    cf.stationStyles.set(stationId, slotIndex);
+    return slotIndex;
+  }
 
-    // Remove obsolete layers
-    for (const id of currentIds) {
-      if (!newIds.has(id)) {
+  function reconcileObservationSeriesLayers(cf, usableEntries, selectionDiff) {
+    if (!cf || !cf.seriesLayers) return;
+
+    if (selectionDiff) {
+      // Remove only explicitly removed stations
+      selectionDiff.removedStationIds.forEach(id => {
         const layer = cf.seriesLayers.get(id);
-        layer.path?.remove();
-        layer.symbolGroup?.remove();
-        cf.seriesLayers.delete(id);
+        if (layer) {
+          layer.path?.remove();
+          layer.symbolGroup?.remove();
+          cf.seriesLayers.delete(id);
+        }
+        cf.stationStyles.delete(id);
+      });
+    } else {
+      // Fallback: remove obsolete layers
+      const currentIds = new Set(cf.seriesLayers.keys());
+      const newIds = new Set(usableEntries.map(e => e.stationId));
+      for (const id of currentIds) {
+        if (!newIds.has(id)) {
+          const layer = cf.seriesLayers.get(id);
+          layer.path?.remove();
+          layer.symbolGroup?.remove();
+          cf.seriesLayers.delete(id);
+          cf.stationStyles.delete(id);
+        }
       }
     }
 
     // Add new layers and update visual indices
-    usableEntries.forEach((entry, i) => {
-      if (!cf.seriesLayers.has(entry.stationId)) {
+    usableEntries.forEach((entry) => {
+      const isNew = !cf.seriesLayers.has(entry.stationId);
+      if (isNew) {
+        const slotIndex = assignLayerSlotIndex(cf, entry.stationId);
         const path = d3.select(cf.svgEl).insert("path", ".chart-dot")
           .attr("class", "chart-line")
+          .attr("data-series-index", String(slotIndex))
           .attr("clip-path", `url(#${cf.clipPathId})`);
         
         const symbolGroup = d3.select(cf.svgEl).insert("g", ".chart-dot")
-          .attr("class", `chart-symbols-${i}`)
+          .attr("class", `chart-symbols-${slotIndex}`)
+          .attr("data-series-index", String(slotIndex))
           .attr("clip-path", `url(#${cf.clipPathId})`);
 
-        cf.seriesLayers.set(entry.stationId, { path, symbolGroup });
+        cf.seriesLayers.set(entry.stationId, { path, symbolGroup, slotIndex });
       }
       
       const layer = cf.seriesLayers.get(entry.stationId);
-      layer.path.attr("data-series-index", String(i));
-      layer.symbolGroup.attr("class", `chart-symbols-${i}`)
-        .attr("data-series-index", String(i));
-      
-      // Ensure z-index ordering matches selection
-      layer.path.raise();
-      layer.symbolGroup.raise();
+      layer.slotIndex = getChartVisualSlot(entry.stationId, 0);
+      if (isNew || !selectionDiff) {
+        layer.path.attr("data-series-index", String(layer.slotIndex));
+        layer.symbolGroup
+          .attr("class", `chart-symbols-${layer.slotIndex}`)
+          .attr("data-series-index", String(layer.slotIndex));
+        // A targeted selection update must not reorder retained DOM nodes.
+        layer.path.raise();
+        layer.symbolGroup.raise();
+      }
     });
 
     // Raise overlay elements to stay on top
@@ -21989,6 +22325,7 @@
 
   function updateAqiLayer(cf, aqiPoints, renderOptions) {
     if (renderOptions.skipAqiRepaint) return;
+    if (renderOptions.aqiSourceStationId) cf.currentAqiSourceStationId = renderOptions.aqiSourceStationId;
     if (aqiPoints !== undefined) {
       const nextAqiKey = renderOptions.aqiCacheKey || null;
       if (renderOptions.forceClearAqi === true) {
@@ -22059,51 +22396,86 @@
       cf.emptyStateGroup.remove();
       cf.emptyStateGroup = null;
     }
-
-    // Cancel any running domain animation — we now have real data.
     if (cf.animFrameId != null) {
       cancelAnimationFrame(cf.animFrameId);
       cf.animFrameId = null;
     }
 
-    // Update x-axis domain to match the current range.
+    const previousXDomain = cf.xScale.domain().map((value) => value.getTime());
+    const xChanged = Math.abs(previousXDomain[0] - range.startMs) > 1 || Math.abs(previousXDomain[1] - range.endMs) > 1;
+    const currentYDomain = cf.yScale.domain().slice();
+    const newYDomain = computeYDomainNiced(seriesPointsMap, usableEntries, guideline);
+    const yChanged = Math.abs(newYDomain[0] - currentYDomain[0]) > 1e-9
+      || Math.abs(newYDomain[1] - currentYDomain[1]) > 1e-9;
+
     cf.xScale.domain([range.startDate, range.endDate]);
     cf.frame.startMs = range.startMs;
     cf.frame.endMs = range.endMs;
-    const rangeMs = range.endMs - range.startMs;
-    cf.xAxisGroup.call(buildChartXAxis(cf.xScale, rangeMs));
-
-    // Snapshot current y-domain before computing the new one.
-    const currentYDomain = cf.yScale.domain().slice();
-    const newYDomain     = computeYDomainNiced(seriesPointsMap, usableEntries, guideline);
-    const yChanged = Math.abs(newYDomain[0] - currentYDomain[0]) > 1e-9 ||
-                     Math.abs(newYDomain[1] - currentYDomain[1]) > 1e-9;
-
-    // Store guideline for animation redraws.
     cf.currentGuideline = guideline || null;
 
+    reconcileObservationSeriesLayers(cf, usableEntries, renderOptions.selectionDiff);
+
+    const lineFn = d3.line()
+      .x((point) => cf.xScale(point.date))
+      .y((point) => cf.yScale(point.value));
+    const windowValue = normalizeChartRangeValue(state.chartModeTimeRange);
+    const intervalMs = ChartCore.getSymbolIntervalMs(windowValue);
+    const seriesSegments = usableEntries.map((entry) => ChartCore.buildSegments(seriesPointsMap.get(entry.stationId) || []));
+    cf.currentSeriesData = { entries: usableEntries, pointsMap: seriesPointsMap, seriesSegments, units };
+
     updateAqiLayer(cf, aqiPoints, renderOptions);
+    if (cf.yAxisLabelEl) cf.yAxisLabelEl.text(buildYAxisLabel(units));
 
-    if (cf.yAxisLabelEl) {
-      const axisLabel = buildYAxisLabel(units);
-      cf.yAxisLabelEl.text(axisLabel);
-    }
-
-    if (renderOptions.aqiChangeOnly && !yChanged) {
+    if (renderOptions.aqiChangeOnly && !xChanged && !yChanged) {
       updateGuidelineLayer(cf, guideline, seriesPointsMap, usableEntries);
       return;
     }
 
-    // Build line generator and segments (used every animation frame and at finalize).
-    const lineFn = d3.line()
-      .x((p) => cf.xScale(p.date))
-      .y((p) => cf.yScale(p.value));
-    const windowValue = normalizeChartRangeValue(state.chartModeTimeRange);
-    const intervalMs  = ChartCore.getSymbolIntervalMs(windowValue);
-    const seriesSegments = [];
-    usableEntries.forEach((entry) => {
-      seriesSegments.push(ChartCore.buildSegments(seriesPointsMap.get(entry.stationId) || []));
-    });
+    const allStationIds = new Set(usableEntries.map((entry) => entry.stationId));
+    const explicitlyChanged = renderOptions.changedStationIds instanceof Set
+      ? renderOptions.changedStationIds
+      : null;
+    const updateStationIds = (xChanged || yChanged || renderOptions.selectionChangeOnly !== true || !explicitlyChanged)
+      ? allStationIds
+      : new Set(Array.from(explicitlyChanged).filter((stationId) => allStationIds.has(stationId)));
+
+    if (xChanged) {
+      cf.xAxisGroup.call(buildChartXAxis(cf.xScale, range.endMs - range.startMs));
+    }
+
+    const drawPaths = (stationIds) => {
+      usableEntries.forEach((entry, index) => {
+        if (!stationIds.has(entry.stationId)) return;
+        const layer = cf.seriesLayers?.get(entry.stationId);
+        const segments = seriesSegments[index] || [];
+        layer?.path?.attr("d", segments.map((segment) => lineFn(segment)).join(" ") || null);
+      });
+    };
+
+    const drawSymbols = (stationIds) => {
+      usableEntries.forEach((entry, index) => {
+        if (!stationIds.has(entry.stationId)) return;
+        const points = seriesPointsMap.get(entry.stationId) || [];
+        const segments = seriesSegments[index] || [];
+        const layer = cf.seriesLayers?.get(entry.stationId);
+        if (!layer?.symbolGroup) return;
+        layer.symbolGroup.selectAll("*").remove();
+        layer.symbolGroup.style("opacity", 1);
+        if (!points.length || !segments.length) return;
+        const symbolSet = ChartCore.getSymbolPositions(points, segments, intervalMs);
+        const slotIndex = Number.isInteger(layer.slotIndex)
+          ? layer.slotIndex
+          : getChartVisualSlot(entry.stationId, index);
+        ChartCore.renderSeriesSymbols(layer.symbolGroup, points, symbolSet, cf.xScale, cf.yScale, slotIndex);
+      });
+    };
+
+    const finish = (stationIds) => {
+      updateGuidelineLayer(cf, guideline, seriesPointsMap, usableEntries);
+      drawSymbols(stationIds);
+      setChartHoverSeries(cf, cf.hoveredStationId);
+    };
+
     if (isChartDebugEnabled()) {
       console.debug("[uk-aq chart]", "render-lines", {
         selected_chart_identity: {
@@ -22114,95 +22486,47 @@
         range_label: windowValue,
         range_start_utc: range.startDate.toISOString(),
         range_end_utc: range.endDate.toISOString(),
-        series: usableEntries.map((entry, index) => {
-          const points = seriesPointsMap.get(entry.stationId) || [];
-          const gapSummary = summarizeParsedGapRanges(points, range);
-          return {
-            timeseries_id: entry?.timeseriesId || null,
-            station_id: getEntryStationId(entry),
-            connector_id: getEntryConnectorId(entry),
-            pollutant: entry?.pollutant || getCurrentContext()?.pollutant || null,
-            parsed_point_count: points.length,
-            rendered_line_segment_count: Array.isArray(seriesSegments[index]) ? seriesSegments[index].length : 0,
-            parsed_gap_ranges: gapSummary.ranges,
-            parsed_gap_range_count: gapSummary.total,
-            parsed_gap_ranges_truncated: gapSummary.truncated,
-          };
-        }),
+        incremental: renderOptions.selectionChangeOnly === true,
+        changed_station_ids: Array.from(updateStationIds),
+        x_changed: xChanged,
+        y_changed: yChanged,
       });
     }
 
-    reconcileObservationSeriesLayers(cf, usableEntries);
+    if (!yChanged) {
+      cf.yScale.domain(newYDomain);
+      drawPaths(updateStationIds);
+      finish(updateStationIds);
+      return;
+    }
 
-    // Expose current data immediately so the hover handler works during animation.
-    cf.currentSeriesData = { entries: usableEntries, pointsMap: seriesPointsMap, seriesSegments, units };
-
-    // Redraws y-axis, all series paths, and the guideline line position each RAF frame.
-    function applyScales() {
+    cf.seriesLayers?.forEach((layer) => layer.symbolGroup?.style("opacity", 0));
+    const startY = currentYDomain;
+    const t0 = performance.now();
+    const DURATION = 150;
+    function frame(now) {
+      const raw = Math.min(1, (now - t0) / DURATION);
+      const ease = raw < 0.5 ? 2 * raw * raw : -1 + (4 - 2 * raw) * raw;
+      cf.yScale.domain([
+        startY[0] + (newYDomain[0] - startY[0]) * ease,
+        startY[1] + (newYDomain[1] - startY[1]) * ease,
+      ]);
       cf.yAxisGroup.call(d3.axisLeft(cf.yScale).ticks(5).tickSizeOuter(0));
-      usableEntries.forEach((entry, i) => {
-        const segs = seriesSegments[i] || [];
-        const layer = cf.seriesLayers?.get(entry.stationId);
-        if (layer?.path) layer.path.attr("d", segs.map((s) => lineFn(s)).join(" ") || null);
-      });
+      drawPaths(allStationIds);
       const guidelineValue = Number(guideline?.limit_value);
       if (Number.isFinite(guidelineValue)) {
         const gy = cf.yScale(guidelineValue);
         cf.guidelineEl.attr("y1", gy).attr("y2", gy);
         cf.guidelineLabelEl.attr("y", Math.max(cf.margin.top + 12, gy - 6));
       }
-    }
-
-    // Called once the y-domain has reached its final value: sets guideline visibility and redraws symbols.
-    function finalizeSymbols() {
-      updateGuidelineLayer(cf, guideline, seriesPointsMap, usableEntries);
-      usableEntries.forEach((entry, i) => {
-        const points   = seriesPointsMap.get(entry.stationId) || [];
-        const segments = seriesSegments[i] || [];
-        const layer = cf.seriesLayers?.get(entry.stationId);
-        if (layer?.symbolGroup) {
-          layer.symbolGroup.selectAll("*").remove();
-          layer.symbolGroup.style("opacity", 1);
-          if (points.length && segments.length) {
-            const symbolSet = ChartCore.getSymbolPositions(points, segments, intervalMs);
-            ChartCore.renderSeriesSymbols(layer.symbolGroup, points, symbolSet, cf.xScale, cf.yScale, i);
-          }
-        }
-      });
-      setChartHoverSeries(cf, cf.hoveredSeriesIndex);
-    }
-
-    if (!yChanged) {
-      // Domain unchanged — snap and finalize with no animation.
-      cf.yScale.domain(newYDomain);
-      applyScales();
-      finalizeSymbols();
-      return;
-    }
-
-    // y-domain is changing: hide symbols and animate over 150 ms.
-    if (cf.seriesLayers) {
-      cf.seriesLayers.forEach((layer) => layer.symbolGroup?.style("opacity", 0));
-    }
-    const startY   = currentYDomain;
-    const t0       = performance.now();
-    const DURATION = 150;
-
-    function frame(now) {
-      const raw  = Math.min(1, (now - t0) / DURATION);
-      const ease = raw < 0.5 ? 2 * raw * raw : -1 + (4 - 2 * raw) * raw;
-      cf.yScale.domain([
-        startY[0] + (newYDomain[0] - startY[0]) * ease,
-        startY[1] + (newYDomain[1] - startY[1]) * ease,
-      ]);
-      applyScales();
       if (raw < 1) {
         cf.animFrameId = requestAnimationFrame(frame);
       } else {
         cf.animFrameId = null;
         cf.yScale.domain(newYDomain);
-        applyScales();
-        finalizeSymbols();
+        cf.yAxisGroup.call(d3.axisLeft(cf.yScale).ticks(5).tickSizeOuter(0));
+        drawPaths(allStationIds);
+        finish(allStationIds);
       }
     }
     cf.animFrameId = requestAnimationFrame(frame);
@@ -22267,8 +22591,10 @@
     getSelectedSensorIndex: (mapKey = null, stationId = "") => {
       if (!state.isChartMode) return -1;
       if (mapKey && state.mapKey !== mapKey) return -1;
+      const normalizedId = String(stationId || "");
       const selectedIds = Array.from(state.chartModeSelectedSensors);
-      return selectedIds.indexOf(String(stationId || ""));
+      const selectedIndex = selectedIds.indexOf(normalizedId);
+      return selectedIndex < 0 ? -1 : getChartVisualSlot(normalizedId, selectedIndex);
     },
   };
 })();

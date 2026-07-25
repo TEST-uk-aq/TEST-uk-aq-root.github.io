@@ -1,1 +1,1 @@
-Trigger the temporary one-off Hex Map chart resize workflow.
+Retry the temporary one-off Hex Map chart resize workflow after narrowing the guarded match.

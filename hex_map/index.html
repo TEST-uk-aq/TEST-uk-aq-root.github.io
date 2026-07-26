@@ -16995,6 +16995,8 @@
     1,
     Math.floor(CHART_GLOBAL_FETCH_CAP / STATION_HISTORY_OBSERVATION_CHUNK_CONCURRENCY),
   );
+  const STATION_HISTORY_FETCH_PRIORITY = Object.freeze({ primary: 0, observations: 1, aqiPrefetch: 2 });
+  const AQI_SOURCE_TRANSITION_MS = 200;
   const BACKGROUND_AQI_PREFETCH_CONCURRENCY = 2;
   const AQI_BAND_TOP_OFFSET_PX = 1;
   const params = new URLSearchParams(window.location.search);
@@ -17013,7 +17015,10 @@
     params.get("station_history_loader"),
     true,
   ) && Boolean(window.UkAqStationHistoryLoader);
-  const HEX_MAP_STATION_HISTORY_CACHE_CONTRACT = "hex-map-station-history-v4-calculated-aqi";
+  const HEX_MAP_STATION_HISTORY_CACHE_CONTRACT = "hex-map-station-history-v5-explicit-response-parts";
+  const stationHistoryFetchScheduler = window.UkAqStationHistoryLoader?.createPriorityFetchScheduler
+    ? window.UkAqStationHistoryLoader.createPriorityFetchScheduler(CHART_GLOBAL_FETCH_CAP)
+    : null;
   const aqiHistoryBaseUrl = resolveAqiHistoryBaseUrl(params.get("aqi_history_base"));
   const AQI_HISTORY_BASE_PLACEHOLDER = "https://cic-test.chronicillnesschannel.co.uk/api/aq/aqi-history";
   const configuredAqiHistoryBase = AQI_HISTORY_BASE_PLACEHOLDER.includes("__UK_AQ_AQI_HISTORY_BASE_URL__")
@@ -20815,7 +20820,7 @@
   function buildStationHistoryCacheKey(entry) {
     if (!entry?.timeseriesId) return "";
     const pollutantKey = normalizeAqiSupportedPollutant(entry?.pollutant || "") || "unknown";
-    return `${HEX_MAP_STATION_HISTORY_CACHE_CONTRACT}|timeseries:${normalizeCacheKeyPart(entry.timeseriesId)}|pollutant:${normalizeCacheKeyPart(pollutantKey)}`;
+    return `${HEX_MAP_STATION_HISTORY_CACHE_CONTRACT}|timeseries:${normalizeCacheKeyPart(entry.timeseriesId)}|connector:${normalizeCacheKeyPart(getEntryConnectorId(entry) || "unknown")}|pollutant:${normalizeCacheKeyPart(pollutantKey)}`;
   }
 
   function getStationHistoryRecord(entry) {
@@ -20860,7 +20865,6 @@
   }
 
   function stationHistoryNextBoundary(section, kind) {
-    if (kind === "aqi" && section?.calculation_source === "calculated_from_observations") return null;
     const domainBoundary = kind === "aqi"
       ? section?.next_older_aqi_chunk_end_utc
       : section?.next_older_observation_chunk_end_utc;
@@ -20872,7 +20876,7 @@
     return window.UkAqStationHistoryLoader.resolveStationSeriesHeadBounds(payload, kind, fallbackRange);
   }
 
-  async function fetchStationSeriesBundle(entry, range, windowValue, includeAqi, signal) {
+  async function fetchStationSeriesBundle(entry, range, windowValue, parts, signal, priority = STATION_HISTORY_FETCH_PRIORITY.primary) {
     const connectorId = getEntryConnectorId(entry);
     if (!stationSeriesUrl || !window.UkAqStationHistoryLoader.hasPositiveTimeseriesIdentity(entry)) {
       throw new Error("station_series_request_identity_missing");
@@ -20887,15 +20891,22 @@
     url.searchParams.set("end_utc", range.endIso);
     url.searchParams.set("window", windowValue);
     url.searchParams.set("format", "objects");
+    const includeObservations = parts?.observations === true;
+    const includeAqi = parts?.aqi === true;
+    url.searchParams.set("include_observations", includeObservations ? "true" : "false");
     url.searchParams.set("include_aqi", includeAqi ? "true" : "false");
     const init = { credentials: "include", headers: { Accept: "application/json" }, signal };
     const cacheFetch = getCacheFetch();
-    const response = cacheFetch ? await cacheFetch(url.toString(), init) : await fetch(url.toString(), init);
+    const execute = () => cacheFetch ? cacheFetch(url.toString(), init) : fetch(url.toString(), init);
+    const response = stationHistoryFetchScheduler
+      ? await stationHistoryFetchScheduler.schedule(priority, execute, signal)
+      : await execute();
     if (!response.ok) {
       const body = await response.text().catch(() => "");
       recordWebsiteFetchFailure("station-series", url.toString(), response, body, {
         timeseries_id: entry.timeseriesId,
         connector_id: connectorId,
+        include_observations: includeObservations,
         include_aqi: includeAqi,
       });
       const error = new Error(`Station-series request failed: ${response.status}`);
@@ -20912,6 +20923,7 @@
       route: "station-series",
       timeseries_id: entry.timeseriesId,
       connector_id: connectorId,
+      include_observations: includeObservations,
       include_aqi: includeAqi,
       aqi_complete: payload?.aqi?.response_complete ?? null,
       observations_complete: payload?.observations?.response_complete ?? null,
@@ -20921,10 +20933,10 @@
     return payload;
   }
 
-  async function fetchStationHistoryChunk(kind, entry, record, range, stableHeadStartUtc, signal) {
+  async function fetchStationHistoryChunk(kind, entry, record, range, stableHeadStartUtc, signal, priority) {
     const identity = record?.identity;
     const connectorId = identity?.connector_id;
-    const baseUrl = kind === "aqi" ? cacheAqiHistoryBase : seriesUrl;
+    const baseUrl = seriesUrl;
     if (!baseUrl || !entry?.timeseriesId || !connectorId || identity?.timeseries_id !== Number(entry.timeseriesId) || !stableHeadStartUtc) {
       throw new Error("station_history_chunk_identity_missing");
     }
@@ -20936,10 +20948,15 @@
     url.searchParams.set("end_utc", range.end_utc);
     url.searchParams.set("stable_head_start_utc", stableHeadStartUtc);
     url.searchParams.set("format", "objects");
-    if (kind === "observations") url.searchParams.set("limit", "5000");
+    url.searchParams.set("include_observations", kind === "aqi" ? "false" : "true");
+    url.searchParams.set("include_aqi", kind === "observations" ? "false" : "true");
+    url.searchParams.set("limit", "5000");
     const init = { credentials: "include", headers: { Accept: "application/json" }, signal };
     const cacheFetch = getCacheFetch();
-    const response = cacheFetch ? await cacheFetch(url.toString(), init) : await fetch(url.toString(), init);
+    const execute = () => cacheFetch ? cacheFetch(url.toString(), init) : fetch(url.toString(), init);
+    const response = stationHistoryFetchScheduler
+      ? await stationHistoryFetchScheduler.schedule(priority, execute, signal)
+      : await execute();
     if (!response.ok) {
       const error = new Error(`${kind} history request failed: ${response.status}`);
       error.ukAqHttpStatus = response.status;
@@ -21041,17 +21058,27 @@
     };
   }
 
-  async function loadStationHistoryOlderChunks(kind, entry, record, range, stableHeadStartUtc, initialCursorEndUtc, windowValue, renderScheduler, signal, token, concurrency, onWorkSettled = null) {
+  async function loadStationHistoryOlderChunks(kind, entry, record, range, stableHeadStartUtc, initialCursorEndUtc, windowValue, renderScheduler, signal, token, concurrency, priority, onWorkSettled = null) {
     const loader = window.UkAqStationHistoryLoader;
     const spanMs = getChunkSpanMs(windowValue);
-    const work = loader.buildMissingChunkWorkList(record, kind, range.startIso, initialCursorEndUtc, spanMs);
+    const workKinds = kind === "combined" ? ["observations", "aqi"] : [kind];
+    const byRange = new Map();
+    workKinds.forEach((coverageKind) => {
+      loader.buildMissingChunkWorkList(record, coverageKind, range.startIso, initialCursorEndUtc, spanMs).forEach((item) => {
+        const rangeKey = `${item.range.start_utc}|${item.range.end_utc}`;
+        if (!byRange.has(rangeKey)) byRange.set(rangeKey, item.range);
+      });
+    });
+    const work = [...byRange.values()]
+      .sort((left, right) => Date.parse(right.end_utc) - Date.parse(left.end_utc))
+      .map((requestRange, sequence) => ({ kind, range: requestRange, key: `${kind}:${requestRange.start_utc}:${requestRange.end_utc}`, sequence }));
 
     const settle = async (workItem) => {
       if (token !== state.loadToken || signal.aborted) return { workItem, aborted: true };
       try {
         return {
           workItem,
-          payload: await fetchStationHistoryChunk(kind, entry, record, workItem.range, stableHeadStartUtc, signal),
+          payload: await fetchStationHistoryChunk(kind, entry, record, workItem.range, stableHeadStartUtc, signal, priority),
         };
       } catch (error) {
         return { workItem, error };
@@ -21064,68 +21091,53 @@
       const requestRange = workItem.range;
       const key = workItem.key;
       if (settled.error) {
-        loader.recordCoverageInterval(record, kind, requestRange, "failed");
+        workKinds.forEach((coverageKind) => loader.recordCoverageInterval(record, coverageKind, requestRange, "failed"));
         record.failed_chunks[key] = { chunk: requestRange, reason: settled.error instanceof Error ? settled.error.message : String(settled.error) };
-        recordWebsiteDebugEvent(`${kind}_chunk_failed`, { route: kind === "aqi" ? "aqi-history" : "timeseries", chunk: requestRange, error: serializeDebugError(settled.error) });
+        recordWebsiteDebugEvent(`${kind}_chunk_failed`, { route: "timeseries", chunk: requestRange, error: serializeDebugError(settled.error) });
       } else {
         const payload = settled.payload;
-        if (kind === "aqi") {
-          const aqiChunk = loader.inspectAqiChunk(payload);
+        if (kind === "aqi" || kind === "combined") {
+          const aqiChunk = loader.inspectAqiChunk({
+            ...payload?.aqi,
+            points: payload?.aqi?.rows,
+          });
           const incoming = parseStationSeriesAqiPoints({ rows: aqiChunk.rows });
           const merged = loader.mergeAqiWithoutReplacement(record.aqi_points, incoming);
           record.aqi_points = merged.points;
-          const state = aqiChunk.complete && !merged.conflicts.length ? "complete" : "partial";
-          loader.recordCoverageInterval(record, kind, requestRange, state, { partial_reasons: aqiChunk.partial_reasons });
-          if (state === "complete") {
-            record.completed_chunks[key] = requestRange;
-            delete record.failed_chunks[key];
-            Object.keys(record.failed_chunks).forEach((failedKey) => {
-              const failed = record.failed_chunks[failedKey];
-              if (failedKey.startsWith(`${kind}:`) && failed?.chunk
-                  && !loader.getUncoveredRanges(record, kind, failed.chunk).length) {
-                delete record.failed_chunks[failedKey];
-              }
-            });
-          } else {
+          const aqiState = aqiChunk.complete && !merged.conflicts.length ? "complete" : "partial";
+          loader.recordCoverageInterval(record, "aqi", requestRange, aqiState, { partial_reasons: aqiChunk.partial_reasons });
+          if (aqiState !== "complete") {
             record.failed_chunks[key] = {
               chunk: requestRange,
               reason: merged.conflicts.length ? "aqi_replacement_contract_error" : "aqi_history_incomplete",
               conflicts: merged.conflicts.length,
               partial_reasons: aqiChunk.partial_reasons,
             };
-            recordWebsiteDebugEvent("aqi_chunk_partial", { route: "aqi-history", chunk: requestRange, retained_rows: incoming.length, conflicts: merged.conflicts.length, partial_reasons: aqiChunk.partial_reasons });
+            recordWebsiteDebugEvent("aqi_chunk_partial", { route: "timeseries", chunk: requestRange, retained_rows: incoming.length, conflicts: merged.conflicts.length, partial_reasons: aqiChunk.partial_reasons });
           }
           if (merged.conflicts.length) {
-            recordWebsiteDebugEvent("aqi_replacement_contract_error", { route: "aqi-history", chunk: requestRange, conflicts: merged.conflicts.length });
+            recordWebsiteDebugEvent("aqi_replacement_contract_error", { route: "timeseries", chunk: requestRange, conflicts: merged.conflicts.length });
           }
-        } else {
-          const observationChunk = loader.inspectObservationChunk(payload);
+        }
+        if (kind === "observations" || kind === "combined") {
+          const observationChunk = loader.inspectObservationChunk(kind === "combined" ? {
+            ...payload?.observations,
+            rows: payload?.observations?.rows,
+          } : payload);
           record.observation_points = loader.mergeObservationPoints(record.observation_points, parseStationSeriesObservationPoints({ rows: observationChunk.rows }));
-          if (loader.isCalculatedCombinedResponse(payload)) {
-            const calculated = loader.inspectAqiChunk({ ...payload.aqi, points: payload.aqi.rows });
-            const mergedAqi = loader.mergeAqiWithoutReplacement(record.aqi_points, parseStationSeriesAqiPoints({ rows: calculated.rows }));
-            record.aqi_points = mergedAqi.points;
-            record.aqi_complete = calculated.complete && !mergedAqi.conflicts.length;
-            record.calculated_combined = true;
-            loader.recordCoverageInterval(record, "aqi", requestRange, record.aqi_complete ? "complete" : "partial", { partial_reasons: calculated.partial_reasons });
-          }
           const state = observationChunk.complete ? "complete" : "partial";
-          loader.recordCoverageInterval(record, kind, requestRange, state, { partial_reasons: observationChunk.partial_reasons });
-          if (observationChunk.complete) {
-            record.completed_chunks[key] = requestRange;
-            delete record.failed_chunks[key];
-            Object.keys(record.failed_chunks).forEach((failedKey) => {
-              const failed = record.failed_chunks[failedKey];
-              if (failedKey.startsWith(`${kind}:`) && failed?.chunk
-                  && !loader.getUncoveredRanges(record, kind, failed.chunk).length) {
-                delete record.failed_chunks[failedKey];
-              }
-            });
-          } else {
+          loader.recordCoverageInterval(record, "observations", requestRange, state, { partial_reasons: observationChunk.partial_reasons });
+          if (!observationChunk.complete) {
             record.failed_chunks[key] = { chunk: requestRange, reason: "observations_history_incomplete", partial_reasons: observationChunk.partial_reasons };
             recordWebsiteDebugEvent("observations_chunk_partial", { route: "timeseries", chunk: requestRange, retained_rows: observationChunk.rows.length, partial_reasons: observationChunk.partial_reasons });
           }
         }
+        const requestedPartsComplete = workKinds.every((coverageKind) => loader.getUncoveredRanges(record, coverageKind, requestRange).length === 0);
+        if (requestedPartsComplete) {
+          record.completed_chunks[key] = requestRange;
+          delete record.failed_chunks[key];
+        }
+        if (kind === "combined") record.calculated_combined = true;
         record.updated_at = new Date().toISOString();
       }
 
@@ -21135,26 +21147,100 @@
     };
 
     if (work.length) {
-      const newestSettled = await settle(work[0]);
-      if (!newestSettled?.aborted && token === state.loadToken && !signal.aborted) onWorkSettled?.();
-      await commit(newestSettled);
-      const olderWork = work.slice(1);
-      if (olderWork.length && token === state.loadToken && !signal.aborted) {
-        const ordered = loader.createOrderedSettlementBuffer(1);
-        await runChunkQueueWithConcurrency(olderWork, concurrency, async (workItem) => {
-          const settled = await settle(workItem);
-          if (!settled?.aborted && token === state.loadToken && !signal.aborted) onWorkSettled?.();
-          await ordered.settle(workItem.sequence, settled, commit);
-        });
-        await ordered.flush();
-      }
+      const ordered = loader.createOrderedSettlementBuffer(0);
+      await runChunkQueueWithConcurrency(work, concurrency, async (workItem) => {
+        const settled = await settle(workItem);
+        if (!settled?.aborted && token === state.loadToken && !signal.aborted) onWorkSettled?.();
+        await ordered.settle(workItem.sequence, settled, commit);
+      });
+      await ordered.flush();
     }
-    const rangeCovered = loader.getUncoveredRanges(record, kind, {
+    const rangeCovered = loader.getUncoveredRanges(record, kind === "combined" ? "aqi" : kind, {
       start_utc: range.startIso,
       end_utc: initialCursorEndUtc || range.endIso,
     }).length === 0;
     if (kind === "aqi") record.aqi_complete = rangeCovered;
-    else record.observations_complete = rangeCovered;
+    else if (kind === "observations") record.observations_complete = rangeCovered;
+    else {
+      record.aqi_complete = loader.getUncoveredRanges(record, "aqi", { start_utc: range.startIso, end_utc: initialCursorEndUtc || range.endIso }).length === 0;
+      record.observations_complete = loader.getUncoveredRanges(record, "observations", { start_utc: range.startIso, end_utc: initialCursorEndUtc || range.endIso }).length === 0;
+    }
+  }
+
+  async function prefetchStationHistoryAqi(entry, record, range, windowValue, signal, token) {
+    const loader = window.UkAqStationHistoryLoader;
+    const requestedRange = { start_utc: range.startIso, end_utc: range.endIso };
+    if (!record?.identity || loader.getUncoveredRanges(record, "observations", requestedRange).length) return false;
+    if (!loader.getUncoveredRanges(record, "aqi", requestedRange).length) return true;
+    try {
+      const payload = await fetchStationSeriesBundle(
+        entry,
+        range,
+        windowValue,
+        { observations: false, aqi: true },
+        signal,
+        STATION_HISTORY_FETCH_PRIORITY.aqiPrefetch,
+      );
+      if (signal.aborted || token !== state.loadToken) return false;
+      const identity = loader.resolveAuthoritativeIdentity(payload, {
+        timeseriesId: entry.timeseriesId,
+        pollutant: entry.pollutant || getCurrentContext()?.pollutant,
+      });
+      if (!identity || payload?.aqi?.calculation_source !== "calculated_from_observations") {
+        throw new Error("calculated_aqi_response_required");
+      }
+      record.identity = identity;
+      const bounds = stationSeriesHeadBounds(payload, "aqi", range);
+      const merged = loader.replaceAuthoritativeAqiHead(
+        record.aqi_points,
+        parseStationSeriesAqiPoints(payload.aqi),
+        bounds?.startUtc,
+        bounds?.endUtc,
+      );
+      record.aqi_points = merged.points;
+      loader.recordCoverageInterval(
+        record,
+        "aqi",
+        { start_utc: bounds?.startUtc, end_utc: bounds?.endUtc },
+        stationHistoryIsComplete(payload.aqi) && !merged.conflicts.length ? "complete" : "partial",
+        { partial_reasons: payload?.aqi?.partial_reasons },
+      );
+      const cursor = stationHistoryNextBoundary(payload.aqi, "aqi");
+      if (cursor) {
+        const noRenderScheduler = { schedule: () => Promise.resolve(), flush: () => Promise.resolve() };
+        await loadStationHistoryOlderChunks(
+          "aqi",
+          entry,
+          record,
+          range,
+          bounds?.startUtc,
+          cursor,
+          windowValue,
+          noRenderScheduler,
+          signal,
+          token,
+          STATION_HISTORY_AQI_CHUNK_CONCURRENCY,
+          STATION_HISTORY_FETCH_PRIORITY.aqiPrefetch,
+        );
+      }
+      record.aqi_complete = loader.getUncoveredRanges(record, "aqi", requestedRange).length === 0;
+      record.updated_at = new Date().toISOString();
+      recordWebsiteDebugEvent("station_history_secondary_aqi_prefetched", {
+        route: "timeseries",
+        timeseries_id: entry.timeseriesId,
+        complete: record.aqi_complete,
+      });
+      return record.aqi_complete;
+    } catch (error) {
+      if (!signal.aborted && token === state.loadToken) {
+        recordWebsiteDebugEvent("station_history_secondary_aqi_prefetch_failed", {
+          route: "timeseries",
+          timeseries_id: entry.timeseriesId,
+          error: serializeDebugError(error),
+        });
+      }
+      return false;
+    }
   }
 
   async function loadStationHistoryChartData(reason = "sensor-change") {
@@ -21266,6 +21352,7 @@
       // a targeted loading path. Retained observation series are never fetched
       // or repainted unless a scale change makes new coordinates necessary.
       if (frameValid && (reason === "sensor-change" || isAqiSourceChangeOnly)) {
+        const loader = window.UkAqStationHistoryLoader;
         const selectionDiff = reason === "sensor-change"
           ? buildChartSelectionDiff(existing, entries)
           : { addedStationIds: new Set(), removedStationIds: new Set(), retainedStationIds: new Set(entries.map((entry) => entry.stationId)) };
@@ -21284,7 +21371,31 @@
           layoutChanged: frameSizeChanged,
           skipAqiRepaint: !aqiSourceChanged,
           aqiChangeOnly: false,
+          includeCachedAqi: !aqiSourceChanged,
+          forceClearAqi: aqiSourceChanged,
         };
+
+        const aqiTransitionToken = aqiSourceChanged
+          ? ((state.aqiTransitionToken = Number(state.aqiTransitionToken || 0) + 1), state.aqiTransitionToken)
+          : Number(state.aqiTransitionToken || 0);
+        let aqiTransitionReady = !aqiSourceChanged;
+        const aqiTransitionPromise = aqiSourceChanged
+          ? loader.waitForTransition(AQI_SOURCE_TRANSITION_MS, signal).then(() => {
+            if (signal.aborted || token !== state.loadToken || aqiTransitionToken !== state.aqiTransitionToken) return false;
+            aqiTransitionReady = true;
+            if (loader.getUncoveredRanges(getStationHistoryRecord(primary), "aqi", {
+              start_utc: range.startIso,
+              end_utc: range.endIso,
+            }).length) return true;
+            renderStationHistoryChart(dom, entries, range, units, primary, true, addedEntries.length > 0, {
+              currentObservationStationIds: currentObservationIds,
+              selectionChangeOnly: true,
+              changedStationIds,
+              aqiChangeOnly: true,
+            });
+            return true;
+          })
+          : Promise.resolve(true);
 
         renderStationHistoryChart(dom, entries, range, units, primary, aqiSourceChanged, addedEntries.length > 0, targetedRenderOptions);
 
@@ -21294,7 +21405,6 @@
         }
 
         setLoading(true);
-        const loader = window.UkAqStationHistoryLoader;
         const payloadByStationId = new Map();
         const failedAddedStationIds = new Set();
         let sourcePayload = null;
@@ -21362,40 +21472,48 @@
         };
 
         let aqiHead = null;
-        if (aqiSourceChanged) {
+        const requestedRange = { start_utc: range.startIso, end_utc: range.endIso };
+        const primaryRecord = getStationHistoryRecord(primary);
+        const sourceNeedsObservations = selectionDiff.addedStationIds.has(primary.stationId);
+        const sourceNeedsAqi = aqiSourceChanged
+          && loader.getUncoveredRanges(primaryRecord, "aqi", requestedRange).length > 0;
+        const sourceLoadPromise = (sourceNeedsObservations || sourceNeedsAqi) ? (async () => {
           try {
             primaryRequestCount += 1;
-            sourcePayload = await fetchStationSeriesBundle(primary, range, windowValue, true, signal);
+            sourcePayload = await fetchStationSeriesBundle(primary, range, windowValue, {
+              observations: sourceNeedsObservations,
+              aqi: sourceNeedsAqi,
+            }, signal, STATION_HISTORY_FETCH_PRIORITY.primary);
             if (signal.aborted || token !== state.loadToken) return;
             payloadByStationId.set(primary.stationId, sourcePayload);
-            aqiHead = mergeAqiHead(primary, getStationHistoryRecord(primary), sourcePayload);
-            if (selectionDiff.addedStationIds.has(primary.stationId)) {
-              mergeObservationHead(primary, getStationHistoryRecord(primary), sourcePayload);
+            if (sourceNeedsAqi) aqiHead = mergeAqiHead(primary, primaryRecord, sourcePayload);
+            if (sourceNeedsObservations) mergeObservationHead(primary, primaryRecord, sourcePayload);
+            if (aqiTransitionReady && sourceNeedsAqi) {
+              renderStationHistoryChart(dom, entries, range, units, primary, true, addedEntries.length > 0, {
+                currentObservationStationIds: currentObservationIds,
+                selectionChangeOnly: true,
+                changedStationIds,
+                aqiChangeOnly: !sourceNeedsObservations,
+              });
             }
-            renderStationHistoryChart(dom, entries, range, units, primary, true, addedEntries.length > 0, {
-              currentObservationStationIds: currentObservationIds,
-              selectionChangeOnly: true,
-              changedStationIds,
-              aqiChangeOnly: !selectionDiff.addedStationIds.has(primary.stationId),
-            });
           } catch (error) {
             if (signal.aborted || token !== state.loadToken) return;
-            aqiSourceFailed = true;
+            if (sourceNeedsAqi) aqiSourceFailed = true;
+            if (sourceNeedsObservations) failedAddedStationIds.add(primary.stationId);
             recordWebsiteDebugEvent("station_history_aqi_source_failed", {
               route: "station-series",
               timeseries_id: primary.timeseriesId,
               error: serializeDebugError(error),
             });
-            setMessage("AQI bands could not be updated for the selected sensor.", { error: true });
           }
-        }
+        })() : Promise.resolve();
 
-        const remainingAddedEntries = addedEntries.filter((entry) => !payloadByStationId.has(entry.stationId));
-        await runChunkQueueWithConcurrency(remainingAddedEntries, ADDITIONAL_OBSERVATION_CONCURRENCY, async (entry) => {
+        const remainingAddedEntries = addedEntries.filter((entry) => !sourceNeedsObservations || entry.stationId !== primary.stationId);
+        const addedHeadPromise = runChunkQueueWithConcurrency(remainingAddedEntries, ADDITIONAL_OBSERVATION_CONCURRENCY, async (entry) => {
           const record = getStationHistoryRecord(entry);
           try {
             secondaryRequestCount += 1;
-            const payload = await fetchStationSeriesBundle(entry, range, windowValue, false, signal);
+            const payload = await fetchStationSeriesBundle(entry, range, windowValue, { observations: true, aqi: false }, signal, STATION_HISTORY_FETCH_PRIORITY.observations);
             if (signal.aborted || token !== state.loadToken) return;
             payloadByStationId.set(entry.stationId, payload);
             mergeObservationHead(entry, record, payload);
@@ -21415,16 +21533,18 @@
             });
           }
         });
+        await Promise.all([sourceLoadPromise, addedHeadPromise]);
         if (signal.aborted || token !== state.loadToken) return;
 
         const aqiScheduler = createStationHistoryRenderScheduler(() => {
+          if (!aqiTransitionReady) return;
           renderStationHistoryChart(dom, entries, range, units, primary, true, addedEntries.length > 0, {
             currentObservationStationIds: currentObservationIds,
             aqiChangeOnly: true,
           });
         }, signal, token);
-        if (aqiSourceChanged && aqiHead?.cursor) {
-          await loadStationHistoryOlderChunks(
+        const aqiHistoryPromise = aqiSourceChanged && aqiHead?.cursor
+          ? loadStationHistoryOlderChunks(
             "aqi",
             primary,
             getStationHistoryRecord(primary),
@@ -21436,10 +21556,9 @@
             signal,
             token,
             STATION_HISTORY_AQI_CHUNK_CONCURRENCY,
-          );
-          await aqiScheduler.flush();
-        }
-        if (signal.aborted || token !== state.loadToken) return;
+            STATION_HISTORY_FETCH_PRIORITY.primary,
+          ).then(() => aqiScheduler.flush())
+          : Promise.resolve();
 
         const observationWorkEntries = addedEntries.filter((entry) => {
           const record = getStationHistoryRecord(entry);
@@ -21464,7 +21583,7 @@
             skipAqiRepaint: true,
           });
         }, signal, token);
-        await runChunkQueueWithConcurrency(
+        const observationHistoryPromise = runChunkQueueWithConcurrency(
           observationWorkEntries,
           STATION_HISTORY_OBSERVATION_STREAM_CONCURRENCY,
           async (entry) => {
@@ -21481,13 +21600,21 @@
               signal,
               token,
               STATION_HISTORY_OBSERVATION_CHUNK_CONCURRENCY,
+              STATION_HISTORY_FETCH_PRIORITY.observations,
               settleObservationProgress,
             );
           },
         );
+        await Promise.all([aqiHistoryPromise, observationHistoryPromise, aqiTransitionPromise]);
         clearObservationProgress();
         await observationScheduler.flush();
         if (signal.aborted || token !== state.loadToken) return;
+
+        addedEntries
+          .filter((entry) => entry.stationId !== primary.stationId && !failedAddedStationIds.has(entry.stationId))
+          .forEach((entry) => {
+            void prefetchStationHistoryAqi(entry, getStationHistoryRecord(entry), range, windowValue, signal, token);
+          });
 
         renderStationHistoryChart(dom, entries, range, units, primary, false, false, {
           currentObservationStationIds: currentObservationIds,
@@ -21579,10 +21706,9 @@
         }));
       if (cachedHeadsReusable) {
         entries.forEach((entry) => currentObservationStationIds.add(entry.stationId));
-        const cachedAqiPromise = primaryRecord.calculated_combined
-          ? Promise.resolve()
-          : loadStationHistoryOlderChunks(
-            "aqi",
+        const cachedPrimaryPromise = cachedAqiCursor
+          ? loadStationHistoryOlderChunks(
+            "combined",
             primary,
             primaryRecord,
             range,
@@ -21593,11 +21719,13 @@
             signal,
             token,
             STATION_HISTORY_AQI_CHUNK_CONCURRENCY,
-          );
-        await cachedAqiPromise;
-        if (signal.aborted || token !== state.loadToken) return;
+            STATION_HISTORY_FETCH_PRIORITY.primary,
+          )
+          : Promise.resolve();
+        let cachedSecondaryPromise = Promise.resolve();
         if (!isAqiSourceChangeOnly) {
-          const cachedObservationChunkCount = entries.reduce((count, entry) => {
+          const secondaryEntries = entries.filter((entry) => entry.stationId !== primary.stationId);
+          const cachedObservationChunkCount = secondaryEntries.reduce((count, entry) => {
             const record = getStationHistoryRecord(entry);
             const cursor = cachedObservationCursors.get(entry.stationId);
             return count + loader.buildMissingChunkWorkList(
@@ -21609,8 +21737,8 @@
             ).length;
           }, 0);
           beginObservationProgress(cachedObservationChunkCount);
-          await runChunkQueueWithConcurrency(
-          entries,
+          cachedSecondaryPromise = runChunkQueueWithConcurrency(
+          secondaryEntries,
           STATION_HISTORY_OBSERVATION_STREAM_CONCURRENCY,
           async (entry) => {
             const cursor = cachedObservationCursors.get(entry.stationId);
@@ -21626,12 +21754,15 @@
               signal,
               token,
               STATION_HISTORY_OBSERVATION_CHUNK_CONCURRENCY,
+              STATION_HISTORY_FETCH_PRIORITY.observations,
               settleObservationProgress,
             );
+            void prefetchStationHistoryAqi(entry, getStationHistoryRecord(entry), range, windowValue, signal, token);
           },
         );
-        clearObservationProgress();
         } // end !isAqiSourceChangeOnly
+        await Promise.all([cachedPrimaryPromise, cachedSecondaryPromise]);
+        clearObservationProgress();
         await historyRenderScheduler.flush();
         if (signal.aborted || token !== state.loadToken) return;
         renderStationHistoryChart(dom, entries, range, units, primary, false, false, { currentObservationStationIds, skipAqiRepaint: !isAqiSourceChangeOnly, aqiChangeOnly: isAqiSourceChangeOnly });
@@ -21648,7 +21779,7 @@
       let primaryPayload;
       try {
         primaryRequestCount += 1;
-        primaryPayload = await fetchStationSeriesBundle(primary, range, windowValue, true, signal);
+        primaryPayload = await fetchStationSeriesBundle(primary, range, windowValue, { observations: true, aqi: true }, signal, STATION_HISTORY_FETCH_PRIORITY.primary);
         primaryRecord.identity = window.UkAqStationHistoryLoader.resolveAuthoritativeIdentity(primaryPayload, {
           timeseriesId: primary.timeseriesId,
           pollutant: primary.pollutant || getCurrentContext()?.pollutant,
@@ -21732,22 +21863,21 @@
       renderStationHistoryChart(dom, entries, range, units, primary, true, !isAqiSourceChangeOnly, { currentObservationStationIds, aqiChangeOnly: isAqiSourceChangeOnly });
 
       const aqiHeadStart = stationHistoryNextBoundary(primaryPayload.aqi, "aqi");
-      // AQI history receives priority immediately after the primary head and
-      // recent observations paint. Secondary station-series calls below fetch
-      // current observations only; no historical observation request starts
-      // until this AQI phase has settled.
-      const aqiPromise = aqiHeadStart
-        ? loadStationHistoryOlderChunks("aqi", primary, primaryRecord, range, aqiHeadBounds?.startUtc, aqiHeadStart, windowValue, historyRenderScheduler, signal, token, STATION_HISTORY_AQI_CHUNK_CONCURRENCY)
+      // Primary combined history is highest priority.  Its requests run in
+      // parallel with lower-priority secondary observation streams, while the
+      // global scheduler always admits queued primary work first.
+      const primaryHistoryPromise = aqiHeadStart
+        ? loadStationHistoryOlderChunks("combined", primary, primaryRecord, range, aqiHeadBounds?.startUtc, aqiHeadStart, windowValue, historyRenderScheduler, signal, token, STATION_HISTORY_AQI_CHUNK_CONCURRENCY, STATION_HISTORY_FETCH_PRIORITY.primary)
         : Promise.resolve();
 
+      const secondaryObservationPromises = [];
       if (!isAqiSourceChangeOnly) {
-        // Secondary lines are observations-only: no AQI calculation, no R2 AQI
-        // head request, and no duplicated primary-ingest request.
-        await runChunkQueueWithConcurrency(entries.filter((entry) => entry.stationId !== primary.stationId), ADDITIONAL_OBSERVATION_CONCURRENCY, async (entry) => {
+        const secondaryEntries = entries.filter((entry) => entry.stationId !== primary.stationId);
+        secondaryObservationPromises.push(runChunkQueueWithConcurrency(secondaryEntries, ADDITIONAL_OBSERVATION_CONCURRENCY, async (entry) => {
           const record = getStationHistoryRecord(entry);
           try {
             secondaryRequestCount += 1;
-            const payload = await fetchStationSeriesBundle(entry, range, windowValue, false, signal);
+            const payload = await fetchStationSeriesBundle(entry, range, windowValue, { observations: true, aqi: false }, signal, STATION_HISTORY_FETCH_PRIORITY.observations);
             if (signal.aborted || token !== state.loadToken) return;
             record.identity = window.UkAqStationHistoryLoader.resolveAuthoritativeIdentity(payload, {
               timeseriesId: entry.timeseriesId,
@@ -21775,59 +21905,37 @@
             );
             currentObservationStationIds.add(entry.stationId);
             renderStationHistoryChart(dom, entries, range, units, primary, true, true, { currentObservationStationIds });
+            const cursor = record.current_observation_next_chunk_end_utc;
+            if (cursor) {
+              await loadStationHistoryOlderChunks(
+                "observations",
+                entry,
+                record,
+                range,
+                record.observation_head_start_utc,
+                cursor,
+                windowValue,
+                historyRenderScheduler,
+                signal,
+                token,
+                STATION_HISTORY_OBSERVATION_CHUNK_CONCURRENCY,
+                STATION_HISTORY_FETCH_PRIORITY.observations,
+                settleObservationProgress,
+              );
+            }
+            // Prefetch only after this sensor's matching observation range has
+            // been accepted.  Do not await it: it is cache-only background work.
+            void prefetchStationHistoryAqi(entry, record, range, windowValue, signal, token);
           } catch (error) {
             record.current_failed = true;
             failedCurrentObservationStationIds.add(entry.stationId);
             recordWebsiteDebugEvent("station_series_secondary_failed", { route: "station-series", timeseries_id: entry.timeseriesId, error: serializeDebugError(error) });
           }
-        });
+        }));
       }
+      await Promise.all([primaryHistoryPromise, ...secondaryObservationPromises]);
       if (signal.aborted || token !== state.loadToken) return;
-
-      // A complete, partial, or failed AQI chunk settles the AQI phase. Only
-      // then may the historical observation phase make network requests.
-      await aqiPromise;
-      if (signal.aborted || token !== state.loadToken) return;
-
-      if (!isAqiSourceChangeOnly) {
-        const observationHeads = new Map(entries.map((entry) => [entry.stationId, entry.stationId === primary.stationId
-          ? stationHistoryNextBoundary(primaryPayload.observations, "observations")
-          : getStationHistoryRecord(entry).current_observation_next_chunk_end_utc]));
-        const observationChunkCount = entries.reduce((count, entry) => {
-          const cursor = observationHeads.get(entry.stationId);
-          return count + loader.buildMissingChunkWorkList(
-            getStationHistoryRecord(entry),
-            "observations",
-            range.startIso,
-            cursor,
-            getChunkSpanMs(windowValue),
-          ).length;
-        }, 0);
-        beginObservationProgress(observationChunkCount);
-        await runChunkQueueWithConcurrency(
-          entries,
-          STATION_HISTORY_OBSERVATION_STREAM_CONCURRENCY,
-          async (entry) => {
-            const cursor = observationHeads.get(entry.stationId);
-            if (!cursor) return;
-            await loadStationHistoryOlderChunks(
-              "observations",
-              entry,
-              getStationHistoryRecord(entry),
-              range,
-              getStationHistoryRecord(entry).observation_head_start_utc,
-              cursor,
-              windowValue,
-              historyRenderScheduler,
-              signal,
-              token,
-              STATION_HISTORY_OBSERVATION_CHUNK_CONCURRENCY,
-              settleObservationProgress,
-            );
-          },
-        );
-        clearObservationProgress();
-      }
+      clearObservationProgress();
       await historyRenderScheduler.flush();
       if (signal.aborted || token !== state.loadToken) return;
       renderStationHistoryChart(dom, entries, range, units, primary, false, false, { currentObservationStationIds, aqiChangeOnly: isAqiSourceChangeOnly });

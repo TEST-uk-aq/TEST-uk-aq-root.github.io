@@ -340,6 +340,84 @@
     };
   }
 
+  function createPriorityFetchScheduler(maxConcurrency) {
+    const limit = Math.max(1, Math.floor(Number(maxConcurrency) || 1));
+    const queue = [];
+    let active = 0;
+    let sequence = 0;
+
+    const abortError = function () {
+      const error = new Error("Station-history request aborted");
+      error.name = "AbortError";
+      return error;
+    };
+    const pump = function () {
+      while (active < limit && queue.length) {
+        queue.sort(function (left, right) {
+          return left.priority - right.priority || left.sequence - right.sequence;
+        });
+        const item = queue.shift();
+        if (item.signal?.aborted) {
+          item.reject(abortError());
+          continue;
+        }
+        active += 1;
+        Promise.resolve()
+          .then(item.task)
+          .then(item.resolve, item.reject)
+          .finally(function () {
+            active -= 1;
+            pump();
+          });
+      }
+    };
+    return {
+      schedule(priority, task, signal) {
+        return new Promise(function (resolve, reject) {
+          if (signal?.aborted) {
+            reject(abortError());
+            return;
+          }
+          queue.push({
+            priority: Number.isFinite(Number(priority)) ? Number(priority) : 0,
+            sequence: sequence++,
+            task,
+            signal,
+            resolve,
+            reject,
+          });
+          pump();
+        });
+      },
+      get active_count() { return active; },
+      get queued_count() { return queue.length; },
+      get max_concurrency() { return limit; },
+    };
+  }
+
+  function waitForTransition(delayMs, signal) {
+    const duration = Math.max(0, Number(delayMs) || 0);
+    return new Promise(function (resolve, reject) {
+      if (signal?.aborted) {
+        const error = new Error("Station-history transition aborted");
+        error.name = "AbortError";
+        reject(error);
+        return;
+      }
+      const timer = setTimeout(function () {
+        signal?.removeEventListener?.("abort", onAbort);
+        resolve();
+      }, duration);
+      function onAbort() {
+        clearTimeout(timer);
+        const error = new Error("Station-history transition aborted");
+        error.name = "AbortError";
+        reject(error);
+      }
+      signal?.addEventListener?.("abort", onAbort, { once: true });
+    });
+  }
+
   function normalizeStationIdentity(value) {
     if (value === null || value === undefined) return "";
     return String(value).trim();
@@ -416,7 +494,7 @@
   function createCacheRecord(raw) {
     const value = raw && typeof raw === "object" ? raw : {};
     return {
-      contract_version: "station-history-v2-calculated-aqi",
+      contract_version: "station-history-v3-explicit-response-parts",
       aqi_points: Array.isArray(value.aqi_points) ? value.aqi_points : [],
       observation_points: Array.isArray(value.observation_points) ? value.observation_points : [],
       completed_chunks: value.completed_chunks && typeof value.completed_chunks === "object"
@@ -463,6 +541,7 @@
   function isCalculatedCombinedResponse(payload) {
     return Number(payload?.schema_version) >= 2
       && payload?.aqi?.enabled === true
+      && payload?.observations?.enabled === true
       && payload?.aqi?.calculation_source === "calculated_from_observations"
       && Array.isArray(payload?.observations?.rows)
       && Array.isArray(payload?.aqi?.rows);
@@ -496,6 +575,8 @@
     getUncoveredRanges,
     buildMissingChunkWorkList,
     createOrderedSettlementBuffer,
+    createPriorityFetchScheduler,
+    waitForTransition,
     normalizeStationIdentity,
     hasPositiveTimeseriesIdentity,
     resolveAuthoritativeIdentity,

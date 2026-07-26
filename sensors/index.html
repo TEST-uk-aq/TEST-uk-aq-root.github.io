@@ -647,10 +647,15 @@
     const SERIES_CACHE_STORAGE_KEY = `uk_aq_series_cache_v4:${projectRef || "unknown"}`;
     // Stored AQI dates are canonical hour-ending endpoints. Explicit period
     // bounds are derived from that unambiguous value when cache records load.
-    const STATION_HISTORY_CACHE_STORAGE_KEY = `uk_aq_station_history_cache_v2_calculated_aqi:${projectRef || "unknown"}`;
+    const STATION_HISTORY_CACHE_STORAGE_KEY = `uk_aq_station_history_cache_v3_explicit_response_parts:${projectRef || "unknown"}`;
     const STATION_HISTORY_CACHE_MAX_KEYS = 30;
     const STATION_HISTORY_AQI_CHUNK_HOURS = 31 * 24;
     const STATION_HISTORY_OBSERVATION_CHUNK_HOURS = 7 * 24;
+    const STATION_HISTORY_CHUNK_CONCURRENCY = 2;
+    const STATION_HISTORY_GLOBAL_FETCH_CAP = 6;
+    const stationHistoryFetchScheduler = window.UkAqStationHistoryLoader?.createPriorityFetchScheduler
+      ? window.UkAqStationHistoryLoader.createPriorityFetchScheduler(STATION_HISTORY_GLOBAL_FETCH_CAP)
+      : null;
     const SERIES_CACHE_MAX_KEYS = 30;
     const SERIES_CACHE_MAX_POINTS_PER_KEY = 8000;
     const DAY_MS = 24 * 60 * 60 * 1000;
@@ -3682,7 +3687,8 @@
           format: "compact",
         });
       }
-      const url = new URL(SERIES_EDGE_URL);
+      const legacyStoredAqi = kind === "aqi";
+      const url = new URL(legacyStoredAqi ? cacheAqiHistoryBase : SERIES_EDGE_URL);
       url.searchParams.set("timeseries_id", seriesId);
       if (startIso && endIso) {
         url.searchParams.set("start", startIso);
@@ -4396,7 +4402,7 @@
 
     function serializeStationHistoryRecord(record) {
       return {
-        contract_version: "station-history-v2-calculated-aqi",
+        contract_version: "station-history-v3-explicit-response-parts",
         aqi_points: (record?.aqiPoints || []).map((point) => [
           point.date.toISOString(), point.daqi, point.eaqi,
         ]),
@@ -4433,7 +4439,7 @@
       if (!window.localStorage) return;
       try {
         const parsed = JSON.parse(localStorage.getItem(STATION_HISTORY_CACHE_STORAGE_KEY) || "null");
-        if (parsed?.version !== 2 || parsed?.contract_version !== "station-history-v2-calculated-aqi") return;
+        if (parsed?.version !== 3 || parsed?.contract_version !== "station-history-v3-explicit-response-parts") return;
         Object.entries(parsed.records || {}).forEach(([key, value]) => {
           stationHistoryCacheByKey.set(key, normalizeStationHistoryRecord(value));
         });
@@ -4452,8 +4458,8 @@
             records[key] = serializeStationHistoryRecord(record);
           });
         localStorage.setItem(STATION_HISTORY_CACHE_STORAGE_KEY, JSON.stringify({
-          version: 2,
-          contract_version: "station-history-v2-calculated-aqi",
+          version: 3,
+          contract_version: "station-history-v3-explicit-response-parts",
           saved_at: new Date().toISOString(),
           records,
         }));
@@ -4502,11 +4508,13 @@
       url.searchParams.set("end_utc", range.endUtc);
       url.searchParams.set("window", windowValue);
       url.searchParams.set("format", "objects");
+      url.searchParams.set("include_observations", "true");
+      url.searchParams.set("include_aqi", "true");
       return url;
     }
 
     function buildStationHistoryChunkUrl(kind, meta, range, stableHeadStartUtc) {
-      const url = new URL(kind === "aqi" ? cacheAqiHistoryBase : SERIES_EDGE_URL);
+      const url = new URL(SERIES_EDGE_URL);
       const pollutant = normalizeAqiSupportedPollutant(meta?.aqiPollutantKey || meta?.pollutant);
       url.searchParams.set("timeseries_id", String(meta.id));
       url.searchParams.set("connector_id", String(meta.connectorId));
@@ -4515,11 +4523,13 @@
       url.searchParams.set("end_utc", range.end_utc);
       url.searchParams.set("stable_head_start_utc", stableHeadStartUtc);
       url.searchParams.set("format", "objects");
-      if (kind === "aqi") {
+      if (legacyStoredAqi) {
         url.searchParams.set("scope", "timeseries");
         url.searchParams.set("grain", "hourly");
         url.searchParams.set("row_limit", String(STATION_HISTORY_AQI_CHUNK_HOURS));
       } else {
+        url.searchParams.set("include_observations", "true");
+        url.searchParams.set("include_aqi", kind === "observations" ? "false" : "true");
         url.searchParams.set("limit", "5000");
       }
       return url;
@@ -4570,10 +4580,13 @@
     async function fetchStationHistoryJson(url, kind, loadId, signal) {
       if (kind === "aqi") noteAqiRequest(loadId);
       else noteObservationRequest(loadId, { usedEtag: false });
-      const response = await fetchCacheApi(url.toString(), {
+      const execute = () => fetchCacheApi(url.toString(), {
         headers: { Accept: "application/json" },
         signal,
       });
+      const response = stationHistoryFetchScheduler
+        ? await stationHistoryFetchScheduler.schedule(0, execute, signal)
+        : await execute();
       if (kind === "aqi") noteAqiResponse(loadId, response);
       else noteObservationResponse(loadId, response);
       if (!response.ok) throw new Error(`${kind} history request failed: ${response.status}`);
@@ -4584,108 +4597,108 @@
       const loader = window.UkAqStationHistoryLoader;
       const spanMs = (kind === "aqi" ? STATION_HISTORY_AQI_CHUNK_HOURS : STATION_HISTORY_OBSERVATION_CHUNK_HOURS) * HOUR_MS;
       let cursorEndUtc = initialNextEndUtc;
-      let complete = initialNextEndUtc === null;
-      while (isSeriesLoadCurrent(loadId) && cursorEndUtc) {
+      const work = [];
+      while (cursorEndUtc) {
         const chunk = loader.nextChunkRange(fullRange.startUtc, cursorEndUtc, spanMs);
-        if (!chunk) {
-          complete = true;
-          break;
-        }
+        if (!chunk) break;
         if (!loader.isOlderChunk(chunk.start_utc, chunk.end_utc, stableHeadStartUtc)) {
           console.error("[uk-aq station-history] history chunk overlaps stable AQI head", { kind, chunk, stable_head_start_utc: stableHeadStartUtc });
           break;
         }
         const key = loader.chunkKey(kind, chunk);
         const completed = record.completedChunks[key];
-        if (completed?.next_older_chunk_end_utc !== undefined) {
-          cursorEndUtc = completed.next_older_chunk_end_utc || null;
-          continue;
+        if (!completed) work.push({ sequence: work.length, chunk, key });
+        cursorEndUtc = chunk.start_utc;
+      }
+      let complete = initialNextEndUtc === null || work.length === 0;
+      let aqiPartsComplete = true;
+      let observationPartsComplete = true;
+      const ordered = loader.createOrderedSettlementBuffer(0);
+      let cursor = 0;
+      const commit = async ({ item, payload, error }) => {
+        const { chunk, key } = item;
+        if (error) {
+          if (isAbortError(error)) throw error;
+          complete = false;
+          if (kind !== "observations") aqiPartsComplete = false;
+          if (kind !== "aqi") observationPartsComplete = false;
+          record.failedChunks[key] = { reason: sanitizeChartTelemetryErrorMessage(error), retry_at: new Date().toISOString() };
+          console.warn("[uk-aq station-history] retained completed chunks after failure", { kind, key, error });
+        } else {
+          const nextEndUtc = payload?.chunk?.next_older_chunk_end_utc || chunk.start_utc;
+          let partComplete = kind === "combined" || payload?.response_complete === true;
+          if (kind === "aqi") {
+            const stableHeadStartMs = Date.parse(stableHeadStartUtc);
+            const chunkPoints = parseStationSeriesAqiPoints(payload?.points, context.pollutantKey);
+            const stableHeadOverlap = chunkPoints.filter((point) => Number.isFinite(stableHeadStartMs) && point.date.getTime() > stableHeadStartMs);
+            if (stableHeadOverlap.length) {
+              partComplete = false;
+              record.failedChunks[key] = { reason: "aqi_stable_head_overlap", retry_at: new Date().toISOString() };
+            } else {
+              const conflicts = mergeStationHistoryAqi(record, chunkPoints, loadId, "history_chunk");
+              applyAqiContextState(record.aqiPoints, context);
+              if (conflicts.length) {
+                partComplete = false;
+                aqiPartsComplete = false;
+                record.failedChunks[key] = { reason: "aqi_replacement_contract_error", retry_at: new Date().toISOString() };
+              }
+            }
+          } else {
+            const observationChunk = loader.inspectObservationChunk(kind === "combined" ? {
+              ...payload?.observations,
+              rows: payload?.observations?.rows,
+            } : payload);
+            record.observationPoints = loader.mergeObservationPoints(record.observationPoints, parseStationSeriesObservationPoints(observationChunk.rows));
+            partComplete = partComplete && observationChunk.complete;
+            observationPartsComplete = observationPartsComplete && observationChunk.complete;
+            if (kind === "combined") {
+              const calculated = loader.inspectAqiChunk({ ...payload?.aqi, points: payload?.aqi?.rows });
+              const conflicts = mergeStationHistoryAqi(record, parseStationSeriesAqiPoints(calculated.rows, context.pollutantKey), loadId, "combined_history_chunk");
+              applyAqiContextState(record.aqiPoints, context);
+              partComplete = partComplete && calculated.complete && conflicts.length === 0;
+              aqiPartsComplete = aqiPartsComplete && calculated.complete && conflicts.length === 0;
+            }
+            renderStationHistoryObservations(record, meta, windowValue, fullRange, loadId, "Loading chart data…");
+          }
+          if (partComplete) {
+            record.completedChunks[key] = { next_older_chunk_end_utc: nextEndUtc };
+            delete record.failedChunks[key];
+          } else {
+            complete = false;
+            record.failedChunks[key] ||= { reason: "incomplete_response", retry_at: new Date().toISOString() };
+          }
         }
-        try {
-          const payload = await fetchStationHistoryJson(
-            buildStationHistoryChunkUrl(kind, meta, chunk, stableHeadStartUtc),
+        record.updatedAt = new Date().toISOString();
+        persistStationHistoryCacheToStorage();
+      };
+      const workers = Array.from({ length: Math.min(STATION_HISTORY_CHUNK_CONCURRENCY, work.length) }, () => (async () => {
+        while (isSeriesLoadCurrent(loadId) && !signal.aborted) {
+          const item = work[cursor++];
+          if (!item) return;
+          let payload;
+          let error;
+          try {
+            payload = await fetchStationHistoryJson(
+            buildStationHistoryChunkUrl(kind, meta, item.chunk, stableHeadStartUtc),
             kind,
             loadId,
             signal,
           );
-          if (!isSeriesLoadCurrent(loadId)) return;
-          const nextEndUtc = payload?.chunk?.next_older_chunk_end_utc || chunk.start_utc;
-          if (kind === "aqi") {
-            const stableHeadStartMs = Date.parse(stableHeadStartUtc);
-            const chunkPoints = parseStationSeriesAqiPoints(payload?.points, context.pollutantKey);
-            const stableHeadOverlap = chunkPoints.filter((point) =>
-              Number.isFinite(stableHeadStartMs) && point.date.getTime() > stableHeadStartMs
-            );
-            if (stableHeadOverlap.length) {
-              console.error("[uk-aq station-history] AQI history response overlaps stable head", {
-                load_id: loadId,
-                chunk,
-                stable_head_start_utc: stableHeadStartUtc,
-                rejected_hours: stableHeadOverlap.map((point) => point.date.toISOString()),
-              });
-              record.failedChunks[key] = { reason: "aqi_stable_head_overlap", retry_at: new Date().toISOString() };
-              persistStationHistoryCacheToStorage();
-              break;
-            }
-            const conflicts = mergeStationHistoryAqi(
-              record,
-              chunkPoints,
-              loadId,
-              "history_chunk",
-            );
-            applyAqiContextState(record.aqiPoints, context);
-            if (conflicts.length) {
-              record.failedChunks[key] = { reason: "aqi_replacement_contract_error", retry_at: new Date().toISOString() };
-              break;
-            }
-          } else {
-            const observationChunk = loader.inspectObservationChunk(payload);
-            record.observationPoints = loader.mergeObservationPoints(
-              record.observationPoints,
-              parseStationSeriesObservationPoints(observationChunk.rows),
-            );
-            if (loader.isCalculatedCombinedResponse(payload)) {
-              const calculatedPoints = parseStationSeriesAqiPoints(payload?.aqi?.rows, context.pollutantKey);
-              const conflicts = mergeStationHistoryAqi(record, calculatedPoints, loadId, "combined_history_chunk");
-              applyAqiContextState(record.aqiPoints, context);
-              if (conflicts.length) {
-                record.failedChunks[key] = { reason: "aqi_replacement_contract_error", retry_at: new Date().toISOString() };
-                break;
-              }
-            }
-            renderStationHistoryObservations(record, meta, windowValue, fullRange, loadId, "Loading chart data…");
-            if (!observationChunk.complete) {
-              record.failedChunks[key] = { reason: "incomplete_response", partial_reasons: observationChunk.partial_reasons, retry_at: new Date().toISOString() };
-              record.updatedAt = new Date().toISOString();
-              persistStationHistoryCacheToStorage();
-              cursorEndUtc = chunk.start_utc;
-              complete = false;
-              continue;
-            }
+          } catch (caught) {
+            error = caught;
           }
-          if (payload?.response_complete !== true) {
-            record.failedChunks[key] = { reason: "incomplete_response", retry_at: new Date().toISOString() };
-            persistStationHistoryCacheToStorage();
-            break;
-          }
-          record.completedChunks[key] = { next_older_chunk_end_utc: nextEndUtc };
-          delete record.failedChunks[key];
-          record.updatedAt = new Date().toISOString();
-          persistStationHistoryCacheToStorage();
-          cursorEndUtc = nextEndUtc;
-        } catch (error) {
-          if (isAbortError(error)) throw error;
-          record.failedChunks[key] = {
-            reason: sanitizeChartTelemetryErrorMessage(error),
-            retry_at: new Date().toISOString(),
-          };
-          persistStationHistoryCacheToStorage();
-          console.warn("[uk-aq station-history] retained completed chunks after failure", { kind, key, error });
-          break;
+          await ordered.settle(item.sequence, { item, payload, error }, commit);
         }
-      }
+      })());
+      await Promise.all(workers);
+      await ordered.flush();
+      complete = complete || (work.length > 0 && work.every((item) => Boolean(record.completedChunks[item.key])));
       if (kind === "aqi") record.aqiComplete = complete;
-      else record.observationsComplete = complete;
+      else if (kind === "observations") record.observationsComplete = complete;
+      else {
+        record.aqiComplete = aqiPartsComplete;
+        record.observationsComplete = observationPartsComplete;
+      }
     }
 
     function renderStationHistoryStaleFallback(record, meta, windowValue, range, context, loadId) {
@@ -4732,10 +4745,13 @@
       try {
         noteAqiRequest(loadId);
         noteObservationRequest(loadId, { usedEtag: false });
-        const response = await fetchCacheApi(stationSeriesUrl.toString(), {
+        const execute = () => fetchCacheApi(stationSeriesUrl.toString(), {
           headers: { Accept: "application/json" },
           signal,
         });
+        const response = stationHistoryFetchScheduler
+          ? await stationHistoryFetchScheduler.schedule(0, execute, signal)
+          : await execute();
         noteAqiResponse(loadId, response);
         noteObservationResponse(loadId, response);
         if (!response.ok) throw new Error(`Station-series request failed: ${response.status}`);
@@ -4769,7 +4785,7 @@
       }
 
       const combinedResponse = window.UkAqStationHistoryLoader.isCalculatedCombinedResponse(payload);
-      const aqiNextEndUtc = combinedResponse ? null : payload?.aqi?.next_older_aqi_chunk_end_utc
+      const aqiNextEndUtc = payload?.aqi?.next_older_aqi_chunk_end_utc
         ?? payload?.aqi?.next_chunk_end_utc
         ?? null;
       const observationNextEndUtc = payload?.observations?.next_chunk_end_utc ?? null;
@@ -4791,7 +4807,8 @@
         renderStationHistoryObservations(record, meta, windowValue, fullRange, loadId, "No observations in this window.");
       }
       const observationChunks = loadStationHistoryChunks(
-        "observations", meta, windowValue, fullRange, stableHeadStartUtc, observationNextEndUtc,
+        combinedResponse ? "combined" : "observations", meta, windowValue, fullRange, stableHeadStartUtc,
+        combinedResponse ? (observationNextEndUtc || aqiNextEndUtc) : observationNextEndUtc,
         record, context, loadId, signal,
       );
 

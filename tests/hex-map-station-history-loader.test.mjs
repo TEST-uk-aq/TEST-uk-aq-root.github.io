@@ -9,7 +9,7 @@ const section = page.slice(start, end);
 
 assert.ok(start >= 0, "Hex Map progressive station-history loader exists");
 assert.match(page, /station_history_loader/);
-assert.match(page, /HEX_MAP_STATION_HISTORY_CACHE_CONTRACT = "hex-map-station-history-v3"/);
+assert.match(page, /HEX_MAP_STATION_HISTORY_CACHE_CONTRACT = "hex-map-station-history-v4-calculated-aqi"/);
 assert.match(page, /const periodEndIndex = columns\.indexOf\("period_end_utc"\)/);
 assert.match(page, /periodEndIndex >= 0 \? row\[periodEndIndex\] : timestampHourIndex >= 0/);
 assert.match(page, /periodStart: new Date\(periodEnd\.getTime\(\) - HOUR_MS\)/);

@@ -416,7 +416,7 @@
   function createCacheRecord(raw) {
     const value = raw && typeof raw === "object" ? raw : {};
     return {
-      contract_version: "station-history-v2-calculated-aqi",
+      contract_version: "station-history-v1",
       aqi_points: Array.isArray(value.aqi_points) ? value.aqi_points : [],
       observation_points: Array.isArray(value.observation_points) ? value.observation_points : [],
       completed_chunks: value.completed_chunks && typeof value.completed_chunks === "object"
@@ -431,7 +431,6 @@
       },
       aqi_complete: value.aqi_complete === true,
       observations_complete: value.observations_complete === true,
-      calculated_combined: value.calculated_combined === true,
       identity: resolveAuthoritativeIdentity({ identity: value.identity }) || null,
       guideline: value.guideline && typeof value.guideline === "object" ? value.guideline : null,
       updated_at: typeof value.updated_at === "string" ? value.updated_at : null,
@@ -458,14 +457,6 @@
       retryable: !complete,
       partial_reasons: Array.isArray(payload?.partial_reasons) ? payload.partial_reasons.map(String) : [],
     };
-  }
-
-  function isCalculatedCombinedResponse(payload) {
-    return Number(payload?.schema_version) >= 2
-      && payload?.aqi?.enabled === true
-      && payload?.aqi?.calculation_source === "calculated_from_observations"
-      && Array.isArray(payload?.observations?.rows)
-      && Array.isArray(payload?.aqi?.rows);
   }
 
   function resolveStationSeriesHeadBounds(payload, kind, fallbackRange) {
@@ -503,7 +494,6 @@
     createCacheRecord,
     inspectAqiChunk,
     inspectObservationChunk,
-    isCalculatedCombinedResponse,
     resolveStationSeriesHeadBounds,
   };
 });

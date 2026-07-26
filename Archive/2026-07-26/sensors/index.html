@@ -647,7 +647,7 @@
     const SERIES_CACHE_STORAGE_KEY = `uk_aq_series_cache_v4:${projectRef || "unknown"}`;
     // Stored AQI dates are canonical hour-ending endpoints. Explicit period
     // bounds are derived from that unambiguous value when cache records load.
-    const STATION_HISTORY_CACHE_STORAGE_KEY = `uk_aq_station_history_cache_v2_calculated_aqi:${projectRef || "unknown"}`;
+    const STATION_HISTORY_CACHE_STORAGE_KEY = `uk_aq_station_history_cache_v1:${projectRef || "unknown"}`;
     const STATION_HISTORY_CACHE_MAX_KEYS = 30;
     const STATION_HISTORY_AQI_CHUNK_HOURS = 31 * 24;
     const STATION_HISTORY_OBSERVATION_CHUNK_HOURS = 7 * 24;
@@ -4396,7 +4396,7 @@
 
     function serializeStationHistoryRecord(record) {
       return {
-        contract_version: "station-history-v2-calculated-aqi",
+        contract_version: "station-history-v1",
         aqi_points: (record?.aqiPoints || []).map((point) => [
           point.date.toISOString(), point.daqi, point.eaqi,
         ]),
@@ -4433,7 +4433,7 @@
       if (!window.localStorage) return;
       try {
         const parsed = JSON.parse(localStorage.getItem(STATION_HISTORY_CACHE_STORAGE_KEY) || "null");
-        if (parsed?.version !== 2 || parsed?.contract_version !== "station-history-v2-calculated-aqi") return;
+        if (parsed?.version !== 1 || parsed?.contract_version !== "station-history-v1") return;
         Object.entries(parsed.records || {}).forEach(([key, value]) => {
           stationHistoryCacheByKey.set(key, normalizeStationHistoryRecord(value));
         });
@@ -4452,8 +4452,8 @@
             records[key] = serializeStationHistoryRecord(record);
           });
         localStorage.setItem(STATION_HISTORY_CACHE_STORAGE_KEY, JSON.stringify({
-          version: 2,
-          contract_version: "station-history-v2-calculated-aqi",
+          version: 1,
+          contract_version: "station-history-v1",
           saved_at: new Date().toISOString(),
           records,
         }));
@@ -4644,15 +4644,6 @@
               record.observationPoints,
               parseStationSeriesObservationPoints(observationChunk.rows),
             );
-            if (loader.isCalculatedCombinedResponse(payload)) {
-              const calculatedPoints = parseStationSeriesAqiPoints(payload?.aqi?.rows, context.pollutantKey);
-              const conflicts = mergeStationHistoryAqi(record, calculatedPoints, loadId, "combined_history_chunk");
-              applyAqiContextState(record.aqiPoints, context);
-              if (conflicts.length) {
-                record.failedChunks[key] = { reason: "aqi_replacement_contract_error", retry_at: new Date().toISOString() };
-                break;
-              }
-            }
             renderStationHistoryObservations(record, meta, windowValue, fullRange, loadId, "Loading chart data…");
             if (!observationChunk.complete) {
               record.failedChunks[key] = { reason: "incomplete_response", partial_reasons: observationChunk.partial_reasons, retry_at: new Date().toISOString() };
@@ -4768,12 +4759,11 @@
         applyAqiContextState(record.aqiPoints, context);
       }
 
-      const combinedResponse = window.UkAqStationHistoryLoader.isCalculatedCombinedResponse(payload);
-      const aqiNextEndUtc = combinedResponse ? null : payload?.aqi?.next_older_aqi_chunk_end_utc
+      const aqiNextEndUtc = payload?.aqi?.next_older_aqi_chunk_end_utc
         ?? payload?.aqi?.next_chunk_end_utc
         ?? null;
       const observationNextEndUtc = payload?.observations?.next_chunk_end_utc ?? null;
-      const aqiChunks = combinedResponse ? Promise.resolve() : loadStationHistoryChunks(
+      const aqiChunks = loadStationHistoryChunks(
         "aqi", meta, windowValue, fullRange, stableHeadStartUtc, aqiNextEndUtc,
         record, context, loadId, signal,
       );

@@ -17013,7 +17013,7 @@
     params.get("station_history_loader"),
     true,
   ) && Boolean(window.UkAqStationHistoryLoader);
-  const HEX_MAP_STATION_HISTORY_CACHE_CONTRACT = "hex-map-station-history-v4-calculated-aqi";
+  const HEX_MAP_STATION_HISTORY_CACHE_CONTRACT = "hex-map-station-history-v3";
   const aqiHistoryBaseUrl = resolveAqiHistoryBaseUrl(params.get("aqi_history_base"));
   const AQI_HISTORY_BASE_PLACEHOLDER = "https://cic-test.chronicillnesschannel.co.uk/api/aq/aqi-history";
   const configuredAqiHistoryBase = AQI_HISTORY_BASE_PLACEHOLDER.includes("__UK_AQ_AQI_HISTORY_BASE_URL__")
@@ -20860,7 +20860,6 @@
   }
 
   function stationHistoryNextBoundary(section, kind) {
-    if (kind === "aqi" && section?.calculation_source === "calculated_from_observations") return null;
     const domainBoundary = kind === "aqi"
       ? section?.next_older_aqi_chunk_end_utc
       : section?.next_older_observation_chunk_end_utc;
@@ -21101,14 +21100,6 @@
         } else {
           const observationChunk = loader.inspectObservationChunk(payload);
           record.observation_points = loader.mergeObservationPoints(record.observation_points, parseStationSeriesObservationPoints({ rows: observationChunk.rows }));
-          if (loader.isCalculatedCombinedResponse(payload)) {
-            const calculated = loader.inspectAqiChunk({ ...payload.aqi, points: payload.aqi.rows });
-            const mergedAqi = loader.mergeAqiWithoutReplacement(record.aqi_points, parseStationSeriesAqiPoints({ rows: calculated.rows }));
-            record.aqi_points = mergedAqi.points;
-            record.aqi_complete = calculated.complete && !mergedAqi.conflicts.length;
-            record.calculated_combined = true;
-            loader.recordCoverageInterval(record, "aqi", requestRange, record.aqi_complete ? "complete" : "partial", { partial_reasons: calculated.partial_reasons });
-          }
           const state = observationChunk.complete ? "complete" : "partial";
           loader.recordCoverageInterval(record, kind, requestRange, state, { partial_reasons: observationChunk.partial_reasons });
           if (observationChunk.complete) {
@@ -21315,7 +21306,6 @@
           );
           record.aqi_points = merged.points;
           record.aqi_complete = stationHistoryIsComplete(payload.aqi) && !stationHistoryNextBoundary(payload.aqi, "aqi");
-          record.calculated_combined = loader.isCalculatedCombinedResponse(payload);
           record.stable_head_start_utc = bounds?.startUtc || null;
           record.stable_head_end_utc = bounds?.endUtc || null;
           record.updated_at = new Date().toISOString();
@@ -21579,21 +21569,19 @@
         }));
       if (cachedHeadsReusable) {
         entries.forEach((entry) => currentObservationStationIds.add(entry.stationId));
-        const cachedAqiPromise = primaryRecord.calculated_combined
-          ? Promise.resolve()
-          : loadStationHistoryOlderChunks(
-            "aqi",
-            primary,
-            primaryRecord,
-            range,
-            primaryRecord.stable_head_start_utc,
-            cachedAqiCursor,
-            windowValue,
-            historyRenderScheduler,
-            signal,
-            token,
-            STATION_HISTORY_AQI_CHUNK_CONCURRENCY,
-          );
+        const cachedAqiPromise = loadStationHistoryOlderChunks(
+          "aqi",
+          primary,
+          primaryRecord,
+          range,
+          primaryRecord.stable_head_start_utc,
+          cachedAqiCursor,
+          windowValue,
+          historyRenderScheduler,
+          signal,
+          token,
+          STATION_HISTORY_AQI_CHUNK_CONCURRENCY,
+        );
         await cachedAqiPromise;
         if (signal.aborted || token !== state.loadToken) return;
         if (!isAqiSourceChangeOnly) {
@@ -21685,7 +21673,6 @@
       );
       primaryRecord.aqi_points = headMerge.points;
       primaryRecord.aqi_complete = stationHistoryIsComplete(primaryPayload.aqi) && !stationHistoryNextBoundary(primaryPayload.aqi, "aqi");
-      primaryRecord.calculated_combined = loader.isCalculatedCombinedResponse(primaryPayload);
       primaryRecord.stable_head_start_utc = aqiHeadBounds?.startUtc || null;
       primaryRecord.stable_head_end_utc = aqiHeadBounds?.endUtc || null;
       primaryRecord.updated_at = new Date().toISOString();

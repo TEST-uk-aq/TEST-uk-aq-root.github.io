@@ -72,8 +72,13 @@ assert.equal(loader.isOlderChunk(range.start_utc, range.end_utc, "2026-07-14T23:
 const retryKey = loader.chunkKey("aqi", range);
 const record = loader.createCacheRecord({ completed_chunks: { [retryKey]: range } });
 assert.equal(record.completed_chunks[retryKey].end_utc, range.end_utc);
-assert.equal(record.contract_version, "station-history-v1");
+assert.equal(record.contract_version, "station-history-v2-calculated-aqi");
 assert.equal(record.identity, null);
+assert.equal(loader.isCalculatedCombinedResponse({
+  schema_version: 2,
+  observations: { rows: [] },
+  aqi: { enabled: true, calculation_source: "calculated_from_observations", rows: [] },
+}), true);
 
 loader.recordCoverageInterval(record, "aqi", {
   start_utc: "2026-07-08T00:00:00.000Z",

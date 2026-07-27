@@ -72,7 +72,10 @@
     const source = payload?.identity && typeof payload.identity === "object"
       ? payload.identity
       : payload?.request;
-    const timeseriesId = positiveInteger(source?.timeseries_id);
+    const physicalTimeseriesId = positiveInteger(source?.timeseries_id);
+    const requestedTimeseriesId = positiveInteger(source?.requested_timeseries_id);
+    if (physicalTimeseriesId && requestedTimeseriesId && physicalTimeseriesId !== requestedTimeseriesId) return null;
+    const timeseriesId = physicalTimeseriesId || requestedTimeseriesId;
     const connectorId = positiveInteger(source?.connector_id);
     const stationId = positiveInteger(source?.station_id);
     const pollutant = normalizePollutant(source?.pollutant ?? source?.pollutant_code);

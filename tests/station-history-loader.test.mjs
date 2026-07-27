@@ -407,6 +407,13 @@ assert.deepEqual(authoritativeIdentity, {
   station_id: 42,
   pollutant: "no2",
 });
+const calculatedHistoryIdentity = loader.resolveAuthoritativeIdentity({
+  request: { requested_timeseries_id: 420, connector_id: 2, station_id: 42, pollutant: "no2" },
+}, { timeseriesId: "420", pollutant: "NO2" });
+assert.deepEqual(calculatedHistoryIdentity, authoritativeIdentity, "calculated older-history chunks retain the requested logical-series identity");
+assert.equal(loader.resolveAuthoritativeIdentity({
+  request: { timeseries_id: 421, requested_timeseries_id: 420, connector_id: 2, station_id: 42, pollutant: "no2" },
+}, { timeseriesId: "420", pollutant: "NO2" }), null, "conflicting physical and requested timeseries identities remain unsafe");
 assert.equal(loader.createCacheRecord({ identity: authoritativeIdentity }).identity.connector_id, 2);
 
 // A 12h/24h response that says its next boundary is the requested start has

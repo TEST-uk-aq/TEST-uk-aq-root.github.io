@@ -502,6 +502,102 @@
     };
   }
 
+  async function completeAtomicAqiSourceSwitch(options) {
+    const config = options && typeof options === "object" ? options : {};
+    const gate = config.gate;
+    const isCurrent = typeof config.isCurrent === "function" ? config.isCurrent : function () { return true; };
+    await Promise.all([
+      config.aqiWorkPromise || Promise.resolve(),
+      config.transitionPromise || Promise.resolve(),
+    ]);
+    if (!gate || isCurrent() !== true || gate.markTerminal() !== true) {
+      return { committed: false };
+    }
+    return {
+      committed: gate.commit(config.commit),
+    };
+  }
+
+  function normalizeAqiSourceSwitchIdentity(value) {
+    const rangeStartUtc = String(value?.range_start_utc || "").trim();
+    const rangeEndUtc = String(value?.range_end_utc || "").trim();
+    const rangeStartMs = Date.parse(rangeStartUtc);
+    const rangeEndMs = Date.parse(rangeEndUtc);
+    const loadToken = Number(value?.load_token);
+    const transitionToken = Number(value?.transition_token);
+    const sourceId = String(value?.source_id || "").trim();
+    if (!sourceId
+      || !Number.isFinite(rangeStartMs)
+      || !Number.isFinite(rangeEndMs)
+      || rangeEndMs <= rangeStartMs
+      || !Number.isFinite(loadToken)
+      || !Number.isFinite(transitionToken)) return null;
+    return Object.freeze({
+      source_id: sourceId,
+      range_start_utc: new Date(rangeStartMs).toISOString(),
+      range_end_utc: new Date(rangeEndMs).toISOString(),
+      load_token: loadToken,
+      transition_token: transitionToken,
+    });
+  }
+
+  function createAqiSourceSwitchMessageController() {
+    let currentIdentity = null;
+    let errorOwner = null;
+    const sameIdentity = function (left, right) {
+      return Boolean(left && right)
+        && left.source_id === right.source_id
+        && left.range_start_utc === right.range_start_utc
+        && left.range_end_utc === right.range_end_utc
+        && left.load_token === right.load_token
+        && left.transition_token === right.transition_token;
+    };
+    return {
+      begin(identity) {
+        currentIdentity = normalizeAqiSourceSwitchIdentity(identity);
+        errorOwner = null;
+        return currentIdentity;
+      },
+      fail(identity, reason) {
+        const candidate = normalizeAqiSourceSwitchIdentity(identity);
+        if (!sameIdentity(candidate, currentIdentity)) return false;
+        errorOwner = Object.freeze({
+          ...candidate,
+          actual_failure: true,
+          failure_reason: String(reason || "aqi_source_switch_failed"),
+          message: "AQI bands could not be updated for the selected sensor.",
+        });
+        return true;
+      },
+      succeed(identity) {
+        const candidate = normalizeAqiSourceSwitchIdentity(identity);
+        if (!sameIdentity(candidate, currentIdentity)) return false;
+        errorOwner = null;
+        return true;
+      },
+      invalidate() {
+        currentIdentity = null;
+        errorOwner = null;
+      },
+      get error() { return errorOwner; },
+      get current_identity() { return currentIdentity; },
+    };
+  }
+
+  function resolveAqiSourceSwitchMessage(text, options) {
+    const config = options && typeof options === "object" ? options : {};
+    const requestedText = String(text || "");
+    const ownedMessage = String(config.errorOwner?.message || "");
+    const preserveOwnedError = !requestedText
+      && config.clearOwnedError !== true
+      && ownedMessage
+      && String(config.currentText || "") === ownedMessage;
+    return {
+      text: preserveOwnedError ? ownedMessage : requestedText,
+      error: Boolean(preserveOwnedError || config.error === true),
+    };
+  }
+
   function normalizeStationIdentity(value) {
     if (value === null || value === undefined) return "";
     return String(value).trim();
@@ -702,6 +798,9 @@
     createPriorityFetchScheduler,
     waitForTransition,
     createAtomicAqiRenderGate,
+    completeAtomicAqiSourceSwitch,
+    createAqiSourceSwitchMessageController,
+    resolveAqiSourceSwitchMessage,
     normalizeStationIdentity,
     hasPositiveTimeseriesIdentity,
     resolveAuthoritativeIdentity,

@@ -247,6 +247,96 @@ const replacementSwitch = loader.createAtomicAqiRenderGate({
 replacementSwitch.markTerminal();
 assert.equal(replacementSwitch.commit(() => { visibleAqiCommitCount += 1; }), true);
 
+const switchMessages = loader.createAqiSourceSwitchMessageController();
+const oldSwitchIdentity = {
+  source_id: "old-source",
+  range_start_utc: "2026-07-26T12:00:00.000Z",
+  range_end_utc: "2026-07-27T12:00:00.000Z",
+  load_token: 10,
+  transition_token: 20,
+};
+switchMessages.begin(oldSwitchIdentity);
+assert.equal(switchMessages.fail(oldSwitchIdentity, "request_failed"), true);
+assert.equal(switchMessages.error.actual_failure, true, "a genuine current failure owns the AQI message");
+switchMessages.invalidate();
+assert.equal(switchMessages.error, null, "a new selection can clear the previous AQI error synchronously");
+
+const currentSwitchIdentity = { ...oldSwitchIdentity, source_id: "current-source", load_token: 11, transition_token: 21 };
+switchMessages.begin(currentSwitchIdentity);
+assert.equal(switchMessages.succeed(currentSwitchIdentity), true);
+assert.equal(switchMessages.error, null, "a settled or authoritative-partial success finishes without an AQI error");
+assert.equal(switchMessages.fail(oldSwitchIdentity, "obsolete_failure"), false);
+assert.equal(switchMessages.error, null, "an obsolete transition cannot acquire message ownership");
+switchMessages.fail(currentSwitchIdentity, "service_failed");
+const resizeObservedOwner = switchMessages.error;
+assert.equal(switchMessages.current_identity.source_id, "current-source");
+assert.equal(switchMessages.error, resizeObservedOwner, "resize observation does not become or clear the AQI error owner");
+assert.deepEqual(loader.resolveAqiSourceSwitchMessage("", {
+  errorOwner: resizeObservedOwner,
+  currentText: resizeObservedOwner.message,
+}), {
+  text: resizeObservedOwner.message,
+  error: true,
+}, "a resize-time blank message cannot hide the current owned AQI failure");
+assert.deepEqual(loader.resolveAqiSourceSwitchMessage("", {
+  errorOwner: resizeObservedOwner,
+  currentText: resizeObservedOwner.message,
+  clearOwnedError: true,
+}), { text: "", error: false }, "the owning transition can explicitly clear its AQI failure");
+const newerSwitchIdentity = { ...currentSwitchIdentity, source_id: "newer-source", load_token: 12, transition_token: 22 };
+switchMessages.begin(newerSwitchIdentity);
+assert.equal(switchMessages.error, null, "a newer successful transition clears the older transition's error");
+
+let unrelatedObservationSettled = false;
+let releaseUnrelatedObservation;
+const unrelatedObservationWork = new Promise((resolve) => {
+  releaseUnrelatedObservation = () => {
+    unrelatedObservationSettled = true;
+    resolve();
+  };
+});
+let unrelatedPrefetchSettled = false;
+let releaseUnrelatedPrefetch;
+const unrelatedPrefetchWork = new Promise((resolve) => {
+  releaseUnrelatedPrefetch = () => {
+    unrelatedPrefetchSettled = true;
+    resolve();
+  };
+});
+let isolatedCommitCount = 0;
+const isolatedGate = loader.createAtomicAqiRenderGate();
+const isolatedCompletion = await loader.completeAtomicAqiSourceSwitch({
+  gate: isolatedGate,
+  aqiWorkPromise: Promise.resolve(),
+  transitionPromise: loader.waitForTransition(0),
+  commit: () => { isolatedCommitCount += 1; },
+  // These deliberately unresolved tasks are not part of the visible AQI switch.
+  observationPromise: unrelatedObservationWork,
+  backgroundPrefetchPromise: unrelatedPrefetchWork,
+});
+assert.equal(isolatedCompletion.committed, true);
+assert.equal(isolatedCommitCount, 1, "the isolated AQI switch commits exactly once");
+assert.equal(unrelatedObservationSettled, false, "pending observation work does not delay the AQI commit");
+assert.equal(unrelatedPrefetchSettled, false, "background prefetch does not delay the AQI commit");
+releaseUnrelatedObservation();
+releaseUnrelatedPrefetch();
+await Promise.all([unrelatedObservationWork, unrelatedPrefetchWork]);
+
+let releaseUncachedAqi;
+const uncachedAqiWork = new Promise((resolve) => { releaseUncachedAqi = resolve; });
+let uncachedCommitCount = 0;
+const uncachedCompletion = loader.completeAtomicAqiSourceSwitch({
+  gate: loader.createAtomicAqiRenderGate(),
+  aqiWorkPromise: uncachedAqiWork,
+  transitionPromise: Promise.resolve(),
+  commit: () => { uncachedCommitCount += 1; },
+});
+await loader.waitForTransition(0);
+assert.equal(uncachedCommitCount, 0, "genuinely uncached AQI still waits for its required work");
+releaseUncachedAqi();
+assert.equal((await uncachedCompletion).committed, true);
+assert.equal(uncachedCommitCount, 1);
+
 const distinctHeadPayload = {
   aqi: {
     stable_head_start_utc: "2026-07-08T00:00:00.000Z",

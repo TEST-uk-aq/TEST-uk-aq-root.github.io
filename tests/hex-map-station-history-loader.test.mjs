@@ -51,7 +51,8 @@ const sourceSetterEnd = page.indexOf("function buildChartHeaderHtml", sourceSett
 const sourceSetterSection = page.slice(sourceSetterStart, sourceSetterEnd);
 assert.match(sourceSetterSection, /state\.aqiTransitionToken = Number\(state\.aqiTransitionToken \|\| 0\) \+ 1/, "a second selection invalidates the older transition synchronously");
 assert.match(sourceSetterSection, /syncAqiBands\(chartFrame,[\s\S]*forceClear: true,[\s\S]*aqiLoading: true/, "the previous source bands disappear at selection time, even while an older load is aborting");
-assert.match(sourceSetterSection, /const displayedRange = getDisplayedChartRange\(chartFrame\)/, "the source setter snapshots the displayed range before clearing AQI");
+assert.match(sourceSetterSection, /const frameIdentityValid = isCurrentChartFrame\(chartFrame\)[\s\S]*const displayedRange = frameIdentityValid \? getDisplayedChartRange\(chartFrame\) : null/, "the source setter snapshots only the current chart frame's displayed range before clearing AQI");
+assert.match(sourceSetterSection, /aqiSourceSwitchMessages\.invalidate\(\)[\s\S]*setMessage\("", \{ clearAqiSourceError: true \}\)/, "a new AQI source clears an older transition error synchronously");
 assert.match(sourceSetterSection, /displayedRange,[\s\S]*settledAqiCacheHit: isAqiSourceRangeSettled\(selectedEntry, displayedRange\)/, "cache-hit detection and load takeover receive the same displayed range");
 
 assert.match(targetedSection, /forceClearAqi: aqiSourceChanged/, "the previous source bands are cleared immediately");
@@ -59,12 +60,12 @@ assert.match(targetedSection, /waitForTransition\(AQI_SOURCE_TRANSITION_MS, sign
 assert.match(targetedSection, /createAtomicAqiRenderGate/, "source switching uses an explicit visible render gate");
 assert.match(targetedSection, /aqiTransitionGate\?\.stage\(\)/, "settled head and chunk work is staged");
 assert.match(targetedSection, /const aqiScheduler = aqiSourceChanged[\s\S]*schedule: \(\) => \{[\s\S]*aqiTransitionGate\?\.stage\(\)[\s\S]*flush: \(\) => Promise\.resolve\(\)/, "AQI switch chunks settle without a render callback");
-assert.match(targetedSection, /const requiredTransitionWork = isAqiSourceChangeOnly[\s\S]*\? \[aqiHistoryPromise, aqiTransitionPromise\][\s\S]*await Promise\.all\(requiredTransitionWork\)/, "an AQI-only switch does not await observation-history work");
-assert.match(targetedSection, /aqiTransitionGate\?\.markTerminal\(\)/);
-assert.match(targetedSection, /aqiTransitionGate\.commit\(commitTargetedRender\)/, "the visible AQI layer commits once at terminal state");
+assert.match(targetedSection, /completeAtomicAqiSourceSwitch\(\{[\s\S]*aqiWorkPromise: aqiHistoryPromise,[\s\S]*transitionPromise: aqiTransitionPromise,[\s\S]*commit: commitTargetedRender/, "the AQI-only terminal helper awaits only required AQI work and the transition");
+assert.match(targetedSection, /else \{[\s\S]*await observationScheduler\.flush\(\)/, "observation scheduler flushing remains on the non-AQI-only branch");
 assert.match(targetedSection, /const sourceNeedsAqi = aqiSourceChanged[\s\S]*getUncoveredRanges\(primaryRecord, "aqi", requestedRange\)/, "AQI request planning uses settlement coverage");
 assert.match(targetedSection, /const sourceLoadPromise = \(sourceNeedsObservations \|\| sourceNeedsAqi\)/, "a settled AQI-only switch starts no source request");
-assert.match(targetedSection, /aqiTransitionFailed[\s\S]*AQI bands could not be updated for the selected sensor/, "an actual unsettled AQI failure retains the error state");
+assert.doesNotMatch(targetedSection, /const aqiTransitionFailed/, "uncovered cache intervals alone are no longer inferred to be a visible failure");
+assert.match(targetedSection, /aqiSourceSwitchMessages\.fail\(aqiSwitchIdentity/, "confirmed current AQI failures acquire transition-local message ownership");
 assert.doesNotMatch(page, /AQI bands are incomplete for the selected sensor/, "authoritative blank AQI intervals do not produce the false warning");
 assert.match(targetedSection, /token === state\.loadToken[\s\S]*aqiTransitionToken === state\.aqiTransitionToken/, "obsolete load and transition tokens cannot commit");
 
@@ -74,6 +75,7 @@ assert.match(targetedSection, /observations: sourceNeedsObservations,[\s\S]*aqi:
 assert.match(targetedSection, /skipAqiRepaint: true/, "observation-only targeted renders cannot expose staged AQI");
 assert.match(targetedSection, /aqiChangeOnly: aqiSourceChanged && !addedEntries\.length/, "the final AQI-only commit takes the non-observation repaint path");
 assert.match(targetedSection, /void prefetchStationHistoryAqi/, "background AQI prefetch is not awaited by the visible switch");
+assert.match(targetedSection, /if \(!isAqiSourceChangeOnly\) setLoading\(true\)/, "AQI-only switching does not apply the full-chart loading class");
 
 const updateStart = page.indexOf("function updateChart(");
 const updateEnd = page.indexOf("function ensureChartFrame", updateStart);
@@ -84,18 +86,20 @@ const legacyStart = page.indexOf("async function loadLegacyChartData");
 const legacyEnd = page.indexOf("async function loadStationHistoryChartData", legacyStart);
 const legacySection = page.slice(legacyStart, legacyEnd);
 assert.match(legacySection, /options\.settledAqiCacheHit === true[\s\S]*state\.loadAbortController\?\.abort\(\)/, "a settled compatibility switch immediately supersedes unrelated chart loading");
-assert.match(legacySection, /const displayedAqiSourceRange = isAqiSourceChangeOnly[\s\S]*normalizeDisplayedChartRange\(options\.displayedRange\)[\s\S]*getDisplayedChartRange\(dom\?\.chartFrame\)[\s\S]*const range = displayedAqiSourceRange \|\| resolveRange\(windowValue\)/, "the compatibility path reuses the exact displayed range");
+assert.match(legacySection, /const displayedAqiSourceRange = isAqiSourceChangeOnly && isCurrentChartFrame\(dom\?\.chartFrame\)[\s\S]*normalizeDisplayedChartRange\(options\.displayedRange\)[\s\S]*getDisplayedChartRange\(dom\?\.chartFrame\)[\s\S]*const range = displayedAqiSourceRange \|\| resolveRange\(windowValue\)/, "the compatibility path reuses the exact displayed range only for the current frame identity");
 assert.match(legacySection, /const atomicAqiSourceSwitch = isAqiSourceChangeOnly && frameValid/);
 assert.match(legacySection, /getMissingRangesForRequest\(range, aqiCacheRecord\.settledRanges\)/, "the compatibility path plans AQI requests from settlement coverage");
 assert.match(legacySection, /const aqiProgressPromise = \(async \(\) => \{[\s\S]*if \(!aqiCacheRecord \|\| !aqiMissingRanges\.length\) return;/, "a settled compatibility switch starts no AQI request");
-assert.match(legacySection, /settled: isAqiCacheResultSettled\(result\)/, "compatibility responses explicitly record settlement");
+assert.match(legacySection, /const aqiResultSettled = isAqiCacheResultSettled\(result\)[\s\S]*settled: aqiResultSettled/, "compatibility responses explicitly record settlement");
+assert.match(page, /function isAqiCacheResultSettled\(result\)[\s\S]*inspectAqiSettlement\([\s\S]*\)\.settled/, "compatibility authoritative partials use the shared calculated-gap settlement contract");
 assert.match(legacySection, /aqiTransitionGate\.stage\(\);[\s\S]*return;[\s\S]*syncAqiBands/, "legacy fallback also gates per-chunk AQI painting");
-assert.match(legacySection, /aqiTransitionGate\.commit\(commitAqiSourceSwitch\)/, "legacy fallback also commits once");
+assert.match(legacySection, /completeAtomicAqiSourceSwitch\(\{[\s\S]*commit: commitAqiSourceSwitch/, "legacy fallback also commits once through the isolated AQI terminal helper");
 assert.match(legacySection, /void prefetchAqiBandsForEntries/, "compatibility background prefetch is not awaited by the visible switch");
-assert.match(legacySection, /AQI bands could not be updated for the selected sensor/, "a genuine compatibility request failure retains the AQI error state");
+assert.match(legacySection, /aqiSourceSwitchMessages\.fail[\s\S]*aqiSourceSwitchMessages\.error\.message/, "only an explicitly failed current compatibility transition owns the AQI error");
+assert.match(legacySection, /if \(aqiLoadingActive \|\| hasObservationFetch\)[\s\S]*setLoading\(true\)/, "compatibility AQI-only switching does not apply the full-chart loading class");
 
 assert.match(loadSection, /options\.settledAqiCacheHit === true[\s\S]*state\.loadAbortController\?\.abort\(\)/, "a settled combined-path switch immediately supersedes unrelated chart loading");
-assert.match(loadSection, /const displayedAqiSourceRange = isAqiSourceChangeOnly[\s\S]*normalizeDisplayedChartRange\(options\.displayedRange\)[\s\S]*getDisplayedChartRange\(existing\)[\s\S]*const range = displayedAqiSourceRange \|\| resolveRange\(windowValue, retainedWindowEndMs\)/, "the combined path reuses the exact displayed range");
+assert.match(loadSection, /const displayedAqiSourceRange = isAqiSourceChangeOnly && frameValid[\s\S]*normalizeDisplayedChartRange\(options\.displayedRange\)[\s\S]*getDisplayedChartRange\(existing\)[\s\S]*const range = displayedAqiSourceRange \|\| resolveRange\(windowValue, retainedWindowEndMs\)/, "the combined path reuses the exact displayed range only for the current frame identity");
 for (const field of [
   "aqi_source_switch_total_ms",
   "aqi_source_switch_transition_ms",

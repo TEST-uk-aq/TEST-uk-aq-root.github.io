@@ -418,6 +418,43 @@
     });
   }
 
+  function createAtomicAqiRenderGate(options) {
+    const config = options && typeof options === "object" ? options : {};
+    const isCurrent = typeof config.isCurrent === "function" ? config.isCurrent : function () { return true; };
+    let stagedRevision = 0;
+    let terminal = false;
+    let committed = false;
+    let invalidated = false;
+
+    function current() {
+      return !invalidated && isCurrent() === true;
+    }
+
+    return {
+      stage() {
+        if (!current() || terminal) return false;
+        stagedRevision += 1;
+        return true;
+      },
+      markTerminal() {
+        terminal = true;
+        return current();
+      },
+      commit(render) {
+        if (!terminal || committed || !current()) return false;
+        committed = true;
+        if (typeof render === "function") render({ staged_revision: stagedRevision });
+        return true;
+      },
+      invalidate() {
+        invalidated = true;
+      },
+      get staged_revision() { return stagedRevision; },
+      get terminal() { return terminal; },
+      get committed() { return committed; },
+    };
+  }
+
   function normalizeStationIdentity(value) {
     if (value === null || value === undefined) return "";
     return String(value).trim();
@@ -577,6 +614,7 @@
     createOrderedSettlementBuffer,
     createPriorityFetchScheduler,
     waitForTransition,
+    createAtomicAqiRenderGate,
     normalizeStationIdentity,
     hasPositiveTimeseriesIdentity,
     resolveAuthoritativeIdentity,

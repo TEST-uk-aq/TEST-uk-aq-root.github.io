@@ -17366,6 +17366,16 @@
     if (!selectedIds.includes(normalizedId)) return false;
     if (state.selectedAqiSensorId === normalizedId) return true;
     state.selectedAqiSensorId = normalizedId;
+    state.aqiTransitionToken = Number(state.aqiTransitionToken || 0) + 1;
+    const chartFrame = domByMap[state.mapKey]?.chartFrame;
+    if (chartFrame) {
+      chartFrame.currentAqiSourceStationId = normalizedId;
+      syncAqiBands(chartFrame, {
+        forceClear: true,
+        aqiLoading: true,
+        aqiSourceSymbolIndex: getChartVisualSlot(normalizedId, Math.max(0, selectedIds.indexOf(normalizedId))),
+      });
+    }
     renderSensorList(getCurrentContext() || {});
     notifySelectionChange();
     if (options.reload !== false) {
@@ -20449,6 +20459,20 @@
         && frameValid
         && dom?.chartFrame?.currentAqiKey === aqiCacheKey
         && aqiMissingRanges.length === 0;
+      const atomicAqiSourceSwitch = isAqiSourceChangeOnly && frameValid;
+      const aqiTransitionToken = atomicAqiSourceSwitch
+        ? ((state.aqiTransitionToken = Number(state.aqiTransitionToken || 0) + 1), state.aqiTransitionToken)
+        : Number(state.aqiTransitionToken || 0);
+      const aqiTransitionGate = atomicAqiSourceSwitch
+        ? window.UkAqStationHistoryLoader.createAtomicAqiRenderGate({
+          isCurrent: () => !signal.aborted
+            && token === state.loadToken
+            && aqiTransitionToken === state.aqiTransitionToken,
+        })
+        : null;
+      const aqiTransitionPromise = atomicAqiSourceSwitch
+        ? window.UkAqStationHistoryLoader.waitForTransition(AQI_SOURCE_TRANSITION_MS, signal)
+        : Promise.resolve();
       const aqiProgressStartedAt = performance.now();
       const aqiProgressPromise = (async () => {
         if (!aqiCacheRecord || !aqiMissingRanges.length) return;
@@ -20471,6 +20495,10 @@
           if (!advanced || token !== state.loadToken || signal.aborted) return;
           const newlyRenderablePoints = getPointsInRanges(aqiCacheRecord.points, aqiRenderableRanges);
           aqiPoints = mergeSeriesPoints(initialAqiPoints, newlyRenderablePoints);
+          if (aqiTransitionGate) {
+            aqiTransitionGate.stage();
+            return;
+          }
           syncAqiBands(dom?.chartFrame, {
             aqiPoints,
             aqiCacheKey,
@@ -20530,12 +20558,16 @@
         aqiLoadingActive = false;
         if (token !== state.loadToken || signal.aborted) return;
         aqiPoints = getPointsInRange(aqiCacheRecord.points, range);
-        syncAqiBands(dom?.chartFrame, {
-          aqiPoints,
-          aqiCacheKey,
-          aqiLoading: false,
-          aqiSourceSymbolIndex,
-        });
+        if (aqiTransitionGate) {
+          aqiTransitionGate.stage();
+        } else {
+          syncAqiBands(dom?.chartFrame, {
+            aqiPoints,
+            aqiCacheKey,
+            aqiLoading: false,
+            aqiSourceSymbolIndex,
+          });
+        }
       })().finally(() => {
         recordWebsiteDebugTiming("aqi_bands_fetch_ms", performance.now() - aqiProgressStartedAt);
       }).catch((_err) => {
@@ -20558,51 +20590,66 @@
           animateChartDomains(dom.chartFrame, range, dom.chartFrame.yScale.domain(), token);
         } else if (hasCachedData) {
           updateChart(dom, seriesPointsMap, usableEntries, range, primaryGuideline, units, aqiPoints, {
-            aqiLoading: aqiLoadingActive,
+            aqiLoading: aqiLoadingActive || atomicAqiSourceSwitch,
             yAxisLoading: observsLoadingActive,
             aqiSourceSymbolIndex,
             aqiCacheKey,
             skipAqiRepaint: preserveAqiBandsForLineOnlyChange,
+            forceClearAqi: atomicAqiSourceSwitch,
+            aqiChangeOnly: atomicAqiSourceSwitch,
           });
         }
       } else if (hasCachedData) {
         updateChart(dom, seriesPointsMap, usableEntries, range, primaryGuideline, units, aqiPoints, {
-          aqiLoading: aqiLoadingActive,
+          aqiLoading: aqiLoadingActive || atomicAqiSourceSwitch,
           yAxisLoading: observsLoadingActive,
           aqiSourceSymbolIndex,
           aqiCacheKey,
           skipAqiRepaint: preserveAqiBandsForLineOnlyChange,
+          forceClearAqi: atomicAqiSourceSwitch,
+          aqiChangeOnly: atomicAqiSourceSwitch,
         });
       }
       if (!hasCachedData) {
         updateChart(dom, seriesPointsMap, usableEntries, range, primaryGuideline, units, aqiPoints, {
-          aqiLoading: aqiLoadingActive,
+          aqiLoading: aqiLoadingActive || atomicAqiSourceSwitch,
           yAxisLoading: observsLoadingActive,
           aqiSourceSymbolIndex,
           aqiCacheKey,
           skipAqiRepaint: preserveAqiBandsForLineOnlyChange,
+          forceClearAqi: atomicAqiSourceSwitch,
+          aqiChangeOnly: atomicAqiSourceSwitch,
         });
       }
 
-      if (aqiLoadingActive || hasObservationFetch) {
+      if (aqiLoadingActive || hasObservationFetch || atomicAqiSourceSwitch) {
         setLoading(true);
       }
-      await aqiProgressPromise;
+      await Promise.all([aqiProgressPromise, aqiTransitionPromise]);
       if (token !== state.loadToken || signal.aborted) return;
+      aqiTransitionGate?.markTerminal();
 
       // --- Fast path: everything already cached for this requested range. ---
       if (!hasObservationFetch) {
-        updateChart(dom, seriesPointsMap, usableEntries, range, primaryGuideline, units, aqiPoints, {
+        const commitAqiSourceSwitch = () => updateChart(dom, seriesPointsMap, usableEntries, range, primaryGuideline, units, aqiPoints, {
           aqiLoading: false,
           yAxisLoading: false,
           aqiSourceSymbolIndex,
           aqiCacheKey,
           skipAqiRepaint: preserveAqiBandsForLineOnlyChange,
+          aqiChangeOnly: atomicAqiSourceSwitch,
         });
+        if (aqiTransitionGate) {
+          if (!aqiTransitionGate.commit(commitAqiSourceSwitch)) return;
+        } else {
+          commitAqiSourceSwitch();
+        }
         const totalPoints = Array.from(seriesPointsMap.values()).reduce((sum, points) => sum + points.length, 0);
         if (!totalPoints) {
           setMessage("");
           renderNoHistoryChartMessage(dom, getNoHistoryChartMessage(usableEntries.length));
+        } else if (atomicAqiSourceSwitch && getMissingRangesForRequest(range, aqiCacheRecord?.coveredRanges || []).length) {
+          setMessage("AQI bands are incomplete for the selected sensor; available intervals are shown.", { error: true });
         } else {
           setMessage("");
         }
@@ -21378,21 +21425,16 @@
         const aqiTransitionToken = aqiSourceChanged
           ? ((state.aqiTransitionToken = Number(state.aqiTransitionToken || 0) + 1), state.aqiTransitionToken)
           : Number(state.aqiTransitionToken || 0);
-        let aqiTransitionReady = !aqiSourceChanged;
+        const aqiTransitionGate = aqiSourceChanged
+          ? loader.createAtomicAqiRenderGate({
+            isCurrent: () => !signal.aborted
+              && token === state.loadToken
+              && aqiTransitionToken === state.aqiTransitionToken,
+          })
+          : null;
         const aqiTransitionPromise = aqiSourceChanged
           ? loader.waitForTransition(AQI_SOURCE_TRANSITION_MS, signal).then(() => {
             if (signal.aborted || token !== state.loadToken || aqiTransitionToken !== state.aqiTransitionToken) return false;
-            aqiTransitionReady = true;
-            if (loader.getUncoveredRanges(getStationHistoryRecord(primary), "aqi", {
-              start_utc: range.startIso,
-              end_utc: range.endIso,
-            }).length) return true;
-            renderStationHistoryChart(dom, entries, range, units, primary, true, addedEntries.length > 0, {
-              currentObservationStationIds: currentObservationIds,
-              selectionChangeOnly: true,
-              changedStationIds,
-              aqiChangeOnly: true,
-            });
             return true;
           })
           : Promise.resolve(true);
@@ -21486,14 +21528,17 @@
             }, signal, STATION_HISTORY_FETCH_PRIORITY.primary);
             if (signal.aborted || token !== state.loadToken) return;
             payloadByStationId.set(primary.stationId, sourcePayload);
-            if (sourceNeedsAqi) aqiHead = mergeAqiHead(primary, primaryRecord, sourcePayload);
+            if (sourceNeedsAqi) {
+              aqiHead = mergeAqiHead(primary, primaryRecord, sourcePayload);
+              aqiTransitionGate?.stage();
+            }
             if (sourceNeedsObservations) mergeObservationHead(primary, primaryRecord, sourcePayload);
-            if (aqiTransitionReady && sourceNeedsAqi) {
+            if (sourceNeedsObservations) {
               renderStationHistoryChart(dom, entries, range, units, primary, true, addedEntries.length > 0, {
                 currentObservationStationIds: currentObservationIds,
                 selectionChangeOnly: true,
                 changedStationIds,
-                aqiChangeOnly: !sourceNeedsObservations,
+                skipAqiRepaint: true,
               });
             }
           } catch (error) {
@@ -21536,13 +21581,20 @@
         await Promise.all([sourceLoadPromise, addedHeadPromise]);
         if (signal.aborted || token !== state.loadToken) return;
 
-        const aqiScheduler = createStationHistoryRenderScheduler(() => {
-          if (!aqiTransitionReady) return;
-          renderStationHistoryChart(dom, entries, range, units, primary, true, addedEntries.length > 0, {
-            currentObservationStationIds: currentObservationIds,
-            aqiChangeOnly: true,
-          });
-        }, signal, token);
+        const aqiScheduler = aqiSourceChanged
+          ? {
+            schedule: () => {
+              aqiTransitionGate?.stage();
+              return Promise.resolve();
+            },
+            flush: () => Promise.resolve(),
+          }
+          : createStationHistoryRenderScheduler(() => {
+            renderStationHistoryChart(dom, entries, range, units, primary, true, addedEntries.length > 0, {
+              currentObservationStationIds: currentObservationIds,
+              aqiChangeOnly: true,
+            });
+          }, signal, token);
         const aqiHistoryPromise = aqiSourceChanged && aqiHead?.cursor
           ? loadStationHistoryOlderChunks(
             "aqi",
@@ -21609,6 +21661,7 @@
         clearObservationProgress();
         await observationScheduler.flush();
         if (signal.aborted || token !== state.loadToken) return;
+        aqiTransitionGate?.markTerminal();
 
         addedEntries
           .filter((entry) => entry.stationId !== primary.stationId && !failedAddedStationIds.has(entry.stationId))
@@ -21616,18 +21669,27 @@
             void prefetchStationHistoryAqi(entry, getStationHistoryRecord(entry), range, windowValue, signal, token);
           });
 
-        renderStationHistoryChart(dom, entries, range, units, primary, false, false, {
+        const commitTargetedRender = () => renderStationHistoryChart(dom, entries, range, units, primary, false, false, {
           currentObservationStationIds: currentObservationIds,
           selectionChangeOnly: true,
           changedStationIds,
           skipAqiRepaint: !aqiSourceChanged,
           aqiChangeOnly: aqiSourceChanged && !addedEntries.length,
         });
+        if (aqiTransitionGate) {
+          if (!aqiTransitionGate.commit(commitTargetedRender)) return;
+        } else {
+          commitTargetedRender();
+        }
+        const aqiTransitionIncomplete = aqiSourceChanged
+          && loader.getUncoveredRanges(primaryRecord, "aqi", requestedRange).length > 0;
         if (failedAddedStationIds.size) {
           const count = failedAddedStationIds.size;
           setMessage(`Current data is unavailable for ${count} added sensor${count === 1 ? "" : "s"}.`, { error: true });
         } else if (aqiSourceFailed) {
           setMessage("AQI bands could not be updated for the selected sensor.", { error: true });
+        } else if (aqiTransitionIncomplete) {
+          setMessage("AQI bands are incomplete for the selected sensor; available intervals are shown.", { error: true });
         } else {
           setMessage("");
         }

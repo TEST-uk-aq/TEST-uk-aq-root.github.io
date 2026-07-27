@@ -72,11 +72,11 @@ assert.equal(loader.isOlderChunk(range.start_utc, range.end_utc, "2026-07-14T23:
 const retryKey = loader.chunkKey("aqi", range);
 const record = loader.createCacheRecord({ completed_chunks: { [retryKey]: range } });
 assert.equal(record.completed_chunks[retryKey].end_utc, range.end_utc);
-assert.equal(record.contract_version, "station-history-v2-calculated-aqi");
+assert.equal(record.contract_version, "station-history-v3-explicit-response-parts");
 assert.equal(record.identity, null);
 assert.equal(loader.isCalculatedCombinedResponse({
   schema_version: 2,
-  observations: { rows: [] },
+  observations: { enabled: true, rows: [] },
   aqi: { enabled: true, calculation_source: "calculated_from_observations", rows: [] },
 }), true);
 
@@ -181,6 +181,39 @@ await orderedSettlements.settle(1, { state: "failed", id: "newer-failed" }, asyn
 await orderedSettlements.flush();
 assert.deepEqual(commitOrder, ["newer-failed", "older"], "a failed newer settlement records in order without blocking older success");
 assert.equal(orderedSettlements.pending_count, 0);
+
+let visibleAqiCommitCount = 0;
+const stagedSwitch = loader.createAtomicAqiRenderGate();
+assert.equal(stagedSwitch.stage(), true);
+assert.equal(stagedSwitch.stage(), true);
+assert.equal(stagedSwitch.stage(), true);
+assert.equal(visibleAqiCommitCount, 0, "settled AQI chunks remain non-visible during a source switch");
+assert.equal(stagedSwitch.markTerminal(), true);
+assert.equal(stagedSwitch.commit(() => { visibleAqiCommitCount += 1; }), true);
+assert.equal(stagedSwitch.commit(() => { visibleAqiCommitCount += 1; }), false);
+assert.equal(visibleAqiCommitCount, 1, "a terminal AQI source switch has one visible commit");
+
+let cachedAqiCommitCount = 0;
+const cachedSwitch = loader.createAtomicAqiRenderGate();
+await loader.waitForTransition(0);
+cachedSwitch.markTerminal();
+cachedSwitch.commit(() => { cachedAqiCommitCount += 1; });
+cachedSwitch.commit(() => { cachedAqiCommitCount += 1; });
+assert.equal(cachedAqiCommitCount, 1, "complete cached AQI renders once after the transition");
+
+let currentTransitionToken = 1;
+const obsoleteSwitch = loader.createAtomicAqiRenderGate({
+  isCurrent: () => currentTransitionToken === 1,
+});
+obsoleteSwitch.stage();
+currentTransitionToken = 2;
+obsoleteSwitch.markTerminal();
+assert.equal(obsoleteSwitch.commit(() => { visibleAqiCommitCount += 1; }), false, "a rapid second source change invalidates the older transition");
+const replacementSwitch = loader.createAtomicAqiRenderGate({
+  isCurrent: () => currentTransitionToken === 2,
+});
+replacementSwitch.markTerminal();
+assert.equal(replacementSwitch.commit(() => { visibleAqiCommitCount += 1; }), true);
 
 const distinctHeadPayload = {
   aqi: {
@@ -296,7 +329,7 @@ assert.match(page, /domainStartMs: fullRange\.startMs,[\s\S]*domainEndMs: fullRa
 assert.match(page, /renderSeriesChart\(\[\], meta, windowValue/);
 assert.match(page, /Current recent data is unavailable\. Cached historical data is shown as stale\./);
 assert.match(page, /aqi_replacement_contract_error/);
-assert.match(page, /AQI history response overlaps stable head/);
+assert.match(page, /aqi_stable_head_overlap/);
 assert.match(page, /retained completed chunks after failure/);
 assert.match(page, /const periodEndIndex = columns\.indexOf\("period_end_utc"\)/);
 assert.match(page, /return createAqiIntervalPoint\(endpoint, daqiRaw, eaqiRaw\)/);

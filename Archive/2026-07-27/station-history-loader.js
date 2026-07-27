@@ -10,19 +10,6 @@
   "use strict";
 
   const HOUR_MS = 60 * 60 * 1000;
-  const AUTHORITATIVE_AQI_PARTIAL_REASONS = new Set([
-    "missing_visible_aqi_hours",
-    "calculated_aqi_status_incomplete",
-  ]);
-  const AUTHORITATIVE_AQI_CALCULATION_STATUSES = new Set([
-    "ok",
-    "missing_input",
-    "insufficient_samples",
-  ]);
-  const AUTHORITATIVE_AQI_MISSING_REASONS = new Set([
-    "no_input_value",
-    "insufficient_rolling_24h_hours",
-  ]);
 
   function toDate(value) {
     const date = value instanceof Date ? new Date(value.getTime()) : new Date(value);
@@ -246,20 +233,13 @@
     const value = section && typeof section === "object" ? section : {};
     return {
       covered_intervals: normalizeIntervals(value.covered_intervals),
-      settled_intervals: normalizeIntervals(value.settled_intervals),
       interval_states: (Array.isArray(value.interval_states) ? value.interval_states : [])
         .map(function (entry) {
           const bounds = intervalBounds(entry);
           return bounds ? {
             ...bounds,
             state: ["complete", "partial", "failed", "stale"].includes(entry?.state) ? entry.state : "failed",
-            settled: entry?.settled === true,
-            response_complete: entry?.response_complete === true,
-            has_gap: entry?.has_gap === true,
-            gap_ranges: normalizeIntervals(entry?.gap_ranges),
             partial_reasons: Array.isArray(entry?.partial_reasons) ? entry.partial_reasons.map(String) : [],
-            calculation_statuses: Array.isArray(entry?.calculation_statuses) ? entry.calculation_statuses.map(String) : [],
-            missing_reasons: Array.isArray(entry?.missing_reasons) ? entry.missing_reasons.map(String) : [],
             recorded_at_utc: typeof entry?.recorded_at_utc === "string" ? entry.recorded_at_utc : null,
           } : null;
         })
@@ -277,8 +257,6 @@
     const bounds = intervalBounds(range);
     if (!record || !["aqi", "observations"].includes(kind) || !bounds) return record;
     const section = coverageSection(record, kind);
-    const normalizedState = ["complete", "partial", "failed", "stale"].includes(state) ? state : "failed";
-    const settled = normalizedState === "complete" || (kind === "aqi" && details?.settled === true);
     section.interval_states = section.interval_states.flatMap(function (entry) {
       if (entry.endMs <= bounds.startMs || entry.startMs >= bounds.endMs) return [entry];
       const retained = [];
@@ -288,20 +266,14 @@
     });
     section.interval_states.push({
       ...bounds,
-      state: normalizedState,
-      settled,
-      response_complete: normalizedState === "complete" || details?.response_complete === true,
-      has_gap: details?.has_gap === true,
-      gap_ranges: normalizeIntervals(details?.gap_ranges),
+      state: ["complete", "partial", "failed", "stale"].includes(state) ? state : "failed",
       partial_reasons: Array.isArray(details?.partial_reasons) ? details.partial_reasons.map(String) : [],
-      calculation_statuses: Array.isArray(details?.calculation_statuses) ? details.calculation_statuses.map(String) : [],
-      missing_reasons: Array.isArray(details?.missing_reasons) ? details.missing_reasons.map(String) : [],
       recorded_at_utc: new Date().toISOString(),
     });
     section.interval_states.sort(function (left, right) {
       return left.startMs - right.startMs || left.endMs - right.endMs;
     });
-    if (normalizedState === "complete") {
+    if (state === "complete") {
       section.covered_intervals = normalizeIntervals([...section.covered_intervals, bounds]);
     } else {
       section.covered_intervals = section.covered_intervals.flatMap(function (covered) {
@@ -312,29 +284,10 @@
         return retained;
       });
     }
-    if (kind === "aqi") {
-      if (settled) {
-        section.settled_intervals = normalizeIntervals([...section.settled_intervals, bounds]);
-      } else {
-        section.settled_intervals = section.settled_intervals.flatMap(function (interval) {
-          if (interval.endMs <= bounds.startMs || interval.startMs >= bounds.endMs) return [interval];
-          const retained = [];
-          if (interval.startMs < bounds.startMs) retained.push({ startMs: interval.startMs, endMs: bounds.startMs });
-          if (interval.endMs > bounds.endMs) retained.push({ startMs: bounds.endMs, endMs: interval.endMs });
-          return retained;
-        });
-      }
-    }
     return record;
   }
 
   function getUncoveredRanges(record, kind, range) {
-    const section = coverageSection(record, kind);
-    const requestPlanningIntervals = kind === "aqi" ? section.settled_intervals : section.covered_intervals;
-    return subtractCoveredIntervals(range, requestPlanningIntervals);
-  }
-
-  function getIncompleteRanges(record, kind, range) {
     const section = coverageSection(record, kind);
     return subtractCoveredIntervals(range, section.covered_intervals);
   }
@@ -578,7 +531,7 @@
   function createCacheRecord(raw) {
     const value = raw && typeof raw === "object" ? raw : {};
     return {
-      contract_version: "station-history-v4-aqi-settlement",
+      contract_version: "station-history-v3-explicit-response-parts",
       aqi_points: Array.isArray(value.aqi_points) ? value.aqi_points : [],
       observation_points: Array.isArray(value.observation_points) ? value.observation_points : [],
       completed_chunks: value.completed_chunks && typeof value.completed_chunks === "object"
@@ -611,53 +564,14 @@
     };
   }
 
-  function inspectAqiSettlement(payload) {
-    const rows = Array.isArray(payload?.points)
-      ? payload.points
-      : Array.isArray(payload?.rows)
-        ? payload.rows
-        : [];
-    const complete = payload?.response_complete === true && payload?.has_gap !== true;
-    const partialReasons = Array.isArray(payload?.partial_reasons)
-      ? payload.partial_reasons.map(function (reason) { return String(reason).trim().toLowerCase(); }).filter(Boolean)
-      : [];
-    const calculationStatuses = rows.flatMap(function (row) {
-      return [row?.daqi_calculation_status, row?.eaqi_calculation_status]
-        .map(function (status) { return String(status || "").trim().toLowerCase(); })
-        .filter(Boolean);
-    });
-    const missingReasons = rows.flatMap(function (row) {
-      return [row?.daqi_missing_reason, row?.eaqi_missing_reason]
-        .map(function (reason) { return String(reason || "").trim().toLowerCase(); })
-        .filter(Boolean);
-    });
-    const authoritativePartial = !complete
-      && payload?.enabled !== false
-      && payload?.calculation_source === "calculated_from_observations"
-      && partialReasons.length > 0
-      && partialReasons.every(function (reason) { return AUTHORITATIVE_AQI_PARTIAL_REASONS.has(reason); })
-      && calculationStatuses.every(function (status) { return AUTHORITATIVE_AQI_CALCULATION_STATUSES.has(status); })
-      && missingReasons.every(function (reason) { return AUTHORITATIVE_AQI_MISSING_REASONS.has(reason); });
-    return {
-      complete,
-      settled: complete || authoritativePartial,
-      retryable: !complete && !authoritativePartial,
-      authoritative_partial: authoritativePartial,
-      response_complete: payload?.response_complete === true,
-      has_gap: payload?.has_gap === true,
-      gap_ranges: Array.isArray(payload?.gap_ranges) ? payload.gap_ranges : [],
-      partial_reasons: partialReasons,
-      calculation_statuses: calculationStatuses,
-      missing_reasons: missingReasons,
-    };
-  }
-
   function inspectAqiChunk(payload) {
     const rows = Array.isArray(payload?.points) ? payload.points : [];
-    const settlement = inspectAqiSettlement(payload);
+    const complete = payload?.response_complete === true && payload?.has_gap !== true;
     return {
       rows,
-      ...settlement,
+      complete,
+      retryable: !complete,
+      partial_reasons: Array.isArray(payload?.partial_reasons) ? payload.partial_reasons.map(String) : [],
     };
   }
 
@@ -696,7 +610,6 @@
     subtractCoveredIntervals,
     recordCoverageInterval,
     getUncoveredRanges,
-    getIncompleteRanges,
     buildMissingChunkWorkList,
     createOrderedSettlementBuffer,
     createPriorityFetchScheduler,
@@ -707,7 +620,6 @@
     resolveAuthoritativeIdentity,
     resolveSelectedStationEntries,
     createCacheRecord,
-    inspectAqiSettlement,
     inspectAqiChunk,
     inspectObservationChunk,
     isCalculatedCombinedResponse,

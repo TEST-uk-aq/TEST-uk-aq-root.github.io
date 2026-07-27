@@ -17015,7 +17015,7 @@
     params.get("station_history_loader"),
     true,
   ) && Boolean(window.UkAqStationHistoryLoader);
-  const HEX_MAP_STATION_HISTORY_CACHE_CONTRACT = "hex-map-station-history-v6-aqi-settlement";
+  const HEX_MAP_STATION_HISTORY_CACHE_CONTRACT = "hex-map-station-history-v5-explicit-response-parts";
   const stationHistoryFetchScheduler = window.UkAqStationHistoryLoader?.createPriorityFetchScheduler
     ? window.UkAqStationHistoryLoader.createPriorityFetchScheduler(CHART_GLOBAL_FETCH_CAP)
     : null;
@@ -17082,7 +17082,7 @@
   // value: { points: Point[], guideline: object|null, coveredRanges: [], failedRanges: [], partialRanges: [], malformedRanges: [], unknownRanges: [], rangeStates: [] }
   const seriesDataCache = new Map();
   // key: `${timeseriesId}|station:${stationId}|connector:${connectorId}|pollutant:${pollutantKey}`
-  // value: { points: AqiPoint[], coveredRanges: [], settledRanges: [], failedRanges: [], partialRanges: [], malformedRanges: [], unknownRanges: [], rangeStates: [], lastResponseMeta: object|null }
+  // value: { points: AqiPoint[], coveredRanges: [], failedRanges: [], partialRanges: [], malformedRanges: [], unknownRanges: [], rangeStates: [], lastResponseMeta: object|null }
   const aqiBandCache    = new Map();
   // Deliberately separate from the legacy cache: a legacy range must never be
   // mistaken for a station-series head or rendered ahead of a fresh head.
@@ -18721,8 +18721,6 @@
           periodEnd,
           daqi: normalizeAqiBandLevel(getAqiPayloadRowField(row, columns, "daqi_index_level"), false),
           eaqi: normalizeAqiBandLevel(getAqiPayloadRowField(row, columns, "eaqi_index_level"), true),
-          daqi_calculation_status: String(getAqiPayloadRowField(row, columns, "daqi_calculation_status") || "").trim() || null,
-          eaqi_calculation_status: String(getAqiPayloadRowField(row, columns, "eaqi_calculation_status") || "").trim() || null,
           daqi_missing_reason: normalizeAqiMissingReason(getAqiPayloadRowField(row, columns, "daqi_missing_reason")),
           eaqi_missing_reason: normalizeAqiMissingReason(getAqiPayloadRowField(row, columns, "eaqi_missing_reason")),
         };
@@ -18734,8 +18732,6 @@
         periodEnd,
         daqi: normalizeAqiBandLevel(getAqiPayloadRowField(row, columns, "daqi_index_level"), false),
         eaqi: normalizeAqiBandLevel(getAqiPayloadRowField(row, columns, "eaqi_index_level"), true),
-        daqi_calculation_status: String(getAqiPayloadRowField(row, columns, "daqi_calculation_status") || "").trim() || null,
-        eaqi_calculation_status: String(getAqiPayloadRowField(row, columns, "eaqi_calculation_status") || "").trim() || null,
         daqi_missing_reason: normalizeAqiMissingReason(getAqiPayloadRowField(row, columns, "daqi_missing_reason")),
         eaqi_missing_reason: normalizeAqiMissingReason(getAqiPayloadRowField(row, columns, "eaqi_missing_reason")),
       };
@@ -19546,10 +19542,7 @@
   }
 
   function normalizeAqiCacheRecord(record = {}) {
-    return {
-      ...normalizeCacheRecord(record, { lastResponseMeta: null }),
-      settledRanges: normalizeCoveredRanges(record.settledRanges),
-    };
+    return normalizeCacheRecord(record, { lastResponseMeta: null });
   }
 
   function getOrCreateSeriesCacheRecord(cacheKey) {
@@ -19583,13 +19576,6 @@
     });
     record.rangeStates = normalizeCacheRangeStates(record.rangeStates);
 
-    if (Array.isArray(record.settledRanges)) {
-      const settled = details.settled === true || isCoveredCacheState(normalizedState);
-      record.settledRanges = settled
-        ? addCoveredRange(record.settledRanges, startMs, endMs)
-        : removeOverlappingRanges(record.settledRanges, startMs, endMs);
-    }
-
     if (isCoveredCacheState(normalizedState)) {
       record.coveredRanges = addCoveredRange(record.coveredRanges, startMs, endMs);
       nonCoveredProps.forEach((prop) => {
@@ -19614,7 +19600,6 @@
     const normalized = normalizeCacheRecord(record || {});
     return {
       covered_ranges: normalizeDebugRanges(normalized.coveredRanges),
-      settled_ranges: normalizeDebugRanges(record?.settledRanges || []),
       failed_ranges: normalizeDebugRanges(normalized.failedRanges),
       partial_ranges: normalizeDebugRanges(normalized.partialRanges),
       malformed_ranges: normalizeDebugRanges(normalized.malformedRanges),
@@ -19669,15 +19654,6 @@
     if (responseComplete === true) return "covered_empty";
     if (responseComplete === false || hasGap) return "partial";
     return "unknown";
-  }
-
-  function isAqiCacheResultSettled(result) {
-    // The compatibility path reads stored-R2 AQI. A complete response is
-    // settled even when its rows contain null AQI values, because those rows
-    // preserve their calculation status. A partial stored-R2 response does
-    // not expose the calculated-history reason contract reliably, so it must
-    // remain retryable rather than being guessed authoritative.
-    return isCoveredCacheState(classifyAqiCacheState(result));
   }
 
   function extractObservationSourceMetadata(entry, result) {
@@ -20159,7 +20135,7 @@
       const aqiCacheKey = buildAqiCacheKey(entry, pollutantKey);
       if (!aqiCacheKey || !pollutantKey) continue;
       const cacheRecord = getOrCreateAqiCacheRecord(aqiCacheKey);
-      const missingRanges = getMissingRangesForRequest(range, cacheRecord.settledRanges);
+      const missingRanges = getMissingRangesForRequest(range, cacheRecord.coveredRanges);
       if (!missingRanges.length) {
         aqiBandCache.set(aqiCacheKey, cacheRecord);
         continue;
@@ -20191,7 +20167,6 @@
         missing.endMs,
         classifyAqiCacheState(result),
         {
-          settled: isAqiCacheResultSettled(result),
           sourceMetadata: extractAqiSourceMetadata(entry, pollutantKey, result),
           error: result?.error,
           httpStatus: result?.meta?.http_status,
@@ -20420,7 +20395,7 @@
       let aqiPoints = aqiCacheRecord ? getPointsInRange(aqiCacheRecord.points, range) : [];
 
       const aqiMissingRanges = (aqiCacheRecord && primary && pollutantKey)
-        ? getMissingRangesForRequest(range, aqiCacheRecord.settledRanges)
+        ? getMissingRangesForRequest(range, aqiCacheRecord.coveredRanges)
         : [];
       startWebsiteDebugSession({
         reason,
@@ -20553,7 +20528,6 @@
             missing.endMs,
             classifyAqiCacheState(result),
             {
-              settled: isAqiCacheResultSettled(result),
               sourceMetadata: extractAqiSourceMetadata(primary, pollutantKey, result),
               error: result?.error,
               httpStatus: result?.meta?.http_status,
@@ -20674,8 +20648,8 @@
         if (!totalPoints) {
           setMessage("");
           renderNoHistoryChartMessage(dom, getNoHistoryChartMessage(usableEntries.length));
-        } else if (atomicAqiSourceSwitch && getMissingRangesForRequest(range, aqiCacheRecord?.settledRanges || []).length) {
-          setMessage("AQI bands could not be updated for the selected sensor.", { error: true });
+        } else if (atomicAqiSourceSwitch && getMissingRangesForRequest(range, aqiCacheRecord?.coveredRanges || []).length) {
+          setMessage("AQI bands are incomplete for the selected sensor; available intervals are shown.", { error: true });
         } else {
           setMessage("");
         }
@@ -20919,8 +20893,6 @@
         });
         return point ? {
           ...point,
-          daqi_calculation_status: String(row?.daqi_calculation_status || "").trim() || null,
-          eaqi_calculation_status: String(row?.eaqi_calculation_status || "").trim() || null,
           daqi_missing_reason: normalizeAqiMissingReason(row?.daqi_missing_reason),
           eaqi_missing_reason: normalizeAqiMissingReason(row?.eaqi_missing_reason),
         } : null;
@@ -21180,12 +21152,8 @@
           const merged = loader.mergeAqiWithoutReplacement(record.aqi_points, incoming);
           record.aqi_points = merged.points;
           const aqiState = aqiChunk.complete && !merged.conflicts.length ? "complete" : "partial";
-          const aqiSettled = aqiChunk.settled && !merged.conflicts.length;
-          loader.recordCoverageInterval(record, "aqi", requestRange, aqiState, {
-            ...aqiChunk,
-            settled: aqiSettled,
-          });
-          if (!aqiSettled) {
+          loader.recordCoverageInterval(record, "aqi", requestRange, aqiState, { partial_reasons: aqiChunk.partial_reasons });
+          if (aqiState !== "complete") {
             record.failed_chunks[key] = {
               chunk: requestRange,
               reason: merged.conflicts.length ? "aqi_replacement_contract_error" : "aqi_history_incomplete",
@@ -21193,8 +21161,6 @@
               partial_reasons: aqiChunk.partial_reasons,
             };
             recordWebsiteDebugEvent("aqi_chunk_partial", { route: "timeseries", chunk: requestRange, retained_rows: incoming.length, conflicts: merged.conflicts.length, partial_reasons: aqiChunk.partial_reasons });
-          } else if (!aqiChunk.complete) {
-            recordWebsiteDebugEvent("aqi_chunk_authoritative_partial", { route: "timeseries", chunk: requestRange, retained_rows: incoming.length, partial_reasons: aqiChunk.partial_reasons });
           }
           if (merged.conflicts.length) {
             recordWebsiteDebugEvent("aqi_replacement_contract_error", { route: "timeseries", chunk: requestRange, conflicts: merged.conflicts.length });
@@ -21213,8 +21179,8 @@
             recordWebsiteDebugEvent("observations_chunk_partial", { route: "timeseries", chunk: requestRange, retained_rows: observationChunk.rows.length, partial_reasons: observationChunk.partial_reasons });
           }
         }
-        const requestedPartsSettled = workKinds.every((coverageKind) => loader.getUncoveredRanges(record, coverageKind, requestRange).length === 0);
-        if (requestedPartsSettled) {
+        const requestedPartsComplete = workKinds.every((coverageKind) => loader.getUncoveredRanges(record, coverageKind, requestRange).length === 0);
+        if (requestedPartsComplete) {
           record.completed_chunks[key] = requestRange;
           delete record.failed_chunks[key];
         }
@@ -21240,13 +21206,10 @@
       start_utc: range.startIso,
       end_utc: initialCursorEndUtc || range.endIso,
     }).length === 0;
-    if (kind === "aqi") record.aqi_complete = loader.getIncompleteRanges(record, "aqi", {
-      start_utc: range.startIso,
-      end_utc: initialCursorEndUtc || range.endIso,
-    }).length === 0;
+    if (kind === "aqi") record.aqi_complete = rangeCovered;
     else if (kind === "observations") record.observations_complete = rangeCovered;
     else {
-      record.aqi_complete = loader.getIncompleteRanges(record, "aqi", { start_utc: range.startIso, end_utc: initialCursorEndUtc || range.endIso }).length === 0;
+      record.aqi_complete = loader.getUncoveredRanges(record, "aqi", { start_utc: range.startIso, end_utc: initialCursorEndUtc || range.endIso }).length === 0;
       record.observations_complete = loader.getUncoveredRanges(record, "observations", { start_utc: range.startIso, end_utc: initialCursorEndUtc || range.endIso }).length === 0;
     }
   }
@@ -21282,16 +21245,12 @@
         bounds?.endUtc,
       );
       record.aqi_points = merged.points;
-      const aqiHeadSettlement = loader.inspectAqiSettlement(payload?.aqi);
       loader.recordCoverageInterval(
         record,
         "aqi",
         { start_utc: bounds?.startUtc, end_utc: bounds?.endUtc },
-        aqiHeadSettlement.complete && !merged.conflicts.length ? "complete" : "partial",
-        {
-          ...aqiHeadSettlement,
-          settled: aqiHeadSettlement.settled && !merged.conflicts.length,
-        },
+        stationHistoryIsComplete(payload.aqi) && !merged.conflicts.length ? "complete" : "partial",
+        { partial_reasons: payload?.aqi?.partial_reasons },
       );
       const cursor = stationHistoryNextBoundary(payload.aqi, "aqi");
       if (cursor) {
@@ -21311,16 +21270,14 @@
           STATION_HISTORY_FETCH_PRIORITY.aqiPrefetch,
         );
       }
-      record.aqi_complete = loader.getIncompleteRanges(record, "aqi", requestedRange).length === 0;
-      const aqiSettled = loader.getUncoveredRanges(record, "aqi", requestedRange).length === 0;
+      record.aqi_complete = loader.getUncoveredRanges(record, "aqi", requestedRange).length === 0;
       record.updated_at = new Date().toISOString();
       recordWebsiteDebugEvent("station_history_secondary_aqi_prefetched", {
         route: "timeseries",
         timeseries_id: entry.timeseriesId,
         complete: record.aqi_complete,
-        settled: aqiSettled,
       });
-      return aqiSettled;
+      return record.aqi_complete;
     } catch (error) {
       if (!signal.aborted && token === state.loadToken) {
         recordWebsiteDebugEvent("station_history_secondary_aqi_prefetch_failed", {
@@ -21509,8 +21466,7 @@
             bounds?.endUtc,
           );
           record.aqi_points = merged.points;
-          const aqiSettlement = loader.inspectAqiSettlement(payload?.aqi);
-          record.aqi_complete = aqiSettlement.complete && !stationHistoryNextBoundary(payload.aqi, "aqi");
+          record.aqi_complete = stationHistoryIsComplete(payload.aqi) && !stationHistoryNextBoundary(payload.aqi, "aqi");
           record.calculated_combined = loader.isCalculatedCombinedResponse(payload);
           record.stable_head_start_utc = bounds?.startUtc || null;
           record.stable_head_end_utc = bounds?.endUtc || null;
@@ -21519,11 +21475,8 @@
             record,
             "aqi",
             { start_utc: bounds?.startUtc, end_utc: bounds?.endUtc },
-            aqiSettlement.complete && !merged.conflicts.length ? "complete" : "partial",
-            {
-              ...aqiSettlement,
-              settled: aqiSettlement.settled && !merged.conflicts.length,
-            },
+            stationHistoryIsComplete(payload.aqi) ? "complete" : "partial",
+            { partial_reasons: payload?.aqi?.partial_reasons },
           );
           return { bounds, cursor: stationHistoryNextBoundary(payload.aqi, "aqi") };
         };
@@ -21728,13 +21681,15 @@
         } else {
           commitTargetedRender();
         }
-        const aqiTransitionFailed = aqiSourceChanged
+        const aqiTransitionIncomplete = aqiSourceChanged
           && loader.getUncoveredRanges(primaryRecord, "aqi", requestedRange).length > 0;
         if (failedAddedStationIds.size) {
           const count = failedAddedStationIds.size;
           setMessage(`Current data is unavailable for ${count} added sensor${count === 1 ? "" : "s"}.`, { error: true });
-        } else if (aqiSourceFailed || aqiTransitionFailed) {
+        } else if (aqiSourceFailed) {
           setMessage("AQI bands could not be updated for the selected sensor.", { error: true });
+        } else if (aqiTransitionIncomplete) {
+          setMessage("AQI bands are incomplete for the selected sensor; available intervals are shown.", { error: true });
         } else {
           setMessage("");
         }
@@ -21922,8 +21877,7 @@
         aqiHeadBounds?.endUtc,
       );
       primaryRecord.aqi_points = headMerge.points;
-      const primaryAqiSettlement = loader.inspectAqiSettlement(primaryPayload?.aqi);
-      primaryRecord.aqi_complete = primaryAqiSettlement.complete && !stationHistoryNextBoundary(primaryPayload.aqi, "aqi");
+      primaryRecord.aqi_complete = stationHistoryIsComplete(primaryPayload.aqi) && !stationHistoryNextBoundary(primaryPayload.aqi, "aqi");
       primaryRecord.calculated_combined = loader.isCalculatedCombinedResponse(primaryPayload);
       primaryRecord.stable_head_start_utc = aqiHeadBounds?.startUtc || null;
       primaryRecord.stable_head_end_utc = aqiHeadBounds?.endUtc || null;
@@ -21932,11 +21886,8 @@
         primaryRecord,
         "aqi",
         { start_utc: aqiHeadBounds?.startUtc, end_utc: aqiHeadBounds?.endUtc },
-        primaryAqiSettlement.complete && !headMerge.conflicts.length ? "complete" : "partial",
-        {
-          ...primaryAqiSettlement,
-          settled: primaryAqiSettlement.settled && !headMerge.conflicts.length,
-        },
+        stationHistoryIsComplete(primaryPayload.aqi) ? "complete" : "partial",
+        { partial_reasons: primaryPayload?.aqi?.partial_reasons },
       );
       renderStationHistoryChart(dom, entries, range, units, primary, true, true, preserveExistingFrame
         ? {}

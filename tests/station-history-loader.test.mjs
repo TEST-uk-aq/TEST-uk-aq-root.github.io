@@ -72,7 +72,7 @@ assert.equal(loader.isOlderChunk(range.start_utc, range.end_utc, "2026-07-14T23:
 const retryKey = loader.chunkKey("aqi", range);
 const record = loader.createCacheRecord({ completed_chunks: { [retryKey]: range } });
 assert.equal(record.completed_chunks[retryKey].end_utc, range.end_utc);
-assert.equal(record.contract_version, "station-history-v3-explicit-response-parts");
+assert.equal(record.contract_version, "station-history-v4-aqi-settlement");
 assert.equal(record.identity, null);
 assert.equal(loader.isCalculatedCombinedResponse({
   schema_version: 2,
@@ -84,6 +84,7 @@ loader.recordCoverageInterval(record, "aqi", {
   start_utc: "2026-07-08T00:00:00.000Z",
   end_utc: "2026-07-15T00:00:00.000Z",
 }, "complete");
+assert.deepEqual(record.coverage.aqi.settled_intervals, record.coverage.aqi.covered_intervals, "a complete AQI interval is settled");
 assert.deepEqual(
   loader.getUncoveredRanges(record, "aqi", {
     start_utc: "2026-07-01T00:00:00.000Z",
@@ -247,11 +248,75 @@ const partialAqiChunk = loader.inspectAqiChunk({
 assert.equal(partialAqiChunk.rows.length, 1);
 assert.equal(partialAqiChunk.complete, false);
 assert.equal(partialAqiChunk.retryable, true);
+assert.equal(partialAqiChunk.settled, false, "an undocumented compatibility partial remains unsettled");
 const partialPoint = loader.normalizeAqiPoint(partialAqiChunk.rows[0], {
   daqiField: "daqi_index_level",
   eaqiField: "eaqi_index_level",
 });
 assert.equal(loader.mergeAqiWithoutReplacement([head], [partialPoint]).points[0], head, "a partial history row cannot replace the stable head");
+
+const settledPartialRange = {
+  start_utc: "2026-07-10T00:00:00.000Z",
+  end_utc: "2026-07-11T00:00:00.000Z",
+};
+const settledPartial = loader.inspectAqiChunk({
+  enabled: true,
+  calculation_source: "calculated_from_observations",
+  response_complete: false,
+  has_gap: true,
+  partial_reasons: ["missing_visible_aqi_hours", "calculated_aqi_status_incomplete"],
+  gap_ranges: [{ start_utc: "2026-07-10T03:00:00.000Z", end_utc: "2026-07-10T04:00:00.000Z" }],
+  points: [{
+    timestamp_hour_utc: "2026-07-10T05:00:00.000Z",
+    daqi_index_level: null,
+    eaqi_index_level: 2,
+    daqi_calculation_status: "insufficient_samples",
+    eaqi_calculation_status: "ok",
+    daqi_missing_reason: "insufficient_rolling_24h_hours",
+    eaqi_missing_reason: null,
+  }],
+});
+assert.equal(settledPartial.complete, false);
+assert.equal(settledPartial.settled, true, "a confirmed calculation-data partial is settled without becoming complete");
+assert.equal(settledPartial.retryable, false);
+const settledPartialRecord = loader.createCacheRecord();
+loader.recordCoverageInterval(settledPartialRecord, "aqi", settledPartialRange, "partial", settledPartial);
+assert.equal(loader.getUncoveredRanges(settledPartialRecord, "aqi", settledPartialRange).length, 0, "settled partial AQI is excluded from missing-request planning");
+assert.equal(loader.getIncompleteRanges(settledPartialRecord, "aqi", settledPartialRange).length, 1, "settlement does not relabel a partial response complete");
+assert.equal(loader.buildMissingChunkWorkList(
+  settledPartialRecord,
+  "aqi",
+  settledPartialRange.start_utc,
+  settledPartialRange.end_utc,
+  24 * loader.HOUR_MS,
+).length, 0, "settled partial AQI schedules no repeat chunk request");
+assert.equal(settledPartialRecord.coverage.aqi.interval_states[0].has_gap, true);
+assert.deepEqual(settledPartialRecord.coverage.aqi.interval_states[0].missing_reasons, ["insufficient_rolling_24h_hours"]);
+
+const unresolvedPartial = loader.inspectAqiChunk({
+  enabled: true,
+  calculation_source: "calculated_from_observations",
+  response_complete: false,
+  has_gap: true,
+  partial_reasons: ["required_observation_source_incomplete"],
+  points: [],
+});
+assert.equal(unresolvedPartial.settled, false);
+assert.equal(unresolvedPartial.retryable, true, "an operational or unresolved partial remains retryable");
+const unresolvedRecord = loader.createCacheRecord();
+loader.recordCoverageInterval(unresolvedRecord, "aqi", settledPartialRange, "partial", unresolvedPartial);
+assert.equal(loader.getUncoveredRanges(unresolvedRecord, "aqi", settledPartialRange).length, 1);
+
+let settledPartialVisibleCommits = 0;
+let settledPartialFetches = 0;
+if (loader.getUncoveredRanges(settledPartialRecord, "aqi", settledPartialRange).length) settledPartialFetches += 1;
+const settledPartialSwitch = loader.createAtomicAqiRenderGate();
+await loader.waitForTransition(0);
+settledPartialSwitch.markTerminal();
+settledPartialSwitch.commit(() => { settledPartialVisibleCommits += 1; });
+settledPartialSwitch.commit(() => { settledPartialVisibleCommits += 1; });
+assert.equal(settledPartialFetches, 0, "switching to settled partial AQI performs no AQI fetch");
+assert.equal(settledPartialVisibleCommits, 1, "settled partial AQI performs one visible commit");
 loader.recordCoverageInterval(record, "observations", {
   start_utc: "2026-07-14T00:00:00.000Z",
   end_utc: "2026-07-15T00:00:00.000Z",

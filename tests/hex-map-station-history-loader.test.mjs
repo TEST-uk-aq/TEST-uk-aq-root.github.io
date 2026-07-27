@@ -11,7 +11,7 @@ const targetedEnd = loadSection.indexOf("const preserveExistingFrame", targetedS
 const targetedSection = loadSection.slice(targetedStart, targetedEnd);
 
 assert.ok(loadStart >= 0 && targetedStart >= 0 && targetedEnd > targetedStart, "Hex Map targeted station-history loader exists");
-assert.match(page, /HEX_MAP_STATION_HISTORY_CACHE_CONTRACT = "hex-map-station-history-v5-explicit-response-parts"/);
+assert.match(page, /HEX_MAP_STATION_HISTORY_CACHE_CONTRACT = "hex-map-station-history-v6-aqi-settlement"/);
 assert.match(page, /<script src="\/station-history-loader\.js"><\/script>/);
 assert.match(page, /const clippedStartMs = Math\.max\(frame\.startMs, periodStartMs\)/);
 assert.match(page, /const clippedEndMs = Math\.min\(frame\.endMs, endpointMs\)/);
@@ -31,7 +31,9 @@ assert.match(targetedSection, /const aqiScheduler = aqiSourceChanged[\s\S]*sched
 assert.match(targetedSection, /await Promise\.all\(\[aqiHistoryPromise, observationHistoryPromise, aqiTransitionPromise\]\)/);
 assert.match(targetedSection, /aqiTransitionGate\?\.markTerminal\(\)/);
 assert.match(targetedSection, /aqiTransitionGate\.commit\(commitTargetedRender\)/, "the visible AQI layer commits once at terminal state");
-assert.match(targetedSection, /aqiTransitionIncomplete[\s\S]*available intervals are shown/, "terminal partial results retain valid intervals and report incompleteness");
+assert.match(targetedSection, /const sourceNeedsAqi = aqiSourceChanged[\s\S]*getUncoveredRanges\(primaryRecord, "aqi", requestedRange\)/, "AQI request planning uses settlement coverage");
+assert.match(targetedSection, /aqiTransitionFailed[\s\S]*AQI bands could not be updated for the selected sensor/, "an actual unsettled AQI failure retains the error state");
+assert.doesNotMatch(page, /AQI bands are incomplete for the selected sensor/, "authoritative blank AQI intervals do not produce the false warning");
 assert.match(targetedSection, /token === state\.loadToken[\s\S]*aqiTransitionToken === state\.aqiTransitionToken/, "obsolete load and transition tokens cannot commit");
 
 assert.match(targetedSection, /addedStationIds: new Set\(\), removedStationIds: new Set\(\), retainedStationIds:/, "an AQI-only change has no observation selection diff");
@@ -49,8 +51,11 @@ const legacyStart = page.indexOf("async function loadLegacyChartData");
 const legacyEnd = page.indexOf("async function loadStationHistoryChartData", legacyStart);
 const legacySection = page.slice(legacyStart, legacyEnd);
 assert.match(legacySection, /const atomicAqiSourceSwitch = isAqiSourceChangeOnly && frameValid/);
+assert.match(legacySection, /getMissingRangesForRequest\(range, aqiCacheRecord\.settledRanges\)/, "the compatibility path plans AQI requests from settlement coverage");
+assert.match(legacySection, /settled: isAqiCacheResultSettled\(result\)/, "compatibility responses explicitly record settlement");
 assert.match(legacySection, /aqiTransitionGate\.stage\(\);[\s\S]*return;[\s\S]*syncAqiBands/, "legacy fallback also gates per-chunk AQI painting");
 assert.match(legacySection, /aqiTransitionGate\.commit\(commitAqiSourceSwitch\)/, "legacy fallback also commits once");
+assert.match(legacySection, /AQI bands could not be updated for the selected sensor/, "a genuine compatibility request failure retains the AQI error state");
 
 assert.match(sensorsPage, /<script src="\/station-history-loader\.js"><\/script>/, "Sensors uses the shared loader");
 assert.match(sensorsPage, /include_observations/);

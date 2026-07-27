@@ -17367,9 +17367,10 @@
     if (!selectedIds.includes(normalizedId)) return false;
     if (state.selectedAqiSensorId === normalizedId) return true;
     const aqiSourceSwitchStartedAt = performance.now();
+    const chartFrame = domByMap[state.mapKey]?.chartFrame;
+    const displayedRange = getDisplayedChartRange(chartFrame);
     state.selectedAqiSensorId = normalizedId;
     state.aqiTransitionToken = Number(state.aqiTransitionToken || 0) + 1;
-    const chartFrame = domByMap[state.mapKey]?.chartFrame;
     if (chartFrame) {
       chartFrame.currentAqiSourceStationId = normalizedId;
       syncAqiBands(chartFrame, {
@@ -17385,7 +17386,8 @@
         .find((entry) => String(entry?.stationId || "") === normalizedId);
       loadChartData("aqi-source-change", {
         aqiSourceSwitchStartedAt,
-        settledAqiCacheHit: isAqiSourceRangeSettled(selectedEntry),
+        displayedRange,
+        settledAqiCacheHit: isAqiSourceRangeSettled(selectedEntry, displayedRange),
       });
     }
     return true;
@@ -20300,9 +20302,35 @@
     cf.animFrameId = requestAnimationFrame(frame);
   }
 
-  function isAqiSourceRangeSettled(entry) {
+  function normalizeDisplayedChartRange(value) {
+    const startMs = Number(value?.startMs);
+    const endMs = Number(value?.endMs);
+    if (!Number.isFinite(startMs) || !Number.isFinite(endMs) || endMs <= startMs) return null;
+    const startDate = new Date(startMs);
+    const endDate = new Date(endMs);
+    return Object.freeze({
+      startDate,
+      endDate,
+      startMs,
+      endMs,
+      startIso: startDate.toISOString(),
+      endIso: endDate.toISOString(),
+    });
+  }
+
+  function getDisplayedChartRange(chartFrame) {
+    const displayedDomain = chartFrame?.xScale?.domain?.();
+    const domainRange = normalizeDisplayedChartRange({
+      startMs: displayedDomain?.[0]?.getTime?.(),
+      endMs: displayedDomain?.[1]?.getTime?.(),
+    });
+    return domainRange || normalizeDisplayedChartRange(chartFrame?.frame);
+  }
+
+  function isAqiSourceRangeSettled(entry, displayedRange) {
     if (!entry?.timeseriesId) return false;
-    const range = resolveRange(normalizeChartRangeValue(state.chartModeTimeRange));
+    const range = normalizeDisplayedChartRange(displayedRange);
+    if (!range) return false;
     if (HEX_MAP_STATION_HISTORY_LOADER_ENABLED) {
       const loader = window.UkAqStationHistoryLoader;
       const record = getStationHistoryRecord(entry);
@@ -20391,8 +20419,11 @@
       const aqiSourceSymbolIndex = getChartVisualSlot(aqiSourceId, Math.max(0, selectedIds.indexOf(aqiSourceId)));
 
       const windowValue = normalizeChartRangeValue(state.chartModeTimeRange);
-      const range = resolveRange(windowValue);
       dom = domByMap[state.mapKey];
+      const displayedAqiSourceRange = isAqiSourceChangeOnly
+        ? (normalizeDisplayedChartRange(options.displayedRange) || getDisplayedChartRange(dom?.chartFrame))
+        : null;
+      const range = displayedAqiSourceRange || resolveRange(windowValue);
       const units = usableEntries[0]?.units || getCurrentContext()?.units || "";
       const svgEl = dom?.svg?.node();
       if (!svgEl) return;
@@ -21483,7 +21514,10 @@
       const retainedWindowEndMs = reason === "window-change" && frameValid
         ? existing.frame?.endMs
         : null;
-      const range = resolveRange(windowValue, retainedWindowEndMs);
+      const displayedAqiSourceRange = isAqiSourceChangeOnly
+        ? (normalizeDisplayedChartRange(options.displayedRange) || getDisplayedChartRange(existing))
+        : null;
+      const range = displayedAqiSourceRange || resolveRange(windowValue, retainedWindowEndMs);
       const units = entries[0]?.units || getCurrentContext()?.units || "";
       continuityContext = { entries, range, units, primary };
       startWebsiteDebugSession({

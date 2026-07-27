@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import fs from "node:fs";
+import loader from "../station-history-loader.js";
 
 const page = fs.readFileSync(new URL("../hex_map/index.html", import.meta.url), "utf8");
 const sensorsPage = fs.readFileSync(new URL("../sensors/index.html", import.meta.url), "utf8");
@@ -9,6 +10,32 @@ const loadSection = page.slice(loadStart, loadEnd);
 const targetedStart = loadSection.indexOf("if (frameValid && (reason === \"sensor-change\" || isAqiSourceChangeOnly))");
 const targetedEnd = loadSection.indexOf("const preserveExistingFrame", targetedStart);
 const targetedSection = loadSection.slice(targetedStart, targetedEnd);
+const rangeHelperStart = page.indexOf("function normalizeDisplayedChartRange");
+const rangeHelperEnd = page.indexOf("function isAqiSourceRangeSettled", rangeHelperStart);
+const rangeHelpers = Function(`"use strict"; ${page.slice(rangeHelperStart, rangeHelperEnd)}; return { normalizeDisplayedChartRange, getDisplayedChartRange };`)();
+const displayedFrame = {
+  xScale: {
+    domain: () => [new Date("2026-07-26T12:00:00.000Z"), new Date("2026-07-27T12:00:00.000Z")],
+  },
+  frame: {
+    startMs: Date.parse("2026-07-26T11:59:55.000Z"),
+    endMs: Date.parse("2026-07-27T11:59:55.000Z"),
+  },
+};
+const displayedRange = rangeHelpers.getDisplayedChartRange(displayedFrame);
+assert.equal(displayedRange.startMs, Date.parse("2026-07-26T12:00:00.000Z"));
+assert.equal(displayedRange.endMs, Date.parse("2026-07-27T12:00:00.000Z"));
+assert.equal(displayedRange.startIso, "2026-07-26T12:00:00.000Z");
+assert.equal(displayedRange.endIso, "2026-07-27T12:00:00.000Z");
+assert.equal(Object.isFrozen(displayedRange), true, "the displayed source-switch range is an immutable snapshot");
+assert.equal(loader.subtractCoveredIntervals(displayedRange, [displayedRange]).length, 0, "the exact displayed range has no false uncovered tail");
+const driftedRange = { ...displayedRange, endMs: displayedRange.endMs + 5000 };
+assert.deepEqual(loader.subtractCoveredIntervals(driftedRange, [displayedRange]), [{
+  startMs: displayedRange.endMs,
+  endMs: displayedRange.endMs + 5000,
+  start_utc: displayedRange.endIso,
+  end_utc: "2026-07-27T12:00:05.000Z",
+}], "recalculating five seconds later would create the uncovered tail this fix prevents");
 
 assert.ok(loadStart >= 0 && targetedStart >= 0 && targetedEnd > targetedStart, "Hex Map targeted station-history loader exists");
 assert.match(page, /const AQI_SOURCE_TRANSITION_MS = 50;/, "AQI source switching uses the 50ms transition");
@@ -24,7 +51,8 @@ const sourceSetterEnd = page.indexOf("function buildChartHeaderHtml", sourceSett
 const sourceSetterSection = page.slice(sourceSetterStart, sourceSetterEnd);
 assert.match(sourceSetterSection, /state\.aqiTransitionToken = Number\(state\.aqiTransitionToken \|\| 0\) \+ 1/, "a second selection invalidates the older transition synchronously");
 assert.match(sourceSetterSection, /syncAqiBands\(chartFrame,[\s\S]*forceClear: true,[\s\S]*aqiLoading: true/, "the previous source bands disappear at selection time, even while an older load is aborting");
-assert.match(sourceSetterSection, /settledAqiCacheHit: isAqiSourceRangeSettled\(selectedEntry\)/, "the source setter identifies an already settled target before load takeover");
+assert.match(sourceSetterSection, /const displayedRange = getDisplayedChartRange\(chartFrame\)/, "the source setter snapshots the displayed range before clearing AQI");
+assert.match(sourceSetterSection, /displayedRange,[\s\S]*settledAqiCacheHit: isAqiSourceRangeSettled\(selectedEntry, displayedRange\)/, "cache-hit detection and load takeover receive the same displayed range");
 
 assert.match(targetedSection, /forceClearAqi: aqiSourceChanged/, "the previous source bands are cleared immediately");
 assert.match(targetedSection, /waitForTransition\(AQI_SOURCE_TRANSITION_MS, signal\)/, "the intentional transition delay remains");
@@ -56,6 +84,7 @@ const legacyStart = page.indexOf("async function loadLegacyChartData");
 const legacyEnd = page.indexOf("async function loadStationHistoryChartData", legacyStart);
 const legacySection = page.slice(legacyStart, legacyEnd);
 assert.match(legacySection, /options\.settledAqiCacheHit === true[\s\S]*state\.loadAbortController\?\.abort\(\)/, "a settled compatibility switch immediately supersedes unrelated chart loading");
+assert.match(legacySection, /const displayedAqiSourceRange = isAqiSourceChangeOnly[\s\S]*normalizeDisplayedChartRange\(options\.displayedRange\)[\s\S]*getDisplayedChartRange\(dom\?\.chartFrame\)[\s\S]*const range = displayedAqiSourceRange \|\| resolveRange\(windowValue\)/, "the compatibility path reuses the exact displayed range");
 assert.match(legacySection, /const atomicAqiSourceSwitch = isAqiSourceChangeOnly && frameValid/);
 assert.match(legacySection, /getMissingRangesForRequest\(range, aqiCacheRecord\.settledRanges\)/, "the compatibility path plans AQI requests from settlement coverage");
 assert.match(legacySection, /const aqiProgressPromise = \(async \(\) => \{[\s\S]*if \(!aqiCacheRecord \|\| !aqiMissingRanges\.length\) return;/, "a settled compatibility switch starts no AQI request");
@@ -66,6 +95,7 @@ assert.match(legacySection, /void prefetchAqiBandsForEntries/, "compatibility ba
 assert.match(legacySection, /AQI bands could not be updated for the selected sensor/, "a genuine compatibility request failure retains the AQI error state");
 
 assert.match(loadSection, /options\.settledAqiCacheHit === true[\s\S]*state\.loadAbortController\?\.abort\(\)/, "a settled combined-path switch immediately supersedes unrelated chart loading");
+assert.match(loadSection, /const displayedAqiSourceRange = isAqiSourceChangeOnly[\s\S]*normalizeDisplayedChartRange\(options\.displayedRange\)[\s\S]*getDisplayedChartRange\(existing\)[\s\S]*const range = displayedAqiSourceRange \|\| resolveRange\(windowValue, retainedWindowEndMs\)/, "the combined path reuses the exact displayed range");
 for (const field of [
   "aqi_source_switch_total_ms",
   "aqi_source_switch_transition_ms",

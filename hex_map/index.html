@@ -16996,7 +16996,7 @@
     Math.floor(CHART_GLOBAL_FETCH_CAP / STATION_HISTORY_OBSERVATION_CHUNK_CONCURRENCY),
   );
   const STATION_HISTORY_FETCH_PRIORITY = Object.freeze({ primary: 0, observations: 1, aqiPrefetch: 2 });
-  const AQI_SOURCE_TRANSITION_MS = 200;
+  const AQI_SOURCE_TRANSITION_MS = 50;
   const BACKGROUND_AQI_PREFETCH_CONCURRENCY = 2;
   const AQI_BAND_TOP_OFFSET_PX = 1;
   const params = new URLSearchParams(window.location.search);
@@ -17075,6 +17075,7 @@
     loadAbortController: null,
     loadInFlight: false,
     pendingLoadReason: null,
+    pendingLoadOptions: null,
   };
   const NO_SELECTED_SENSOR_CHART_MESSAGE = "Select a sensor from the list to draw a chart.";
 
@@ -17365,6 +17366,7 @@
     const selectedIds = getSelectedSensorIdsOrdered();
     if (!selectedIds.includes(normalizedId)) return false;
     if (state.selectedAqiSensorId === normalizedId) return true;
+    const aqiSourceSwitchStartedAt = performance.now();
     state.selectedAqiSensorId = normalizedId;
     state.aqiTransitionToken = Number(state.aqiTransitionToken || 0) + 1;
     const chartFrame = domByMap[state.mapKey]?.chartFrame;
@@ -17379,7 +17381,12 @@
     renderSensorList(getCurrentContext() || {});
     notifySelectionChange();
     if (options.reload !== false) {
-      loadChartData("aqi-source-change");
+      const selectedEntry = resolveSelectedChartEntries().entries
+        .find((entry) => String(entry?.stationId || "") === normalizedId);
+      loadChartData("aqi-source-change", {
+        aqiSourceSwitchStartedAt,
+        settledAqiCacheHit: isAqiSourceRangeSettled(selectedEntry),
+      });
     }
     return true;
   }
@@ -20293,23 +20300,54 @@
     cf.animFrameId = requestAnimationFrame(frame);
   }
 
-  async function loadChartData(reason = "sensor-change") {
+  function isAqiSourceRangeSettled(entry) {
+    if (!entry?.timeseriesId) return false;
+    const range = resolveRange(normalizeChartRangeValue(state.chartModeTimeRange));
     if (HEX_MAP_STATION_HISTORY_LOADER_ENABLED) {
-      return loadStationHistoryChartData(reason);
+      const loader = window.UkAqStationHistoryLoader;
+      const record = getStationHistoryRecord(entry);
+      return Boolean(record && loader?.getUncoveredRanges)
+        && loader.getUncoveredRanges(record, "aqi", {
+          start_utc: range.startIso,
+          end_utc: range.endIso,
+        }).length === 0;
     }
-    return loadLegacyChartData(reason);
+    const pollutantKey = normalizeAqiSupportedPollutant(entry.pollutant || getCurrentContext()?.pollutant || "");
+    const cacheKey = buildAqiCacheKey(entry, pollutantKey);
+    const record = cacheKey ? aqiBandCache.get(cacheKey) : null;
+    return Boolean(record)
+      && getMissingRangesForRequest(range, normalizeAqiCacheRecord(record).settledRanges).length === 0;
   }
 
-  async function loadLegacyChartData(reason = "sensor-change") {
+  async function loadChartData(reason = "sensor-change", options = {}) {
+    if (HEX_MAP_STATION_HISTORY_LOADER_ENABLED) {
+      return loadStationHistoryChartData(reason, options);
+    }
+    return loadLegacyChartData(reason, options);
+  }
+
+  async function loadLegacyChartData(reason = "sensor-change", options = {}) {
     if (!state.isChartMode) return;
     const websiteDebugLoadStartedAt = performance.now();
+    const aqiSourceSwitchStartedAt = reason === "aqi-source-change"
+      ? (Number.isFinite(Number(options.aqiSourceSwitchStartedAt))
+        ? Number(options.aqiSourceSwitchStartedAt)
+        : websiteDebugLoadStartedAt)
+      : null;
 
-    // If a new load arrives while one is running, abort the current work and
-    // replay the latest reason as soon as the worker loop unwinds.
+    // A settled AQI-only switch can replace unrelated chart work immediately.
+    // Other loads retain the existing abort-and-replay serialization.
     if (state.loadInFlight) {
-      state.pendingLoadReason = reason;
-      state.loadAbortController?.abort();
-      return;
+      if (reason === "aqi-source-change" && options.settledAqiCacheHit === true) {
+        state.pendingLoadReason = null;
+        state.pendingLoadOptions = null;
+        state.loadAbortController?.abort();
+      } else {
+        state.pendingLoadReason = reason;
+        state.pendingLoadOptions = options;
+        state.loadAbortController?.abort();
+        return;
+      }
     }
     state.loadInFlight = true;
     const abortController = new AbortController();
@@ -20495,8 +20533,12 @@
             && aqiTransitionToken === state.aqiTransitionToken,
         })
         : null;
+      const aqiTransitionStartedAt = atomicAqiSourceSwitch ? performance.now() : null;
+      let aqiTransitionElapsedMs = null;
       const aqiTransitionPromise = atomicAqiSourceSwitch
-        ? window.UkAqStationHistoryLoader.waitForTransition(AQI_SOURCE_TRANSITION_MS, signal)
+        ? window.UkAqStationHistoryLoader.waitForTransition(AQI_SOURCE_TRANSITION_MS, signal).then(() => {
+          aqiTransitionElapsedMs = performance.now() - aqiTransitionStartedAt;
+        })
         : Promise.resolve();
       const aqiProgressStartedAt = performance.now();
       const aqiProgressPromise = (async () => {
@@ -20657,18 +20699,32 @@
 
       // --- Fast path: everything already cached for this requested range. ---
       if (!hasObservationFetch) {
-        const commitAqiSourceSwitch = () => updateChart(dom, seriesPointsMap, usableEntries, range, primaryGuideline, units, aqiPoints, {
-          aqiLoading: false,
-          yAxisLoading: false,
-          aqiSourceSymbolIndex,
-          aqiCacheKey,
-          skipAqiRepaint: preserveAqiBandsForLineOnlyChange,
-          aqiChangeOnly: atomicAqiSourceSwitch,
-        });
+        let aqiSourceSwitchCommitCount = 0;
+        const commitAqiSourceSwitch = () => {
+          updateChart(dom, seriesPointsMap, usableEntries, range, primaryGuideline, units, aqiPoints, {
+            aqiLoading: false,
+            yAxisLoading: false,
+            aqiSourceSymbolIndex,
+            aqiCacheKey,
+            skipAqiRepaint: preserveAqiBandsForLineOnlyChange,
+            aqiChangeOnly: atomicAqiSourceSwitch,
+          });
+          if (atomicAqiSourceSwitch) aqiSourceSwitchCommitCount += 1;
+        };
         if (aqiTransitionGate) {
           if (!aqiTransitionGate.commit(commitAqiSourceSwitch)) return;
         } else {
           commitAqiSourceSwitch();
+        }
+        if (atomicAqiSourceSwitch) {
+          recordWebsiteDebugEvent("aqi_source_switch_timing", {
+            route: "aqi-history",
+            aqi_source_switch_total_ms: Math.round(performance.now() - aqiSourceSwitchStartedAt),
+            aqi_source_switch_transition_ms: Math.round(aqiTransitionElapsedMs ?? AQI_SOURCE_TRANSITION_MS),
+            aqi_source_switch_cache_hit: aqiMissingRanges.length === 0,
+            aqi_source_switch_network_required: aqiMissingRanges.length > 0,
+            aqi_source_switch_commit_count: aqiSourceSwitchCommitCount,
+          });
         }
         const totalPoints = Array.from(seriesPointsMap.values()).reduce((sum, points) => sum + points.length, 0);
         if (!totalPoints) {
@@ -20872,20 +20928,23 @@
       setMessage("Could not load chart data. Try Refresh.", { error: true });
     } finally {
       recordWebsiteDebugTiming("load_chart_data_ms", performance.now() - websiteDebugLoadStartedAt);
-      void flushWebsiteDebugLog(signal.aborted ? "chart-load-aborted" : "chart-load-finished");
-      if (state.loadAbortController === abortController) {
+      const ownsActiveLoad = state.loadAbortController === abortController;
+      if (ownsActiveLoad) {
+        void flushWebsiteDebugLog(signal.aborted ? "chart-load-aborted" : "chart-load-finished");
         state.loadAbortController = null;
-      }
-      state.loadInFlight = false;
-      if (token === state.loadToken) {
-        dom?.chartFrame?.progressBar?.remove();
-        if (dom?.chartFrame) dom.chartFrame.progressBar = null;
-        setLoading(false);
-      }
-      const pendingReason = state.pendingLoadReason;
-      state.pendingLoadReason = null;
-      if (pendingReason && state.isChartMode) {
-        queueMicrotask(() => loadChartData(pendingReason));
+        state.loadInFlight = false;
+        if (token === state.loadToken) {
+          dom?.chartFrame?.progressBar?.remove();
+          if (dom?.chartFrame) dom.chartFrame.progressBar = null;
+          setLoading(false);
+        }
+        const pendingReason = state.pendingLoadReason;
+        const pendingOptions = state.pendingLoadOptions || {};
+        state.pendingLoadReason = null;
+        state.pendingLoadOptions = null;
+        if (pendingReason && state.isChartMode) {
+          queueMicrotask(() => loadChartData(pendingReason, pendingOptions));
+        }
       }
     }
   }
@@ -21333,15 +21392,27 @@
     }
   }
 
-  async function loadStationHistoryChartData(reason = "sensor-change") {
+  async function loadStationHistoryChartData(reason = "sensor-change", options = {}) {
     if (!state.isChartMode) return;
     const stationHistoryLoadStartedAt = performance.now();
+    const aqiSourceSwitchStartedAt = reason === "aqi-source-change"
+      ? (Number.isFinite(Number(options.aqiSourceSwitchStartedAt))
+        ? Number(options.aqiSourceSwitchStartedAt)
+        : stationHistoryLoadStartedAt)
+      : null;
     let primaryRequestCount = 0;
     let secondaryRequestCount = 0;
     if (state.loadInFlight) {
-      state.pendingLoadReason = reason;
-      state.loadAbortController?.abort();
-      return;
+      if (reason === "aqi-source-change" && options.settledAqiCacheHit === true) {
+        state.pendingLoadReason = null;
+        state.pendingLoadOptions = null;
+        state.loadAbortController?.abort();
+      } else {
+        state.pendingLoadReason = reason;
+        state.pendingLoadOptions = options;
+        state.loadAbortController?.abort();
+        return;
+      }
     }
     state.loadInFlight = true;
     const abortController = new AbortController();
@@ -21475,9 +21546,12 @@
               && aqiTransitionToken === state.aqiTransitionToken,
           })
           : null;
+        const aqiTransitionStartedAt = aqiSourceChanged ? performance.now() : null;
+        let aqiTransitionElapsedMs = null;
         const aqiTransitionPromise = aqiSourceChanged
           ? loader.waitForTransition(AQI_SOURCE_TRANSITION_MS, signal).then(() => {
             if (signal.aborted || token !== state.loadToken || aqiTransitionToken !== state.aqiTransitionToken) return false;
+            aqiTransitionElapsedMs = performance.now() - aqiTransitionStartedAt;
             return true;
           })
           : Promise.resolve(true);
@@ -21704,7 +21778,10 @@
             );
           },
         );
-        await Promise.all([aqiHistoryPromise, observationHistoryPromise, aqiTransitionPromise]);
+        const requiredTransitionWork = isAqiSourceChangeOnly
+          ? [aqiHistoryPromise, aqiTransitionPromise]
+          : [aqiHistoryPromise, observationHistoryPromise, aqiTransitionPromise];
+        await Promise.all(requiredTransitionWork);
         clearObservationProgress();
         await observationScheduler.flush();
         if (signal.aborted || token !== state.loadToken) return;
@@ -21716,17 +21793,31 @@
             void prefetchStationHistoryAqi(entry, getStationHistoryRecord(entry), range, windowValue, signal, token);
           });
 
-        const commitTargetedRender = () => renderStationHistoryChart(dom, entries, range, units, primary, false, false, {
-          currentObservationStationIds: currentObservationIds,
-          selectionChangeOnly: true,
-          changedStationIds,
-          skipAqiRepaint: !aqiSourceChanged,
-          aqiChangeOnly: aqiSourceChanged && !addedEntries.length,
-        });
+        let aqiSourceSwitchCommitCount = 0;
+        const commitTargetedRender = () => {
+          renderStationHistoryChart(dom, entries, range, units, primary, false, false, {
+            currentObservationStationIds: currentObservationIds,
+            selectionChangeOnly: true,
+            changedStationIds,
+            skipAqiRepaint: !aqiSourceChanged,
+            aqiChangeOnly: aqiSourceChanged && !addedEntries.length,
+          });
+          if (isAqiSourceChangeOnly) aqiSourceSwitchCommitCount += 1;
+        };
         if (aqiTransitionGate) {
           if (!aqiTransitionGate.commit(commitTargetedRender)) return;
         } else {
           commitTargetedRender();
+        }
+        if (isAqiSourceChangeOnly) {
+          recordWebsiteDebugEvent("aqi_source_switch_timing", {
+            route: "station-series",
+            aqi_source_switch_total_ms: Math.round(performance.now() - aqiSourceSwitchStartedAt),
+            aqi_source_switch_transition_ms: Math.round(aqiTransitionElapsedMs ?? AQI_SOURCE_TRANSITION_MS),
+            aqi_source_switch_cache_hit: !sourceNeedsAqi,
+            aqi_source_switch_network_required: sourceNeedsAqi,
+            aqi_source_switch_commit_count: aqiSourceSwitchCommitCount,
+          });
         }
         const aqiTransitionFailed = aqiSourceChanged
           && loader.getUncoveredRanges(primaryRecord, "aqi", requestedRange).length > 0;
@@ -22083,13 +22174,18 @@
         primary_request_count: primaryRequestCount,
         secondary_request_count: secondaryRequestCount,
       });
-      void flushWebsiteDebugLog(signal.aborted ? "station-history-load-aborted" : "station-history-load-finished");
-      if (state.loadAbortController === abortController) state.loadAbortController = null;
-      state.loadInFlight = false;
-      if (token === state.loadToken) setLoading(false);
-      const pendingReason = state.pendingLoadReason;
-      state.pendingLoadReason = null;
-      if (pendingReason && state.isChartMode) queueMicrotask(() => loadChartData(pendingReason));
+      const ownsActiveLoad = state.loadAbortController === abortController;
+      if (ownsActiveLoad) {
+        void flushWebsiteDebugLog(signal.aborted ? "station-history-load-aborted" : "station-history-load-finished");
+        state.loadAbortController = null;
+        state.loadInFlight = false;
+        if (token === state.loadToken) setLoading(false);
+        const pendingReason = state.pendingLoadReason;
+        const pendingOptions = state.pendingLoadOptions || {};
+        state.pendingLoadReason = null;
+        state.pendingLoadOptions = null;
+        if (pendingReason && state.isChartMode) queueMicrotask(() => loadChartData(pendingReason, pendingOptions));
+      }
     }
   }
 

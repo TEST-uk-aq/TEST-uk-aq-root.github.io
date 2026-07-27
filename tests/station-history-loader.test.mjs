@@ -195,12 +195,43 @@ assert.equal(stagedSwitch.commit(() => { visibleAqiCommitCount += 1; }), false);
 assert.equal(visibleAqiCommitCount, 1, "a terminal AQI source switch has one visible commit");
 
 let cachedAqiCommitCount = 0;
+let backgroundAqiWorkSettled = false;
+let releaseBackgroundAqiWork;
+const backgroundAqiWork = new Promise((resolve) => {
+  releaseBackgroundAqiWork = () => {
+    backgroundAqiWorkSettled = true;
+    resolve();
+  };
+});
 const cachedSwitch = loader.createAtomicAqiRenderGate();
-await loader.waitForTransition(0);
+const cachedTransitionStartedAt = performance.now();
+await loader.waitForTransition(50);
+const cachedTransitionElapsedMs = performance.now() - cachedTransitionStartedAt;
 cachedSwitch.markTerminal();
 cachedSwitch.commit(() => { cachedAqiCommitCount += 1; });
 cachedSwitch.commit(() => { cachedAqiCommitCount += 1; });
+assert.ok(cachedTransitionElapsedMs >= 40, "the cached source switch retains the configured 50ms transition");
 assert.equal(cachedAqiCommitCount, 1, "complete cached AQI renders once after the transition");
+assert.equal(backgroundAqiWorkSettled, false, "the cached AQI commit does not await background work");
+releaseBackgroundAqiWork();
+await backgroundAqiWork;
+
+let resolveRequiredAqiWork;
+const requiredAqiWork = new Promise((resolve) => { resolveRequiredAqiWork = resolve; });
+let requiredAqiCommitCount = 0;
+const requiredAqiSwitch = loader.createAtomicAqiRenderGate();
+const requiredAqiTerminal = Promise.all([
+  loader.waitForTransition(0),
+  requiredAqiWork,
+]).then(() => {
+  requiredAqiSwitch.markTerminal();
+  requiredAqiSwitch.commit(() => { requiredAqiCommitCount += 1; });
+});
+await loader.waitForTransition(0);
+assert.equal(requiredAqiSwitch.commit(() => { requiredAqiCommitCount += 1; }), false, "unsettled AQI cannot commit before its required network work finishes");
+resolveRequiredAqiWork();
+await requiredAqiTerminal;
+assert.equal(requiredAqiCommitCount, 1, "unsettled AQI commits once after required work reaches terminal state");
 
 let currentTransitionToken = 1;
 const obsoleteSwitch = loader.createAtomicAqiRenderGate({

@@ -6659,6 +6659,10 @@
     <script src="https://cdn.jsdelivr.net/npm/d3@7.9.0/dist/d3.min.js" crossorigin="anonymous"></script>
     <script src="/timeseries-client.js"></script>
     <script src="/chart-core.js"></script>
+    <script src="/station_chart/station-chart-domain.js"></script>
+    <script src="/station_chart/station-chart-cache.js"></script>
+    <script src="/station_chart/station-chart-diagnostics.js"></script>
+    <script src="/station_chart/aqi-source-controller.js"></script>
     <script src="/station-history-loader.js"></script>
     <script>
       // ── Top summary boxes — shared updater ───────────────────────────────────
@@ -17015,7 +17019,7 @@
     params.get("station_history_loader"),
     true,
   ) && Boolean(window.UkAqStationHistoryLoader);
-  const HEX_MAP_STATION_HISTORY_CACHE_CONTRACT = "hex-map-station-history-v6-aqi-settlement";
+  const HEX_MAP_STATION_HISTORY_CACHE_CONTRACT = "hex-map-station-history-v7-shared-cache";
   const stationHistoryFetchScheduler = window.UkAqStationHistoryLoader?.createPriorityFetchScheduler
     ? window.UkAqStationHistoryLoader.createPriorityFetchScheduler(CHART_GLOBAL_FETCH_CAP)
     : null;
@@ -17059,6 +17063,14 @@
     uk: collectChartDom("uk"),
     cr: collectChartDom("cr"),
   };
+  const stationChartDiagnostics = window.UkAqStationChartDiagnostics.createDiagnostics({
+    recordEvent: recordWebsiteDebugEvent,
+    recordTiming: recordWebsiteDebugTiming,
+  });
+  const aqiSourceController = window.UkAqSourceController.createAqiSourceController({
+    transitionMs: AQI_SOURCE_TRANSITION_MS,
+    diagnostics: stationChartDiagnostics,
+  });
   const state = {
     isChartMode: false,
     mapKey: null,
@@ -17076,7 +17088,6 @@
     loadInFlight: false,
     pendingLoadReason: null,
     pendingLoadOptions: null,
-    aqiSourceSwitchMessages: window.UkAqStationHistoryLoader.createAqiSourceSwitchMessageController(),
   };
   const NO_SELECTED_SENSOR_CHART_MESSAGE = "Select a sensor from the list to draw a chart.";
 
@@ -17367,30 +17378,34 @@
     const selectedIds = getSelectedSensorIdsOrdered();
     if (!selectedIds.includes(normalizedId)) return false;
     if (state.selectedAqiSensorId === normalizedId) return true;
-    const aqiSourceSwitchStartedAt = performance.now();
     const chartFrame = domByMap[state.mapKey]?.chartFrame;
     const frameIdentityValid = isCurrentChartFrame(chartFrame);
     const displayedRange = frameIdentityValid ? getDisplayedChartRange(chartFrame) : null;
-    state.aqiSourceSwitchMessages.invalidate();
-    setMessage("", { clearAqiSourceError: true });
     state.selectedAqiSensorId = normalizedId;
-    state.aqiTransitionToken = Number(state.aqiTransitionToken || 0) + 1;
-    if (chartFrame && frameIdentityValid) {
-      chartFrame.currentAqiSourceStationId = normalizedId;
-      syncAqiBands(chartFrame, {
-        forceClear: true,
-        aqiLoading: true,
-        aqiSourceSymbolIndex: getChartVisualSlot(normalizedId, Math.max(0, selectedIds.indexOf(normalizedId))),
-      });
-    }
+    const aqiTransition = displayedRange
+      ? aqiSourceController.begin({
+        sourceId: normalizedId,
+        range: displayedRange,
+        loadGeneration: state.loadToken + 1,
+        clearAqi: () => {
+          if (!chartFrame || !frameIdentityValid) return;
+          chartFrame.currentAqiSourceStationId = normalizedId;
+          syncAqiBands(chartFrame, {
+            forceClear: true,
+            aqiLoading: true,
+            aqiSourceSymbolIndex: getChartVisualSlot(normalizedId, Math.max(0, selectedIds.indexOf(normalizedId))),
+          });
+        },
+      })
+      : null;
     renderSensorList(getCurrentContext() || {});
     notifySelectionChange();
     if (options.reload !== false) {
       const selectedEntry = resolveSelectedChartEntries().entries
         .find((entry) => String(entry?.stationId || "") === normalizedId);
       loadChartData("aqi-source-change", {
-        aqiSourceSwitchStartedAt,
         displayedRange,
+        aqiTransition,
         settledAqiCacheHit: isAqiSourceRangeSettled(selectedEntry, displayedRange),
       });
     }
@@ -19057,15 +19072,8 @@
   function setMessage(text, options = {}) {
     const dom = domByMap[state.mapKey];
     if (!dom?.message) return;
-    const ownedAqiError = state.aqiSourceSwitchMessages?.error;
-    const resolved = window.UkAqStationHistoryLoader.resolveAqiSourceSwitchMessage(text, {
-      errorOwner: ownedAqiError,
-      currentText: dom.message.textContent,
-      clearOwnedError: options.clearAqiSourceError === true,
-      error: options.error === true,
-    });
-    dom.message.textContent = resolved.text;
-    dom.message.classList.toggle("is-error", resolved.error);
+    dom.message.textContent = String(text || "");
+    dom.message.classList.toggle("is-error", options.error === true);
   }
 
   function setLoading(isLoading) {
@@ -19456,122 +19464,40 @@
     return Array.from(byTime.values()).sort((a, b) => a.date.getTime() - b.date.getTime());
   }
 
-  const CACHE_RANGE_STATES = new Set([
-    "covered_empty",
-    "covered_with_data",
-    "failed",
-    "partial",
-    "malformed",
-    "unknown",
-  ]);
-
   function normalizeCacheRangeState(value) {
-    const state = String(value || "").trim().toLowerCase();
-    return CACHE_RANGE_STATES.has(state) ? state : "unknown";
+    return window.UkAqStationChartCache.normalizeCacheRangeState(value);
   }
 
   function isCoveredCacheState(value) {
-    const state = normalizeCacheRangeState(value);
-    return state === "covered_empty" || state === "covered_with_data";
-  }
-
-  function getNonCoveredRangeProperty(state) {
-    const normalized = normalizeCacheRangeState(state);
-    return normalized === "failed" ? "failedRanges"
-      : normalized === "partial" ? "partialRanges"
-      : normalized === "malformed" ? "malformedRanges"
-      : normalized === "unknown" ? "unknownRanges"
-      : null;
+    return window.UkAqStationChartCache.isCoveredCacheState(value);
   }
 
   function normalizeCacheKeyPart(value) {
-    const text = String(value ?? "").trim();
-    return (text || "null").replace(/\|/g, "_");
+    return window.UkAqStationChartDomain.normalizeCacheKeyPart(value);
   }
 
   function normalizeCoveredRanges(ranges = []) {
-    const cleaned = (Array.isArray(ranges) ? ranges : [])
-      .filter((segment) => Number.isFinite(segment?.startMs) && Number.isFinite(segment?.endMs) && segment.endMs > segment.startMs)
-      .map((segment) => ({ startMs: Number(segment.startMs), endMs: Number(segment.endMs) }))
-      .sort((a, b) => a.startMs - b.startMs);
-    if (!cleaned.length) return [];
-    const merged = [cleaned[0]];
-    for (let i = 1; i < cleaned.length; i++) {
-      const current = cleaned[i];
-      const tail = merged[merged.length - 1];
-      if (current.startMs <= tail.endMs + 1) {
-        tail.endMs = Math.max(tail.endMs, current.endMs);
-      } else {
-        merged.push(current);
-      }
-    }
-    return merged;
+    return window.UkAqStationChartCache.normalizeCoveredRanges(ranges);
   }
 
   function addCoveredRange(ranges, startMs, endMs) {
-    return normalizeCoveredRanges([...(Array.isArray(ranges) ? ranges : []), { startMs, endMs }]);
-  }
-
-  function rangesOverlap(leftStartMs, leftEndMs, rightStartMs, rightEndMs) {
-    return Number.isFinite(leftStartMs)
-      && Number.isFinite(leftEndMs)
-      && Number.isFinite(rightStartMs)
-      && Number.isFinite(rightEndMs)
-      && leftStartMs < rightEndMs
-      && rightStartMs < leftEndMs;
-  }
-
-  function removeOverlappingRanges(ranges, startMs, endMs) {
-    return normalizeCoveredRanges((Array.isArray(ranges) ? ranges : []).filter((segment) => (
-      !rangesOverlap(Number(segment?.startMs), Number(segment?.endMs), startMs, endMs)
-    )));
+    return window.UkAqStationChartCache.addCoveredRange(ranges, startMs, endMs);
   }
 
   function normalizeCacheRangeStates(ranges = []) {
-    return (Array.isArray(ranges) ? ranges : [])
-      .filter((segment) => Number.isFinite(segment?.startMs) && Number.isFinite(segment?.endMs) && segment.endMs > segment.startMs)
-      .map((segment) => ({
-        startMs: Number(segment.startMs),
-        endMs: Number(segment.endMs),
-        state: normalizeCacheRangeState(segment.state),
-        sourceMetadata: segment.sourceMetadata && typeof segment.sourceMetadata === "object" ? segment.sourceMetadata : null,
-        error: segment.error ? String(segment.error) : null,
-        httpStatus: Number.isFinite(Number(segment.httpStatus)) ? Number(segment.httpStatus) : null,
-        recordedAtUtc: segment.recordedAtUtc || null,
-      }))
-      .sort((a, b) => a.startMs - b.startMs);
+    return window.UkAqStationChartCache.normalizeCacheRangeStates(ranges);
   }
 
   function normalizeCacheRecord(record = {}, defaults = {}) {
-    const normalized = {
-      ...record,
-      ...defaults,
-      points: Array.isArray(record.points) ? record.points : [],
-      coveredRanges: normalizeCoveredRanges(record.coveredRanges),
-      failedRanges: normalizeCoveredRanges(record.failedRanges),
-      partialRanges: normalizeCoveredRanges(record.partialRanges),
-      malformedRanges: normalizeCoveredRanges(record.malformedRanges),
-      unknownRanges: normalizeCoveredRanges(record.unknownRanges),
-      rangeStates: normalizeCacheRangeStates(record.rangeStates),
-    };
-    if (Object.prototype.hasOwnProperty.call(defaults, "guideline")) {
-      normalized.guideline = record.guideline || defaults.guideline || null;
-    }
-    if (Object.prototype.hasOwnProperty.call(defaults, "lastResponseMeta")) {
-      normalized.lastResponseMeta = record.lastResponseMeta || defaults.lastResponseMeta || null;
-    }
-    return normalized;
+    return window.UkAqStationChartCache.normalizeCacheRecord(record, defaults);
   }
 
   function normalizeSeriesCacheRecord(record = {}) {
-    return normalizeCacheRecord(record, { guideline: null });
+    return window.UkAqStationChartCache.normalizeSeriesCacheRecord(record);
   }
 
   function normalizeAqiCacheRecord(record = {}) {
-    return {
-      ...normalizeCacheRecord(record, { lastResponseMeta: null }),
-      settledRanges: normalizeCoveredRanges(record.settledRanges),
-    };
+    return window.UkAqStationChartCache.normalizeAqiCacheRecord(record);
   }
 
   function getOrCreateSeriesCacheRecord(cacheKey) {
@@ -19589,71 +19515,11 @@
   }
 
   function recordCacheRangeState(record, startMs, endMs, state, details = {}) {
-    if (!record || !Number.isFinite(startMs) || !Number.isFinite(endMs) || endMs <= startMs) return record;
-    const normalizedState = normalizeCacheRangeState(state);
-    const nonCoveredProps = ["failedRanges", "partialRanges", "malformedRanges", "unknownRanges"];
-    record.rangeStates = normalizeCacheRangeStates(record.rangeStates)
-      .filter((segment) => !rangesOverlap(segment.startMs, segment.endMs, startMs, endMs));
-    record.rangeStates.push({
-      startMs,
-      endMs,
-      state: normalizedState,
-      sourceMetadata: details.sourceMetadata || null,
-      error: details.error ? String(details.error) : null,
-      httpStatus: Number.isFinite(Number(details.httpStatus)) ? Number(details.httpStatus) : null,
-      recordedAtUtc: new Date().toISOString(),
-    });
-    record.rangeStates = normalizeCacheRangeStates(record.rangeStates);
-
-    if (Array.isArray(record.settledRanges)) {
-      // AQI completeness and AQI settlement are independent. A response can
-      // contain valid rows without proving that its blank tail is authoritative.
-      const settled = details.settled === true;
-      record.settledRanges = settled
-        ? addCoveredRange(record.settledRanges, startMs, endMs)
-        : removeOverlappingRanges(record.settledRanges, startMs, endMs);
-    }
-
-    if (isCoveredCacheState(normalizedState)) {
-      record.coveredRanges = addCoveredRange(record.coveredRanges, startMs, endMs);
-      nonCoveredProps.forEach((prop) => {
-        record[prop] = removeOverlappingRanges(record[prop], startMs, endMs);
-      });
-      return record;
-    }
-
-    const prop = getNonCoveredRangeProperty(normalizedState);
-    if (prop) {
-      record.coveredRanges = removeOverlappingRanges(record.coveredRanges, startMs, endMs);
-      nonCoveredProps.forEach((rangeProp) => {
-        record[rangeProp] = rangeProp === prop
-          ? addCoveredRange(record[rangeProp], startMs, endMs)
-          : removeOverlappingRanges(record[rangeProp], startMs, endMs);
-      });
-    }
-    return record;
+    return window.UkAqStationChartCache.recordCacheRangeState(record, startMs, endMs, state, details);
   }
 
   function getCacheStateDebug(record) {
-    const normalized = normalizeCacheRecord(record || {});
-    return {
-      covered_ranges: normalizeDebugRanges(normalized.coveredRanges),
-      settled_ranges: normalizeDebugRanges(record?.settledRanges || []),
-      failed_ranges: normalizeDebugRanges(normalized.failedRanges),
-      partial_ranges: normalizeDebugRanges(normalized.partialRanges),
-      malformed_ranges: normalizeDebugRanges(normalized.malformedRanges),
-      unknown_ranges: normalizeDebugRanges(normalized.unknownRanges),
-      range_states: normalizeCacheRangeStates(normalized.rangeStates).map((segment) => ({
-        startMs: segment.startMs,
-        endMs: segment.endMs,
-        startIso: new Date(segment.startMs).toISOString(),
-        endIso: new Date(segment.endMs).toISOString(),
-        state: segment.state,
-        sourceMetadata: segment.sourceMetadata,
-        error: segment.error,
-        httpStatus: segment.httpStatus,
-      })),
-    };
+    return window.UkAqStationChartCache.getCacheStateDebug(record);
   }
 
   function classifyObservationCacheState(result) {
@@ -19696,11 +19562,9 @@
   }
 
   function classifyAqiCacheResult(result) {
-    // The compatibility path reads stored-R2 AQI. A complete response is
-    // settled even when its rows contain null AQI values, because those rows
-    // preserve their calculation status. A partial response is settled only
-    // when it carries the authoritative calculated-history reason contract;
-    // older compatibility responses without that evidence remain retryable.
+    // Successful calculated responses settle without a diagnostic allow-list,
+    // including authoritative blank hours. Retained stored-R2 compatibility
+    // partials remain retryable when they lack calculated-response identity.
     if (result?.aqiOutcome) return result.aqiOutcome;
     const meta = result?.meta || {};
     const cacheState = classifyAqiCacheState(result);
@@ -19763,20 +19627,7 @@
   }
 
   function getMissingRangesForRequest(range, coveredRanges) {
-    const normalized = normalizeCoveredRanges(coveredRanges);
-    const missing = [];
-    let cursor = range.startMs;
-    normalized.forEach((segment) => {
-      if (segment.endMs <= cursor) return;
-      if (segment.startMs > cursor) {
-        missing.push({ startMs: cursor, endMs: Math.min(segment.startMs, range.endMs) });
-      }
-      cursor = Math.max(cursor, segment.endMs);
-    });
-    if (cursor < range.endMs) {
-      missing.push({ startMs: cursor, endMs: range.endMs });
-    }
-    return missing.filter((segment) => segment.endMs > segment.startMs);
+    return window.UkAqStationChartCache.getMissingRangesForRequest(range, coveredRanges);
   }
 
   function getPointsInRange(points, range) {
@@ -19801,13 +19652,21 @@
   function buildSeriesCacheKey(entry) {
     if (!entry?.timeseriesId) return "";
     const pollutantKey = normalizeAqiSupportedPollutant(entry?.pollutant || "") || "unknown";
-    const connectorId = getEntryConnectorId(entry);
-    return `${normalizeCacheKeyPart(entry.timeseriesId)}|connector:${normalizeCacheKeyPart(connectorId)}|pollutant:${normalizeCacheKeyPart(pollutantKey)}`;
+    return window.UkAqStationChartDomain.buildObservationCacheKey({
+      timeseriesId: entry.timeseriesId,
+      connectorId: getEntryConnectorId(entry),
+      pollutant: pollutantKey,
+    });
   }
 
   function buildAqiCacheKey(entry, pollutantKey) {
     if (!entry?.timeseriesId || !pollutantKey) return "";
-    return `${normalizeCacheKeyPart(entry.timeseriesId)}|station:${normalizeCacheKeyPart(getEntryStationId(entry))}|connector:${normalizeCacheKeyPart(getEntryConnectorId(entry))}|pollutant:${normalizeCacheKeyPart(pollutantKey)}`;
+    return window.UkAqStationChartDomain.buildAqiCacheKey({
+      timeseriesId: entry.timeseriesId,
+      stationId: getEntryStationId(entry),
+      connectorId: getEntryConnectorId(entry),
+      pollutant: pollutantKey,
+    });
   }
 
   function buildChunkWorkQueue(entryPlans, windowValue) {
@@ -20276,8 +20135,9 @@
     resolveSelectedChartEntries().entries.forEach((entry) => {
       if (entry?.timeseriesId) tidSet.add(String(entry.timeseriesId));
     });
-    seriesDataCache.forEach((_v, key) => { if (tidSet.has(key.split("|")[0])) seriesDataCache.delete(key); });
-    aqiBandCache.forEach((_v, key)    => { if (tidSet.has(key.split("|")[0])) aqiBandCache.delete(key); });
+    const matchesSelectedTimeseries = (_value, key) => tidSet.has(String(key).split("|")[0]);
+    window.UkAqStationChartCache.invalidateMatchingEntries(seriesDataCache, matchesSelectedTimeseries);
+    window.UkAqStationChartCache.invalidateMatchingEntries(aqiBandCache, matchesSelectedTimeseries);
   }
 
   function computeYDomainNiced(seriesPointsMap, usableEntries, guideline) {
@@ -20417,7 +20277,7 @@
 
   async function loadChartData(reason = "sensor-change", options = {}) {
     if (reason !== "resize" && reason !== "aqi-source-change") {
-      state.aqiSourceSwitchMessages.invalidate();
+      aqiSourceController.invalidate();
     }
     if (HEX_MAP_STATION_HISTORY_LOADER_ENABLED) {
       return loadStationHistoryChartData(reason, options);
@@ -20428,11 +20288,6 @@
   async function loadLegacyChartData(reason = "sensor-change", options = {}) {
     if (!state.isChartMode) return;
     const websiteDebugLoadStartedAt = performance.now();
-    const aqiSourceSwitchStartedAt = reason === "aqi-source-change"
-      ? (Number.isFinite(Number(options.aqiSourceSwitchStartedAt))
-        ? Number(options.aqiSourceSwitchStartedAt)
-        : websiteDebugLoadStartedAt)
-      : null;
 
     // A settled AQI-only switch can replace unrelated chart work immediately.
     // Other loads retain the existing abort-and-replay serialization.
@@ -20498,7 +20353,7 @@
       const units = usableEntries[0]?.units || getCurrentContext()?.units || "";
       const svgEl = dom?.svg?.node();
       if (!svgEl) return;
-      setMessage("");
+      if (!isAqiSourceChangeOnly) setMessage("");
 
       // Reuse the chart frame whenever its area/session identity is unchanged.
       // Sensor chips can wrap onto another row and change the SVG's available
@@ -20625,32 +20480,21 @@
         && dom?.chartFrame?.currentAqiKey === aqiCacheKey
         && aqiMissingRanges.length === 0;
       const atomicAqiSourceSwitch = isAqiSourceChangeOnly && frameValid;
-      const aqiTransitionToken = atomicAqiSourceSwitch
-        ? ((state.aqiTransitionToken = Number(state.aqiTransitionToken || 0) + 1), state.aqiTransitionToken)
-        : Number(state.aqiTransitionToken || 0);
-      const aqiTransitionGate = atomicAqiSourceSwitch
-        ? window.UkAqStationHistoryLoader.createAtomicAqiRenderGate({
-          isCurrent: () => !signal.aborted
-            && token === state.loadToken
-            && aqiTransitionToken === state.aqiTransitionToken,
-        })
+      const aqiTransition = atomicAqiSourceSwitch
+        ? (options.aqiTransition || aqiSourceController.begin({
+          sourceId: aqiSourceId,
+          range,
+          loadGeneration: token,
+          clearAqi: () => syncAqiBands(dom?.chartFrame, {
+            forceClear: true,
+            aqiLoading: true,
+            aqiSourceSymbolIndex,
+          }),
+        }))
         : null;
-      const aqiSwitchIdentity = atomicAqiSourceSwitch
-        ? state.aqiSourceSwitchMessages.begin({
-          source_id: aqiSourceId,
-          range_start_utc: range.startIso,
-          range_end_utc: range.endIso,
-          load_token: token,
-          transition_token: aqiTransitionToken,
-        })
-        : null;
-      const aqiTransitionStartedAt = atomicAqiSourceSwitch ? performance.now() : null;
-      let aqiTransitionElapsedMs = null;
-      const aqiTransitionPromise = atomicAqiSourceSwitch
-        ? window.UkAqStationHistoryLoader.waitForTransition(AQI_SOURCE_TRANSITION_MS, signal).then(() => {
-          aqiTransitionElapsedMs = performance.now() - aqiTransitionStartedAt;
-        })
-        : Promise.resolve();
+      const aqiNetworkRequired = atomicAqiSourceSwitch
+        ? aqiSourceController.shouldRequest(aqiTransition, () => aqiMissingRanges.length === 0)
+        : aqiMissingRanges.length > 0;
       const aqiProgressStartedAt = performance.now();
       const aqiSwitchClassification = {
         settlement: aqiMissingRanges.length ? "pending" : "settled_cache_hit",
@@ -20662,7 +20506,11 @@
         missing_reasons: new Set(),
       };
       const aqiProgressPromise = (async () => {
-        if (!aqiCacheRecord || !aqiMissingRanges.length) return;
+        if (!aqiCacheRecord || !aqiNetworkRequired) {
+          return window.UkAqStationChartDomain.classifyTerminalRequestOutcome({
+            settlement: { settled: true, complete: true },
+          });
+        }
         let lastResponseMeta = aqiCacheRecord.lastResponseMeta || null;
         const initialAqiPoints = Array.isArray(aqiPoints) ? aqiPoints : [];
         let aqiRenderableRanges = [];
@@ -20682,8 +20530,8 @@
           if (!advanced || token !== state.loadToken || signal.aborted) return;
           const newlyRenderablePoints = getPointsInRanges(aqiCacheRecord.points, aqiRenderableRanges);
           aqiPoints = mergeSeriesPoints(initialAqiPoints, newlyRenderablePoints);
-          if (aqiTransitionGate) {
-            aqiTransitionGate.stage();
+          if (aqiTransition) {
+            aqiSourceController.stage(aqiTransition);
             return;
           }
           syncAqiBands(dom?.chartFrame, {
@@ -20716,12 +20564,6 @@
           aqiResultOutcome.partial_reasons.forEach((reason) => aqiSwitchClassification.partial_reasons.add(reason));
           aqiResultOutcome.calculation_statuses.forEach((status) => aqiSwitchClassification.calculation_statuses.add(status));
           aqiResultOutcome.missing_reasons.forEach((reason) => aqiSwitchClassification.missing_reasons.add(reason));
-          if (atomicAqiSourceSwitch && aqiResultOutcome.actual_failure) {
-            state.aqiSourceSwitchMessages.fail(
-              aqiSwitchIdentity,
-              aqiResultOutcome.failure_reason,
-            );
-          }
           lastResponseMeta = result?.meta || lastResponseMeta;
           if (points.length) {
             aqiCacheRecord.points = mergeSeriesPoints(aqiCacheRecord.points, points);
@@ -20763,8 +20605,8 @@
         aqiLoadingActive = false;
         if (token !== state.loadToken || signal.aborted) return;
         aqiPoints = getPointsInRange(aqiCacheRecord.points, range);
-        if (aqiTransitionGate) {
-          aqiTransitionGate.stage();
+        if (aqiTransition) {
+          aqiSourceController.stage(aqiTransition);
         } else {
           syncAqiBands(dom?.chartFrame, {
             aqiPoints,
@@ -20773,16 +20615,28 @@
             aqiSourceSymbolIndex,
           });
         }
+        return {
+          settled: !aqiSwitchClassification.actual_failure && !aqiSwitchClassification.retryable_incomplete,
+          retryable: aqiSwitchClassification.retryable_incomplete || aqiSwitchClassification.actual_failure,
+          retryable_incomplete: aqiSwitchClassification.retryable_incomplete,
+          actual_failure: aqiSwitchClassification.actual_failure,
+          hard_failure: aqiSwitchClassification.actual_failure,
+          failure_reason: aqiSwitchClassification.failure_reason,
+          settlement: aqiSwitchClassification.settlement,
+          partial_reasons: [...aqiSwitchClassification.partial_reasons],
+          calculation_statuses: [...aqiSwitchClassification.calculation_statuses],
+          missing_reasons: [...aqiSwitchClassification.missing_reasons],
+        };
       })().finally(() => {
         recordWebsiteDebugTiming("aqi_bands_fetch_ms", performance.now() - aqiProgressStartedAt);
       }).catch((error) => {
         aqiLoadingActive = false;
         if (atomicAqiSourceSwitch) {
-          aqiSwitchClassification.settlement = "actual_failure";
+          aqiSwitchClassification.settlement = "hard_failure";
           aqiSwitchClassification.actual_failure = true;
           aqiSwitchClassification.failure_reason = error?.message || "aqi_progress_failed";
-          state.aqiSourceSwitchMessages.fail(aqiSwitchIdentity, error?.message || "aqi_progress_failed");
         }
+        return window.UkAqStationChartDomain.classifyTerminalRequestOutcome({ error });
       });
 
       // Build or reuse the SVG frame.
@@ -20837,13 +20691,12 @@
         setLoading(true);
       }
       if (!atomicAqiSourceSwitch) {
-        await Promise.all([aqiProgressPromise, aqiTransitionPromise]);
+        await aqiProgressPromise;
         if (token !== state.loadToken || signal.aborted) return;
       }
 
       // --- Fast path: everything already cached for this requested range. ---
       if (!hasObservationFetch) {
-        let aqiSourceSwitchCommitCount = 0;
         const commitAqiSourceSwitch = () => {
           updateChart(dom, seriesPointsMap, usableEntries, range, primaryGuideline, units, aqiPoints, {
             aqiLoading: false,
@@ -20853,53 +20706,38 @@
             skipAqiRepaint: preserveAqiBandsForLineOnlyChange,
             aqiChangeOnly: atomicAqiSourceSwitch,
           });
-          if (atomicAqiSourceSwitch) aqiSourceSwitchCommitCount += 1;
         };
         if (atomicAqiSourceSwitch) {
-          const completion = await window.UkAqStationHistoryLoader.completeAtomicAqiSourceSwitch({
-            gate: aqiTransitionGate,
+          const completion = await aqiSourceController.complete({
+            transition: aqiTransition,
             aqiWorkPromise: aqiProgressPromise,
-            transitionPromise: aqiTransitionPromise,
             isCurrent: () => token === state.loadToken
-              && !signal.aborted
-              && aqiTransitionToken === state.aqiTransitionToken,
+              && !signal.aborted,
             commit: commitAqiSourceSwitch,
+            renderUnavailable: () => syncAqiBands(dom?.chartFrame, {
+              forceClear: true,
+              aqiLoading: false,
+              aqiSourceSymbolIndex,
+            }),
+            diagnosticDetails: {
+              route: "aqi-history",
+              aqi_source_switch_cache_hit: !aqiNetworkRequired,
+              aqi_source_switch_network_required: aqiNetworkRequired,
+              aqi_source_switch_reused_displayed_range: Boolean(displayedAqiSourceRange),
+              aqi_source_switch_waited_for_observation_work: false,
+              aqi_source_switch_observation_wait_ms: 0,
+            },
           });
-          if (!completion.committed) return;
+          if (!completion.committed && !completion.actual_failure) return;
         } else {
           commitAqiSourceSwitch();
         }
-        if (atomicAqiSourceSwitch) {
-          recordWebsiteDebugEvent("aqi_source_switch_timing", {
-            route: "aqi-history",
-            aqi_source_switch_total_ms: Math.round(performance.now() - aqiSourceSwitchStartedAt),
-            aqi_source_switch_transition_ms: Math.round(aqiTransitionElapsedMs ?? AQI_SOURCE_TRANSITION_MS),
-            aqi_source_switch_cache_hit: aqiMissingRanges.length === 0,
-            aqi_source_switch_network_required: aqiMissingRanges.length > 0,
-            aqi_source_switch_commit_count: aqiSourceSwitchCommitCount,
-            aqi_source_switch_reused_displayed_range: Boolean(displayedAqiSourceRange),
-            aqi_source_switch_waited_for_observation_work: false,
-            aqi_source_switch_observation_wait_ms: 0,
-            aqi_source_switch_failure: Boolean(state.aqiSourceSwitchMessages.error),
-            aqi_source_switch_settlement: aqiSwitchClassification.settlement,
-            aqi_source_switch_retryable_incomplete: aqiSwitchClassification.retryable_incomplete,
-            aqi_source_switch_actual_failure: aqiSwitchClassification.actual_failure,
-            aqi_source_switch_failure_reason: aqiSwitchClassification.failure_reason,
-            aqi_source_switch_partial_reasons: [...aqiSwitchClassification.partial_reasons].slice(0, 8),
-            aqi_source_switch_calculation_statuses: [...aqiSwitchClassification.calculation_statuses].slice(0, 8),
-            aqi_source_switch_missing_reasons: [...aqiSwitchClassification.missing_reasons].slice(0, 8),
-          });
-        }
         const totalPoints = Array.from(seriesPointsMap.values()).reduce((sum, points) => sum + points.length, 0);
-        if (atomicAqiSourceSwitch && state.aqiSourceSwitchMessages.error) {
-          setMessage(state.aqiSourceSwitchMessages.error.message, { error: true });
-        } else if (!totalPoints) {
-          if (atomicAqiSourceSwitch) state.aqiSourceSwitchMessages.succeed(aqiSwitchIdentity);
+        if (!atomicAqiSourceSwitch && !totalPoints) {
           setMessage("");
           renderNoHistoryChartMessage(dom, getNoHistoryChartMessage(usableEntries.length));
-        } else {
-          if (atomicAqiSourceSwitch) state.aqiSourceSwitchMessages.succeed(aqiSwitchIdentity);
-          setMessage("", { clearAqiSourceError: atomicAqiSourceSwitch });
+        } else if (!atomicAqiSourceSwitch) {
+          setMessage("");
         }
         void prefetchAqiBandsForEntries(usableEntries, range, {
           activeSourceStationId: aqiSourceId,
@@ -21090,8 +20928,12 @@
         error: serializeDebugError(error),
       });
       console.warn("Could not load chart mode data.", error);
-      renderEmptyChart("Could not load chart data. Try Refresh.");
-      setMessage("Could not load chart data. Try Refresh.", { error: true });
+      if (reason === "aqi-source-change") {
+        syncAqiBands(dom?.chartFrame, { forceClear: true, aqiLoading: false });
+      } else {
+        renderEmptyChart("Could not load chart data. Try Refresh.");
+        setMessage("Could not load chart data. Try Refresh.", { error: true });
+      }
     } finally {
       recordWebsiteDebugTiming("load_chart_data_ms", performance.now() - websiteDebugLoadStartedAt);
       const ownsActiveLoad = state.loadAbortController === abortController;
@@ -21118,7 +20960,11 @@
   function buildStationHistoryCacheKey(entry) {
     if (!entry?.timeseriesId) return "";
     const pollutantKey = normalizeAqiSupportedPollutant(entry?.pollutant || "") || "unknown";
-    return `${HEX_MAP_STATION_HISTORY_CACHE_CONTRACT}|timeseries:${normalizeCacheKeyPart(entry.timeseriesId)}|connector:${normalizeCacheKeyPart(getEntryConnectorId(entry) || "unknown")}|pollutant:${normalizeCacheKeyPart(pollutantKey)}`;
+    return window.UkAqStationChartDomain.buildStationHistoryCacheKey({
+      timeseriesId: entry.timeseriesId,
+      connectorId: getEntryConnectorId(entry) || "unknown",
+      pollutant: pollutantKey,
+    }, HEX_MAP_STATION_HISTORY_CACHE_CONTRACT);
   }
 
   function getStationHistoryRecord(entry) {
@@ -21631,11 +21477,6 @@
   async function loadStationHistoryChartData(reason = "sensor-change", options = {}) {
     if (!state.isChartMode) return;
     const stationHistoryLoadStartedAt = performance.now();
-    const aqiSourceSwitchStartedAt = reason === "aqi-source-change"
-      ? (Number.isFinite(Number(options.aqiSourceSwitchStartedAt))
-        ? Number(options.aqiSourceSwitchStartedAt)
-        : stationHistoryLoadStartedAt)
-      : null;
     let primaryRequestCount = 0;
     let secondaryRequestCount = 0;
     if (state.loadInFlight) {
@@ -21775,34 +21616,18 @@
           forceClearAqi: aqiSourceChanged,
         };
 
-        const aqiTransitionToken = aqiSourceChanged
-          ? ((state.aqiTransitionToken = Number(state.aqiTransitionToken || 0) + 1), state.aqiTransitionToken)
-          : Number(state.aqiTransitionToken || 0);
-        const aqiTransitionGate = aqiSourceChanged
-          ? loader.createAtomicAqiRenderGate({
-            isCurrent: () => !signal.aborted
-              && token === state.loadToken
-              && aqiTransitionToken === state.aqiTransitionToken,
-          })
+        const aqiTransition = aqiSourceChanged
+          ? (options.aqiTransition || aqiSourceController.begin({
+            sourceId: primary.stationId,
+            range,
+            loadGeneration: token,
+            clearAqi: () => syncAqiBands(dom?.chartFrame, {
+              forceClear: true,
+              aqiLoading: true,
+              aqiSourceSymbolIndex: getChartVisualSlot(primary.stationId, Math.max(0, selectedIds.indexOf(primary.stationId))),
+            }),
+          }))
           : null;
-        const aqiSwitchIdentity = isAqiSourceChangeOnly
-          ? state.aqiSourceSwitchMessages.begin({
-            source_id: primary.stationId,
-            range_start_utc: range.startIso,
-            range_end_utc: range.endIso,
-            load_token: token,
-            transition_token: aqiTransitionToken,
-          })
-          : null;
-        const aqiTransitionStartedAt = aqiSourceChanged ? performance.now() : null;
-        let aqiTransitionElapsedMs = null;
-        const aqiTransitionPromise = aqiSourceChanged
-          ? loader.waitForTransition(AQI_SOURCE_TRANSITION_MS, signal).then(() => {
-            if (signal.aborted || token !== state.loadToken || aqiTransitionToken !== state.aqiTransitionToken) return false;
-            aqiTransitionElapsedMs = performance.now() - aqiTransitionStartedAt;
-            return true;
-          })
-          : Promise.resolve(true);
 
         renderStationHistoryChart(dom, entries, range, units, primary, aqiSourceChanged, addedEntries.length > 0, targetedRenderOptions);
 
@@ -21815,7 +21640,6 @@
         const payloadByStationId = new Map();
         const failedAddedStationIds = new Set();
         let sourcePayload = null;
-        let aqiSourceFailed = false;
         const aqiSwitchClassification = {
           settlement: "pending",
           retryable_incomplete: false,
@@ -21917,7 +21741,10 @@
         const primaryRecord = getStationHistoryRecord(primary);
         const sourceNeedsObservations = selectionDiff.addedStationIds.has(primary.stationId);
         const sourceNeedsAqi = aqiSourceChanged
-          && loader.getUncoveredRanges(primaryRecord, "aqi", requestedRange).length > 0;
+          && aqiSourceController.shouldRequest(
+            aqiTransition,
+            () => loader.getUncoveredRanges(primaryRecord, "aqi", requestedRange).length === 0,
+          );
         if (!sourceNeedsAqi) aqiSwitchClassification.settlement = "settled_cache_hit";
         const sourceLoadPromise = (sourceNeedsObservations || sourceNeedsAqi) ? (async () => {
           try {
@@ -21931,10 +21758,7 @@
             if (sourceNeedsAqi) {
               aqiHead = mergeAqiHead(primary, primaryRecord, sourcePayload);
               applyAqiSwitchOutcome(aqiHead.outcome);
-              if (aqiHead.outcome.actual_failure) {
-                aqiSourceFailed = true;
-                state.aqiSourceSwitchMessages.fail(aqiSwitchIdentity, aqiHead.outcome.failure_reason);
-              } else if (aqiHead.outcome.retryable_incomplete) {
+              if (aqiHead.outcome.retryable_incomplete) {
                 recordWebsiteDebugEvent("aqi_head_retryable_incomplete", {
                   route: "station-series",
                   timeseries_id: primary.timeseriesId,
@@ -21943,7 +21767,7 @@
                   missing_reasons: aqiHead.outcome.missing_reasons,
                 });
               }
-              aqiTransitionGate?.stage();
+              aqiSourceController.stage(aqiTransition);
             }
             if (sourceNeedsObservations) mergeObservationHead(primary, primaryRecord, sourcePayload);
             if (sourceNeedsObservations) {
@@ -21959,8 +21783,6 @@
             if (sourceNeedsAqi) {
               const outcome = loader.classifyAqiTransitionOutcome({ error });
               applyAqiSwitchOutcome(outcome);
-              aqiSourceFailed = true;
-              state.aqiSourceSwitchMessages.fail(aqiSwitchIdentity, outcome.failure_reason);
             }
             if (sourceNeedsObservations) failedAddedStationIds.add(primary.stationId);
             recordWebsiteDebugEvent("station_history_aqi_source_failed", {
@@ -22002,7 +21824,7 @@
         const aqiScheduler = aqiSourceChanged
           ? {
             schedule: () => {
-              aqiTransitionGate?.stage();
+              aqiSourceController.stage(aqiTransition);
               return Promise.resolve();
             },
             flush: () => Promise.resolve(),
@@ -22029,10 +21851,6 @@
             STATION_HISTORY_FETCH_PRIORITY.primary,
           ).then(async (result) => {
             applyAqiSwitchOutcome(result);
-            if (isAqiSourceChangeOnly && result?.actual_failure) {
-              aqiSourceFailed = true;
-              state.aqiSourceSwitchMessages.fail(aqiSwitchIdentity, result.failure_reason);
-            }
             await aqiScheduler.flush();
             return result;
           })
@@ -22083,7 +21901,6 @@
             );
           },
         );
-        let aqiSourceSwitchCommitCount = 0;
         const commitTargetedRender = () => {
           renderStationHistoryChart(dom, entries, range, units, primary, false, false, {
             currentObservationStationIds: currentObservationIds,
@@ -22092,30 +21909,54 @@
             skipAqiRepaint: !aqiSourceChanged,
             aqiChangeOnly: aqiSourceChanged && !addedEntries.length,
           });
-          if (isAqiSourceChangeOnly) aqiSourceSwitchCommitCount += 1;
         };
-        if (isAqiSourceChangeOnly) {
-          const completion = await loader.completeAtomicAqiSourceSwitch({
-            gate: aqiTransitionGate,
-            aqiWorkPromise: aqiHistoryPromise,
-            transitionPromise: aqiTransitionPromise,
-            isCurrent: () => !signal.aborted
-              && token === state.loadToken
-              && aqiTransitionToken === state.aqiTransitionToken,
+        const aqiWorkPromise = Promise.resolve(aqiHistoryPromise).then(() => ({
+          settled: !aqiSwitchClassification.actual_failure && !aqiSwitchClassification.retryable_incomplete,
+          retryable: aqiSwitchClassification.retryable_incomplete || aqiSwitchClassification.actual_failure,
+          retryable_incomplete: aqiSwitchClassification.retryable_incomplete,
+          actual_failure: aqiSwitchClassification.actual_failure,
+          hard_failure: aqiSwitchClassification.actual_failure,
+          failure_reason: aqiSwitchClassification.failure_reason,
+          settlement: aqiSwitchClassification.settlement,
+          partial_reasons: [...aqiSwitchClassification.partial_reasons],
+          calculation_statuses: [...aqiSwitchClassification.calculation_statuses],
+          missing_reasons: [...aqiSwitchClassification.missing_reasons],
+        }));
+        if (aqiSourceChanged) {
+          const aqiCompletionPromise = aqiSourceController.complete({
+            transition: aqiTransition,
+            aqiWorkPromise,
+            isCurrent: () => !signal.aborted && token === state.loadToken,
             commit: commitTargetedRender,
+            renderUnavailable: () => syncAqiBands(dom?.chartFrame, {
+              forceClear: true,
+              aqiLoading: false,
+              aqiSourceSymbolIndex: getChartVisualSlot(primary.stationId, Math.max(0, selectedIds.indexOf(primary.stationId))),
+            }),
+            diagnosticDetails: {
+              route: "station-series",
+              aqi_source_switch_cache_hit: !sourceNeedsAqi,
+              aqi_source_switch_network_required: sourceNeedsAqi,
+              aqi_source_switch_reused_displayed_range: Boolean(displayedAqiSourceRange),
+              aqi_source_switch_waited_for_observation_work: false,
+              aqi_source_switch_observation_wait_ms: 0,
+            },
           });
-          if (!completion.committed) return;
+          if (isAqiSourceChangeOnly) {
+            const completion = await aqiCompletionPromise;
+            if (!completion.committed && !completion.actual_failure) return;
+          } else {
+            await Promise.all([aqiCompletionPromise, observationHistoryPromise]);
+            clearObservationProgress();
+            await observationScheduler.flush();
+            if (signal.aborted || token !== state.loadToken) return;
+          }
         } else {
-          await Promise.all([aqiHistoryPromise, observationHistoryPromise, aqiTransitionPromise]);
+          await Promise.all([aqiWorkPromise, observationHistoryPromise]);
           clearObservationProgress();
           await observationScheduler.flush();
           if (signal.aborted || token !== state.loadToken) return;
-          aqiTransitionGate?.markTerminal();
-          if (aqiTransitionGate) {
-            if (!aqiTransitionGate.commit(commitTargetedRender)) return;
-          } else {
-            commitTargetedRender();
-          }
+          commitTargetedRender();
         }
 
         addedEntries
@@ -22124,35 +21965,11 @@
             void prefetchStationHistoryAqi(entry, getStationHistoryRecord(entry), range, windowValue, signal, token);
           });
 
-        if (isAqiSourceChangeOnly) {
-          recordWebsiteDebugEvent("aqi_source_switch_timing", {
-            route: "station-series",
-            aqi_source_switch_total_ms: Math.round(performance.now() - aqiSourceSwitchStartedAt),
-            aqi_source_switch_transition_ms: Math.round(aqiTransitionElapsedMs ?? AQI_SOURCE_TRANSITION_MS),
-            aqi_source_switch_cache_hit: !sourceNeedsAqi,
-            aqi_source_switch_network_required: sourceNeedsAqi,
-            aqi_source_switch_commit_count: aqiSourceSwitchCommitCount,
-            aqi_source_switch_reused_displayed_range: Boolean(displayedAqiSourceRange),
-            aqi_source_switch_waited_for_observation_work: false,
-            aqi_source_switch_observation_wait_ms: 0,
-            aqi_source_switch_failure: Boolean(state.aqiSourceSwitchMessages.error),
-            aqi_source_switch_settlement: aqiSwitchClassification.settlement,
-            aqi_source_switch_retryable_incomplete: aqiSwitchClassification.retryable_incomplete,
-            aqi_source_switch_actual_failure: aqiSwitchClassification.actual_failure,
-            aqi_source_switch_failure_reason: aqiSwitchClassification.failure_reason,
-            aqi_source_switch_partial_reasons: [...aqiSwitchClassification.partial_reasons].slice(0, 8),
-            aqi_source_switch_calculation_statuses: [...aqiSwitchClassification.calculation_statuses].slice(0, 8),
-            aqi_source_switch_missing_reasons: [...aqiSwitchClassification.missing_reasons].slice(0, 8),
-          });
-        }
-        if (failedAddedStationIds.size) {
+        if (!isAqiSourceChangeOnly && failedAddedStationIds.size) {
           const count = failedAddedStationIds.size;
           setMessage(`Current data is unavailable for ${count} added sensor${count === 1 ? "" : "s"}.`, { error: true });
-        } else if (aqiSourceFailed || (isAqiSourceChangeOnly && state.aqiSourceSwitchMessages.error)) {
-          setMessage(state.aqiSourceSwitchMessages.error?.message || "AQI bands could not be updated for the selected sensor.", { error: true });
-        } else {
-          if (isAqiSourceChangeOnly) state.aqiSourceSwitchMessages.succeed(aqiSwitchIdentity);
-          setMessage("", { clearAqiSourceError: isAqiSourceChangeOnly });
+        } else if (!isAqiSourceChangeOnly) {
+          setMessage("");
         }
         return;
       }
@@ -22475,7 +22292,9 @@
     } catch (error) {
       if (!signal.aborted && token === state.loadToken) {
         console.warn("Could not load station-history chart data.", error);
-        if (dom?.chartFrame && continuityContext) {
+        if (isAqiSourceChangeOnly) {
+          syncAqiBands(dom?.chartFrame, { forceClear: true, aqiLoading: false });
+        } else if (dom?.chartFrame && continuityContext) {
           renderStationHistoryChart(
             dom,
             continuityContext.entries,
@@ -22488,7 +22307,9 @@
         } else {
           renderEmptyChart("Could not load chart data. Try Refresh.");
         }
-        setMessage("Could not load chart data. Try Refresh.", { error: true });
+        if (!isAqiSourceChangeOnly) {
+          setMessage("Could not load chart data. Try Refresh.", { error: true });
+        }
       }
     } finally {
       clearObservationProgress();

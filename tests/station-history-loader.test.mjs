@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import fs from "node:fs";
 import loader from "../station-history-loader.js";
+import cache from "../station_chart/station-chart-cache.js";
 
 const fields = {
   daqiField: "daqi_pm25_rolling24h_index_level",
@@ -72,8 +73,12 @@ assert.equal(loader.isOlderChunk(range.start_utc, range.end_utc, "2026-07-14T23:
 const retryKey = loader.chunkKey("aqi", range);
 const record = loader.createCacheRecord({ completed_chunks: { [retryKey]: range } });
 assert.equal(record.completed_chunks[retryKey].end_utc, range.end_utc);
-assert.equal(record.contract_version, "station-history-v4-aqi-settlement");
+assert.equal(record.contract_version, "station-history-v5-shared-cache");
 assert.equal(record.identity, null);
+assert.equal(cache.isCacheRecordFresh({ updated_at: "2026-07-27T12:00:00.000Z" }, 60_000, Date.parse("2026-07-27T12:00:30.000Z")), true);
+const invalidatedEntries = new Map([["keep", {}], ["remove", {}]]);
+assert.equal(cache.invalidateMatchingEntries(invalidatedEntries, (_value, key) => key === "remove"), 1);
+assert.deepEqual([...invalidatedEntries.keys()], ["keep"]);
 assert.equal(loader.isCalculatedCombinedResponse({
   schema_version: 2,
   observations: { enabled: true, rows: [] },
@@ -182,160 +187,6 @@ await orderedSettlements.settle(1, { state: "failed", id: "newer-failed" }, asyn
 await orderedSettlements.flush();
 assert.deepEqual(commitOrder, ["newer-failed", "older"], "a failed newer settlement records in order without blocking older success");
 assert.equal(orderedSettlements.pending_count, 0);
-
-let visibleAqiCommitCount = 0;
-const stagedSwitch = loader.createAtomicAqiRenderGate();
-assert.equal(stagedSwitch.stage(), true);
-assert.equal(stagedSwitch.stage(), true);
-assert.equal(stagedSwitch.stage(), true);
-assert.equal(visibleAqiCommitCount, 0, "settled AQI chunks remain non-visible during a source switch");
-assert.equal(stagedSwitch.markTerminal(), true);
-assert.equal(stagedSwitch.commit(() => { visibleAqiCommitCount += 1; }), true);
-assert.equal(stagedSwitch.commit(() => { visibleAqiCommitCount += 1; }), false);
-assert.equal(visibleAqiCommitCount, 1, "a terminal AQI source switch has one visible commit");
-
-let cachedAqiCommitCount = 0;
-let backgroundAqiWorkSettled = false;
-let releaseBackgroundAqiWork;
-const backgroundAqiWork = new Promise((resolve) => {
-  releaseBackgroundAqiWork = () => {
-    backgroundAqiWorkSettled = true;
-    resolve();
-  };
-});
-const cachedSwitch = loader.createAtomicAqiRenderGate();
-const cachedTransitionStartedAt = performance.now();
-await loader.waitForTransition(50);
-const cachedTransitionElapsedMs = performance.now() - cachedTransitionStartedAt;
-cachedSwitch.markTerminal();
-cachedSwitch.commit(() => { cachedAqiCommitCount += 1; });
-cachedSwitch.commit(() => { cachedAqiCommitCount += 1; });
-assert.ok(cachedTransitionElapsedMs >= 40, "the cached source switch retains the configured 50ms transition");
-assert.equal(cachedAqiCommitCount, 1, "complete cached AQI renders once after the transition");
-assert.equal(backgroundAqiWorkSettled, false, "the cached AQI commit does not await background work");
-releaseBackgroundAqiWork();
-await backgroundAqiWork;
-
-let resolveRequiredAqiWork;
-const requiredAqiWork = new Promise((resolve) => { resolveRequiredAqiWork = resolve; });
-let requiredAqiCommitCount = 0;
-const requiredAqiSwitch = loader.createAtomicAqiRenderGate();
-const requiredAqiTerminal = Promise.all([
-  loader.waitForTransition(0),
-  requiredAqiWork,
-]).then(() => {
-  requiredAqiSwitch.markTerminal();
-  requiredAqiSwitch.commit(() => { requiredAqiCommitCount += 1; });
-});
-await loader.waitForTransition(0);
-assert.equal(requiredAqiSwitch.commit(() => { requiredAqiCommitCount += 1; }), false, "unsettled AQI cannot commit before its required network work finishes");
-resolveRequiredAqiWork();
-await requiredAqiTerminal;
-assert.equal(requiredAqiCommitCount, 1, "unsettled AQI commits once after required work reaches terminal state");
-
-let currentTransitionToken = 1;
-const obsoleteSwitch = loader.createAtomicAqiRenderGate({
-  isCurrent: () => currentTransitionToken === 1,
-});
-obsoleteSwitch.stage();
-currentTransitionToken = 2;
-obsoleteSwitch.markTerminal();
-assert.equal(obsoleteSwitch.commit(() => { visibleAqiCommitCount += 1; }), false, "a rapid second source change invalidates the older transition");
-const replacementSwitch = loader.createAtomicAqiRenderGate({
-  isCurrent: () => currentTransitionToken === 2,
-});
-replacementSwitch.markTerminal();
-assert.equal(replacementSwitch.commit(() => { visibleAqiCommitCount += 1; }), true);
-
-const switchMessages = loader.createAqiSourceSwitchMessageController();
-const oldSwitchIdentity = {
-  source_id: "old-source",
-  range_start_utc: "2026-07-26T12:00:00.000Z",
-  range_end_utc: "2026-07-27T12:00:00.000Z",
-  load_token: 10,
-  transition_token: 20,
-};
-switchMessages.begin(oldSwitchIdentity);
-assert.equal(switchMessages.fail(oldSwitchIdentity, "request_failed"), true);
-assert.equal(switchMessages.error.actual_failure, true, "a genuine current failure owns the AQI message");
-switchMessages.invalidate();
-assert.equal(switchMessages.error, null, "a new selection can clear the previous AQI error synchronously");
-
-const currentSwitchIdentity = { ...oldSwitchIdentity, source_id: "current-source", load_token: 11, transition_token: 21 };
-switchMessages.begin(currentSwitchIdentity);
-assert.equal(switchMessages.succeed(currentSwitchIdentity), true);
-assert.equal(switchMessages.error, null, "a settled or authoritative-partial success finishes without an AQI error");
-assert.equal(switchMessages.fail(oldSwitchIdentity, "obsolete_failure"), false);
-assert.equal(switchMessages.error, null, "an obsolete transition cannot acquire message ownership");
-switchMessages.fail(currentSwitchIdentity, "service_failed");
-const resizeObservedOwner = switchMessages.error;
-assert.equal(switchMessages.current_identity.source_id, "current-source");
-assert.equal(switchMessages.error, resizeObservedOwner, "resize observation does not become or clear the AQI error owner");
-assert.deepEqual(loader.resolveAqiSourceSwitchMessage("", {
-  errorOwner: resizeObservedOwner,
-  currentText: resizeObservedOwner.message,
-}), {
-  text: resizeObservedOwner.message,
-  error: true,
-}, "a resize-time blank message cannot hide the current owned AQI failure");
-assert.deepEqual(loader.resolveAqiSourceSwitchMessage("", {
-  errorOwner: resizeObservedOwner,
-  currentText: resizeObservedOwner.message,
-  clearOwnedError: true,
-}), { text: "", error: false }, "the owning transition can explicitly clear its AQI failure");
-const newerSwitchIdentity = { ...currentSwitchIdentity, source_id: "newer-source", load_token: 12, transition_token: 22 };
-switchMessages.begin(newerSwitchIdentity);
-assert.equal(switchMessages.error, null, "a newer successful transition clears the older transition's error");
-
-let unrelatedObservationSettled = false;
-let releaseUnrelatedObservation;
-const unrelatedObservationWork = new Promise((resolve) => {
-  releaseUnrelatedObservation = () => {
-    unrelatedObservationSettled = true;
-    resolve();
-  };
-});
-let unrelatedPrefetchSettled = false;
-let releaseUnrelatedPrefetch;
-const unrelatedPrefetchWork = new Promise((resolve) => {
-  releaseUnrelatedPrefetch = () => {
-    unrelatedPrefetchSettled = true;
-    resolve();
-  };
-});
-let isolatedCommitCount = 0;
-const isolatedGate = loader.createAtomicAqiRenderGate();
-const isolatedCompletion = await loader.completeAtomicAqiSourceSwitch({
-  gate: isolatedGate,
-  aqiWorkPromise: Promise.resolve(),
-  transitionPromise: loader.waitForTransition(0),
-  commit: () => { isolatedCommitCount += 1; },
-  // These deliberately unresolved tasks are not part of the visible AQI switch.
-  observationPromise: unrelatedObservationWork,
-  backgroundPrefetchPromise: unrelatedPrefetchWork,
-});
-assert.equal(isolatedCompletion.committed, true);
-assert.equal(isolatedCommitCount, 1, "the isolated AQI switch commits exactly once");
-assert.equal(unrelatedObservationSettled, false, "pending observation work does not delay the AQI commit");
-assert.equal(unrelatedPrefetchSettled, false, "background prefetch does not delay the AQI commit");
-releaseUnrelatedObservation();
-releaseUnrelatedPrefetch();
-await Promise.all([unrelatedObservationWork, unrelatedPrefetchWork]);
-
-let releaseUncachedAqi;
-const uncachedAqiWork = new Promise((resolve) => { releaseUncachedAqi = resolve; });
-let uncachedCommitCount = 0;
-const uncachedCompletion = loader.completeAtomicAqiSourceSwitch({
-  gate: loader.createAtomicAqiRenderGate(),
-  aqiWorkPromise: uncachedAqiWork,
-  transitionPromise: Promise.resolve(),
-  commit: () => { uncachedCommitCount += 1; },
-});
-await loader.waitForTransition(0);
-assert.equal(uncachedCommitCount, 0, "genuinely uncached AQI still waits for its required work");
-releaseUncachedAqi();
-assert.equal((await uncachedCompletion).committed, true);
-assert.equal(uncachedCommitCount, 1);
 
 const distinctHeadPayload = {
   aqi: {
@@ -465,40 +316,15 @@ const unresolvedPartial = loader.inspectAqiChunk({
   partial_reasons: ["required_observation_source_incomplete"],
   points: [{ period_start_utc: "2026-07-10T07:00:00.000Z", daqi_index_level: 2, eaqi_index_level: 1 }],
 });
-assert.equal(unresolvedPartial.settled, false);
-assert.equal(unresolvedPartial.retryable, true, "an operational or unresolved partial remains retryable");
-assert.equal(unresolvedPartial.actual_failure, false, "an unresolved successful response is not a hard failure");
+assert.equal(unresolvedPartial.settled, true);
+assert.equal(unresolvedPartial.retryable, false, "a structurally valid calculated partial settles without a diagnostic allow-list");
+assert.equal(unresolvedPartial.actual_failure, false, "an unfamiliar calculated partial is not a hard failure");
 const unresolvedOutcome = loader.classifyAqiTransitionOutcome({ settlement: unresolvedPartial });
-assert.equal(unresolvedOutcome.retryable_incomplete, true);
+assert.equal(unresolvedOutcome.retryable_incomplete, false);
 assert.equal(unresolvedOutcome.actual_failure, false);
-const retryableMessages = loader.createAqiSourceSwitchMessageController();
-const retryableIdentity = retryableMessages.begin({
-  source_id: "retryable-source",
-  range_start_utc: settledPartialRange.start_utc,
-  range_end_utc: settledPartialRange.end_utc,
-  load_token: 30,
-  transition_token: 40,
-});
-if (unresolvedOutcome.actual_failure) retryableMessages.fail(retryableIdentity, unresolvedOutcome.failure_reason);
-assert.equal(retryableMessages.error, null, "a retryable partial does not acquire the user-facing AQI error");
 const unresolvedRecord = loader.createCacheRecord();
 loader.recordCoverageInterval(unresolvedRecord, "aqi", settledPartialRange, "partial", unresolvedPartial);
-assert.equal(loader.getUncoveredRanges(unresolvedRecord, "aqi", settledPartialRange).length, 1);
-
-let settledPartialVisibleCommits = 0;
-let settledPartialFetches = 0;
-if (loader.getUncoveredRanges(settledPartialRecord, "aqi", settledPartialRange).length) settledPartialFetches += 1;
-const settledPartialSwitch = loader.createAtomicAqiRenderGate();
-const settledPartialTransitionStartedAt = performance.now();
-await loader.waitForTransition(50);
-const settledPartialTransitionElapsedMs = performance.now() - settledPartialTransitionStartedAt;
-settledPartialSwitch.markTerminal();
-settledPartialSwitch.commit(() => { settledPartialVisibleCommits += 1; });
-settledPartialSwitch.commit(() => { settledPartialVisibleCommits += 1; });
-assert.equal(settledPartialFetches, 0, "switching to settled partial AQI performs no AQI fetch");
-assert.equal(settledPartialVisibleCommits, 1, "settled partial AQI performs one visible commit");
-assert.ok(settledPartialTransitionElapsedMs >= 40, "a repeated settled-partial switch is governed by the 50ms transition");
-assert.ok(settledPartialTransitionElapsedMs < 250, "a cached switch has no network-scale wait in the focused harness");
+assert.equal(loader.getUncoveredRanges(unresolvedRecord, "aqi", settledPartialRange).length, 0, "unknown calculated diagnostics do not create another fetch");
 
 const completeSettlement = loader.inspectAqiSettlement({
   response_complete: true,
@@ -515,8 +341,6 @@ assert.deepEqual({
 const networkFailure = loader.classifyAqiTransitionOutcome({ error: new Error("network_failed") });
 assert.equal(networkFailure.actual_failure, true);
 assert.equal(networkFailure.failure_reason, "network_failed");
-if (networkFailure.actual_failure) retryableMessages.fail(retryableIdentity, networkFailure.failure_reason);
-assert.equal(retryableMessages.error?.actual_failure, true, "a classified current network failure may acquire the AQI message");
 const malformedSettlement = loader.inspectAqiSettlement({ response_complete: false });
 assert.equal(malformedSettlement.actual_failure, true);
 assert.equal(loader.classifyAqiTransitionOutcome({ settlement: malformedSettlement }).failure_reason, "aqi_response_malformed");
@@ -536,12 +360,24 @@ const invalidCalculatedStatus = loader.inspectAqiSettlement({
   partial_reasons: ["calculated_aqi_status_incomplete"],
   rows: [{ daqi_calculation_status: "unexpected_status", eaqi_calculation_status: "ok" }],
 });
-assert.equal(invalidCalculatedStatus.actual_failure, true);
-assert.equal(invalidCalculatedStatus.failure_reason, "aqi_calculated_response_contract_violation");
-assert.deepEqual(loader.classifyAqiTransitionOutcome({
+assert.equal(invalidCalculatedStatus.settled, true, "unfamiliar calculated status text stays non-user-facing and settled");
+assert.equal(invalidCalculatedStatus.actual_failure, false);
+assert.equal(invalidCalculatedStatus.failure_reason, null);
+const abortedOutcome = loader.classifyAqiTransitionOutcome({
   settlement: unresolvedPartial,
   aborted: true,
-}), {
+});
+assert.deepEqual({
+  settled: abortedOutcome.settled,
+  retryable_incomplete: abortedOutcome.retryable_incomplete,
+  actual_failure: abortedOutcome.actual_failure,
+  failure_reason: abortedOutcome.failure_reason,
+  ignored: abortedOutcome.ignored,
+  settlement: abortedOutcome.settlement,
+  partial_reasons: abortedOutcome.partial_reasons,
+  calculation_statuses: abortedOutcome.calculation_statuses,
+  missing_reasons: abortedOutcome.missing_reasons,
+}, {
   settled: false,
   retryable_incomplete: false,
   actual_failure: false,

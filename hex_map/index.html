@@ -19606,7 +19606,9 @@
     record.rangeStates = normalizeCacheRangeStates(record.rangeStates);
 
     if (Array.isArray(record.settledRanges)) {
-      const settled = details.settled === true || isCoveredCacheState(normalizedState);
+      // AQI completeness and AQI settlement are independent. A response can
+      // contain valid rows without proving that its blank tail is authoritative.
+      const settled = details.settled === true;
       record.settledRanges = settled
         ? addCoveredRange(record.settledRanges, startMs, endMs)
         : removeOverlappingRanges(record.settledRanges, startMs, endMs);
@@ -19693,22 +19695,32 @@
     return "unknown";
   }
 
-  function isAqiCacheResultSettled(result) {
+  function classifyAqiCacheResult(result) {
     // The compatibility path reads stored-R2 AQI. A complete response is
     // settled even when its rows contain null AQI values, because those rows
     // preserve their calculation status. A partial response is settled only
     // when it carries the authoritative calculated-history reason contract;
     // older compatibility responses without that evidence remain retryable.
-    if (isCoveredCacheState(classifyAqiCacheState(result))) return true;
+    if (result?.aqiOutcome) return result.aqiOutcome;
     const meta = result?.meta || {};
-    return window.UkAqStationHistoryLoader.inspectAqiSettlement({
+    const cacheState = classifyAqiCacheState(result);
+    const settlement = result?.aqiSettlement || window.UkAqStationHistoryLoader.inspectAqiSettlement({
       enabled: meta.enabled,
       calculation_source: meta.calculation_source,
       response_complete: meta.response_complete,
       has_gap: meta.has_gap,
       partial_reasons: meta.partial_reasons,
       points: Array.isArray(result?.points) ? result.points : [],
-    }).settled;
+      malformed: cacheState === "malformed",
+    });
+    return window.UkAqStationHistoryLoader.classifyAqiTransitionOutcome({
+      settlement,
+      error: cacheState === "failed" ? (result?.error || new Error("aqi_history_request_failed")) : null,
+    });
+  }
+
+  function isAqiCacheResultSettled(result) {
+    return classifyAqiCacheResult(result).settled;
   }
 
   function extractObservationSourceMetadata(entry, result) {
@@ -19995,6 +20007,31 @@
             wireFormat,
             points,
           });
+          const aqiSettlement = window.UkAqStationHistoryLoader.inspectAqiSettlement({
+            enabled: meta.enabled,
+            calculation_source: meta.calculation_source,
+            response_complete: meta.response_complete,
+            has_gap: meta.has_gap,
+            partial_reasons: meta.partial_reasons,
+            points,
+            malformed: payload?.malformed === true,
+          });
+          const expectedIdentity = {
+            timeseries_id: String(entry?.timeseriesId || "").trim(),
+            station_id: String(getEntryStationId(entry) || "").trim(),
+            connector_id: String(getEntryConnectorId(entry) || "").trim(),
+            pollutant: normalizeAqiSupportedPollutant(pollutantKey || ""),
+          };
+          const identityValid = [
+            [expectedIdentity.timeseries_id, meta?.timeseries_id],
+            [expectedIdentity.station_id, meta?.station_id],
+            [expectedIdentity.connector_id, meta?.connector_id],
+            [expectedIdentity.pollutant, normalizeAqiSupportedPollutant(meta?.pollutant || "")],
+          ].every(([expected, actual]) => !expected || !actual || String(actual).trim() === expected);
+          const aqiOutcome = window.UkAqStationHistoryLoader.classifyAqiTransitionOutcome({
+            settlement: aqiSettlement,
+            identity_valid: identityValid,
+          });
           if (payload?.malformed) {
             recordWebsiteDebugEvent("aqi_history_malformed", {
               route: "aqi-history",
@@ -20039,6 +20076,8 @@
           return {
             points,
             meta,
+            aqiSettlement,
+            aqiOutcome,
             rawRowCount: getAqiPayloadRows(payload).length,
             cacheState: payload?.malformed ? "malformed" : null,
           };
@@ -20613,6 +20652,15 @@
         })
         : Promise.resolve();
       const aqiProgressStartedAt = performance.now();
+      const aqiSwitchClassification = {
+        settlement: aqiMissingRanges.length ? "pending" : "settled_cache_hit",
+        retryable_incomplete: false,
+        actual_failure: false,
+        failure_reason: null,
+        partial_reasons: new Set(),
+        calculation_statuses: new Set(),
+        missing_reasons: new Set(),
+      };
       const aqiProgressPromise = (async () => {
         if (!aqiCacheRecord || !aqiMissingRanges.length) return;
         let lastResponseMeta = aqiCacheRecord.lastResponseMeta || null;
@@ -20657,11 +20705,21 @@
           };
           const result = await fetchAqiBandsDeduped(primary, pollutantKey, missingRange, aqiCacheKey);
           const points = Array.isArray(result?.points) ? result.points : [];
-          const aqiResultSettled = isAqiCacheResultSettled(result);
-          if (atomicAqiSourceSwitch && !aqiResultSettled) {
+          const aqiResultOutcome = classifyAqiCacheResult(result);
+          const aqiResultSettled = aqiResultOutcome.settled;
+          if (aqiResultOutcome.actual_failure || !aqiSwitchClassification.actual_failure) {
+            aqiSwitchClassification.settlement = aqiResultOutcome.settlement;
+          }
+          aqiSwitchClassification.retryable_incomplete ||= aqiResultOutcome.retryable_incomplete;
+          aqiSwitchClassification.actual_failure ||= aqiResultOutcome.actual_failure;
+          aqiSwitchClassification.failure_reason ||= aqiResultOutcome.failure_reason;
+          aqiResultOutcome.partial_reasons.forEach((reason) => aqiSwitchClassification.partial_reasons.add(reason));
+          aqiResultOutcome.calculation_statuses.forEach((status) => aqiSwitchClassification.calculation_statuses.add(status));
+          aqiResultOutcome.missing_reasons.forEach((reason) => aqiSwitchClassification.missing_reasons.add(reason));
+          if (atomicAqiSourceSwitch && aqiResultOutcome.actual_failure) {
             state.aqiSourceSwitchMessages.fail(
               aqiSwitchIdentity,
-              result?.error?.message || classifyAqiCacheState(result),
+              aqiResultOutcome.failure_reason,
             );
           }
           lastResponseMeta = result?.meta || lastResponseMeta;
@@ -20720,6 +20778,9 @@
       }).catch((error) => {
         aqiLoadingActive = false;
         if (atomicAqiSourceSwitch) {
+          aqiSwitchClassification.settlement = "actual_failure";
+          aqiSwitchClassification.actual_failure = true;
+          aqiSwitchClassification.failure_reason = error?.message || "aqi_progress_failed";
           state.aqiSourceSwitchMessages.fail(aqiSwitchIdentity, error?.message || "aqi_progress_failed");
         }
       });
@@ -20820,6 +20881,13 @@
             aqi_source_switch_waited_for_observation_work: false,
             aqi_source_switch_observation_wait_ms: 0,
             aqi_source_switch_failure: Boolean(state.aqiSourceSwitchMessages.error),
+            aqi_source_switch_settlement: aqiSwitchClassification.settlement,
+            aqi_source_switch_retryable_incomplete: aqiSwitchClassification.retryable_incomplete,
+            aqi_source_switch_actual_failure: aqiSwitchClassification.actual_failure,
+            aqi_source_switch_failure_reason: aqiSwitchClassification.failure_reason,
+            aqi_source_switch_partial_reasons: [...aqiSwitchClassification.partial_reasons].slice(0, 8),
+            aqi_source_switch_calculation_statuses: [...aqiSwitchClassification.calculation_statuses].slice(0, 8),
+            aqi_source_switch_missing_reasons: [...aqiSwitchClassification.missing_reasons].slice(0, 8),
           });
         }
         const totalPoints = Array.from(seriesPointsMap.values()).reduce((sum, points) => sum + points.length, 0);
@@ -21293,7 +21361,12 @@
   async function loadStationHistoryOlderChunks(kind, entry, record, range, stableHeadStartUtc, initialCursorEndUtc, windowValue, renderScheduler, signal, token, concurrency, priority, onWorkSettled = null) {
     const loader = window.UkAqStationHistoryLoader;
     let actualFailure = false;
+    let retryableIncomplete = false;
     let failureReason = null;
+    let aqiSettlementState = null;
+    const aqiPartialReasons = new Set();
+    const aqiCalculationStatuses = new Set();
+    const aqiMissingReasons = new Set();
     const spanMs = getChunkSpanMs(windowValue);
     const workKinds = kind === "combined" ? ["observations", "aqi"] : [kind];
     const byRange = new Map();
@@ -21326,62 +21399,109 @@
       const key = workItem.key;
       if (settled.error) {
         if (kind === "aqi" || kind === "combined") {
-          actualFailure = true;
-          failureReason = settled.error instanceof Error ? settled.error.message : String(settled.error);
+          const outcome = loader.classifyAqiTransitionOutcome({ error: settled.error });
+          actualFailure ||= outcome.actual_failure;
+          failureReason ||= outcome.failure_reason;
         }
         workKinds.forEach((coverageKind) => loader.recordCoverageInterval(record, coverageKind, requestRange, "failed"));
         record.failed_chunks[key] = { chunk: requestRange, reason: settled.error instanceof Error ? settled.error.message : String(settled.error) };
         recordWebsiteDebugEvent(`${kind}_chunk_failed`, { route: "timeseries", chunk: requestRange, error: serializeDebugError(settled.error) });
       } else {
         const payload = settled.payload;
+        let payloadIdentityValid = true;
         if (kind === "aqi" || kind === "combined") {
+          const payloadIdentity = loader.resolveAuthoritativeIdentity(payload, {
+            timeseriesId: record?.identity?.timeseries_id,
+            pollutant: record?.identity?.pollutant,
+          });
+          payloadIdentityValid = Boolean(payloadIdentity
+            && payloadIdentity.connector_id === record?.identity?.connector_id
+            && payloadIdentity.station_id === record?.identity?.station_id);
           const aqiChunk = loader.inspectAqiChunk({
             ...payload?.aqi,
             points: payload?.aqi?.rows,
           });
-          const incoming = parseStationSeriesAqiPoints({ rows: aqiChunk.rows });
+          const incoming = payloadIdentityValid
+            ? parseStationSeriesAqiPoints({ rows: aqiChunk.rows })
+            : [];
           const merged = loader.mergeAqiWithoutReplacement(record.aqi_points, incoming);
           record.aqi_points = merged.points;
-          const aqiState = aqiChunk.complete && !merged.conflicts.length ? "complete" : "partial";
-          const aqiSettled = aqiChunk.settled && !merged.conflicts.length;
+          const aqiOutcome = loader.classifyAqiTransitionOutcome({
+            settlement: aqiChunk,
+            conflict_count: merged.conflicts.length,
+            identity_valid: payloadIdentityValid,
+          });
+          aqiSettlementState = aqiOutcome.settlement;
+          aqiOutcome.partial_reasons.forEach((reason) => aqiPartialReasons.add(reason));
+          aqiOutcome.calculation_statuses.forEach((status) => aqiCalculationStatuses.add(status));
+          aqiOutcome.missing_reasons.forEach((reason) => aqiMissingReasons.add(reason));
+          const aqiState = aqiOutcome.settled && aqiChunk.complete ? "complete" : "partial";
           loader.recordCoverageInterval(record, "aqi", requestRange, aqiState, {
             ...aqiChunk,
-            settled: aqiSettled,
+            settled: aqiOutcome.settled,
           });
-          if (!aqiSettled) {
+          if (aqiOutcome.actual_failure) {
             actualFailure = true;
-            failureReason = merged.conflicts.length ? "aqi_replacement_contract_error" : "aqi_history_incomplete";
+            failureReason ||= aqiOutcome.failure_reason;
             record.failed_chunks[key] = {
               chunk: requestRange,
-              reason: merged.conflicts.length ? "aqi_replacement_contract_error" : "aqi_history_incomplete",
+              reason: aqiOutcome.failure_reason,
               conflicts: merged.conflicts.length,
               partial_reasons: aqiChunk.partial_reasons,
             };
-            recordWebsiteDebugEvent("aqi_chunk_partial", { route: "timeseries", chunk: requestRange, retained_rows: incoming.length, conflicts: merged.conflicts.length, partial_reasons: aqiChunk.partial_reasons });
+            delete record.retryable_chunks[key];
+          } else if (aqiOutcome.retryable_incomplete) {
+            retryableIncomplete = true;
+            record.retryable_chunks[key] = {
+              chunk: requestRange,
+              reason: "aqi_history_retryable_incomplete",
+              partial_reasons: aqiChunk.partial_reasons,
+            };
+            delete record.failed_chunks[key];
+            recordWebsiteDebugEvent("aqi_chunk_retryable_incomplete", {
+              route: "timeseries",
+              chunk: requestRange,
+              retained_rows: incoming.length,
+              partial_reasons: aqiChunk.partial_reasons,
+              calculation_statuses: aqiChunk.calculation_statuses,
+              missing_reasons: aqiChunk.missing_reasons,
+            });
           } else if (!aqiChunk.complete) {
+            delete record.retryable_chunks[key];
             recordWebsiteDebugEvent("aqi_chunk_authoritative_partial", { route: "timeseries", chunk: requestRange, retained_rows: incoming.length, partial_reasons: aqiChunk.partial_reasons });
+          } else {
+            delete record.retryable_chunks[key];
           }
           if (merged.conflicts.length) {
             recordWebsiteDebugEvent("aqi_replacement_contract_error", { route: "timeseries", chunk: requestRange, conflicts: merged.conflicts.length });
           }
         }
         if (kind === "observations" || kind === "combined") {
-          const observationChunk = loader.inspectObservationChunk(kind === "combined" ? {
-            ...payload?.observations,
-            rows: payload?.observations?.rows,
-          } : payload);
-          record.observation_points = loader.mergeObservationPoints(record.observation_points, parseStationSeriesObservationPoints({ rows: observationChunk.rows }));
-          const state = observationChunk.complete ? "complete" : "partial";
-          loader.recordCoverageInterval(record, "observations", requestRange, state, { partial_reasons: observationChunk.partial_reasons });
-          if (!observationChunk.complete) {
-            record.failed_chunks[key] = { chunk: requestRange, reason: "observations_history_incomplete", partial_reasons: observationChunk.partial_reasons };
-            recordWebsiteDebugEvent("observations_chunk_partial", { route: "timeseries", chunk: requestRange, retained_rows: observationChunk.rows.length, partial_reasons: observationChunk.partial_reasons });
+          if (!payloadIdentityValid) {
+            loader.recordCoverageInterval(record, "observations", requestRange, "failed");
+            record.failed_chunks[key] = {
+              chunk: requestRange,
+              reason: "station_series_authoritative_identity_invalid",
+            };
+          } else {
+            const observationChunk = loader.inspectObservationChunk(kind === "combined" ? {
+              ...payload?.observations,
+              rows: payload?.observations?.rows,
+            } : payload);
+            record.observation_points = loader.mergeObservationPoints(record.observation_points, parseStationSeriesObservationPoints({ rows: observationChunk.rows }));
+            const state = observationChunk.complete ? "complete" : "partial";
+            loader.recordCoverageInterval(record, "observations", requestRange, state, { partial_reasons: observationChunk.partial_reasons });
+            if (!observationChunk.complete) {
+              record.failed_chunks[key] = { chunk: requestRange, reason: "observations_history_incomplete", partial_reasons: observationChunk.partial_reasons };
+              recordWebsiteDebugEvent("observations_chunk_partial", { route: "timeseries", chunk: requestRange, retained_rows: observationChunk.rows.length, partial_reasons: observationChunk.partial_reasons });
+            }
           }
         }
         const requestedPartsSettled = workKinds.every((coverageKind) => loader.getUncoveredRanges(record, coverageKind, requestRange).length === 0);
         if (requestedPartsSettled) {
           record.completed_chunks[key] = requestRange;
           delete record.failed_chunks[key];
+          delete record.retryable_chunks[key];
         }
         if (kind === "combined") record.calculated_combined = true;
         record.updated_at = new Date().toISOString();
@@ -21414,7 +21534,16 @@
       record.aqi_complete = loader.getIncompleteRanges(record, "aqi", { start_utc: range.startIso, end_utc: initialCursorEndUtc || range.endIso }).length === 0;
       record.observations_complete = loader.getUncoveredRanges(record, "observations", { start_utc: range.startIso, end_utc: initialCursorEndUtc || range.endIso }).length === 0;
     }
-    return { settled: rangeCovered, actual_failure: actualFailure, failure_reason: failureReason };
+    return {
+      settled: rangeCovered,
+      retryable_incomplete: retryableIncomplete || (!rangeCovered && !actualFailure),
+      actual_failure: actualFailure,
+      failure_reason: failureReason,
+      settlement: actualFailure ? "actual_failure" : aqiSettlementState || (rangeCovered ? "settled_cache_hit" : "retryable_incomplete"),
+      partial_reasons: [...aqiPartialReasons].slice(0, 8),
+      calculation_statuses: [...aqiCalculationStatuses].slice(0, 8),
+      missing_reasons: [...aqiMissingReasons].slice(0, 8),
+    };
   }
 
   async function prefetchStationHistoryAqi(entry, record, range, windowValue, signal, token) {
@@ -21687,6 +21816,27 @@
         const failedAddedStationIds = new Set();
         let sourcePayload = null;
         let aqiSourceFailed = false;
+        const aqiSwitchClassification = {
+          settlement: "pending",
+          retryable_incomplete: false,
+          actual_failure: false,
+          failure_reason: null,
+          partial_reasons: new Set(),
+          calculation_statuses: new Set(),
+          missing_reasons: new Set(),
+        };
+        const applyAqiSwitchOutcome = (outcome) => {
+          if (!outcome) return;
+          if (outcome.actual_failure || !aqiSwitchClassification.actual_failure) {
+            aqiSwitchClassification.settlement = outcome.settlement || aqiSwitchClassification.settlement;
+          }
+          aqiSwitchClassification.retryable_incomplete ||= outcome.retryable_incomplete === true;
+          aqiSwitchClassification.actual_failure ||= outcome.actual_failure === true;
+          aqiSwitchClassification.failure_reason ||= outcome.failure_reason || null;
+          (outcome.partial_reasons || []).forEach((reason) => aqiSwitchClassification.partial_reasons.add(reason));
+          (outcome.calculation_statuses || []).forEach((status) => aqiSwitchClassification.calculation_statuses.add(status));
+          (outcome.missing_reasons || []).forEach((reason) => aqiSwitchClassification.missing_reasons.add(reason));
+        };
 
         const mergeAqiHead = (entry, record, payload) => {
           record.identity = loader.resolveAuthoritativeIdentity(payload, {
@@ -21703,6 +21853,10 @@
           );
           record.aqi_points = merged.points;
           const aqiSettlement = loader.inspectAqiSettlement(payload?.aqi);
+          const aqiOutcome = loader.classifyAqiTransitionOutcome({
+            settlement: aqiSettlement,
+            conflict_count: merged.conflicts.length,
+          });
           record.aqi_complete = aqiSettlement.complete && !stationHistoryNextBoundary(payload.aqi, "aqi");
           record.calculated_combined = loader.isCalculatedCombinedResponse(payload);
           record.stable_head_start_utc = bounds?.startUtc || null;
@@ -21715,10 +21869,15 @@
             aqiSettlement.complete && !merged.conflicts.length ? "complete" : "partial",
             {
               ...aqiSettlement,
-              settled: aqiSettlement.settled && !merged.conflicts.length,
+              settled: aqiOutcome.settled,
             },
           );
-          return { bounds, cursor: stationHistoryNextBoundary(payload.aqi, "aqi"), settlement: aqiSettlement };
+          return {
+            bounds,
+            cursor: stationHistoryNextBoundary(payload.aqi, "aqi"),
+            settlement: aqiSettlement,
+            outcome: aqiOutcome,
+          };
         };
 
         const mergeObservationHead = (entry, record, payload) => {
@@ -21759,6 +21918,7 @@
         const sourceNeedsObservations = selectionDiff.addedStationIds.has(primary.stationId);
         const sourceNeedsAqi = aqiSourceChanged
           && loader.getUncoveredRanges(primaryRecord, "aqi", requestedRange).length > 0;
+        if (!sourceNeedsAqi) aqiSwitchClassification.settlement = "settled_cache_hit";
         const sourceLoadPromise = (sourceNeedsObservations || sourceNeedsAqi) ? (async () => {
           try {
             primaryRequestCount += 1;
@@ -21770,8 +21930,18 @@
             payloadByStationId.set(primary.stationId, sourcePayload);
             if (sourceNeedsAqi) {
               aqiHead = mergeAqiHead(primary, primaryRecord, sourcePayload);
-              if (!aqiHead.settlement.settled) {
-                state.aqiSourceSwitchMessages.fail(aqiSwitchIdentity, "aqi_head_incomplete");
+              applyAqiSwitchOutcome(aqiHead.outcome);
+              if (aqiHead.outcome.actual_failure) {
+                aqiSourceFailed = true;
+                state.aqiSourceSwitchMessages.fail(aqiSwitchIdentity, aqiHead.outcome.failure_reason);
+              } else if (aqiHead.outcome.retryable_incomplete) {
+                recordWebsiteDebugEvent("aqi_head_retryable_incomplete", {
+                  route: "station-series",
+                  timeseries_id: primary.timeseriesId,
+                  partial_reasons: aqiHead.outcome.partial_reasons,
+                  calculation_statuses: aqiHead.outcome.calculation_statuses,
+                  missing_reasons: aqiHead.outcome.missing_reasons,
+                });
               }
               aqiTransitionGate?.stage();
             }
@@ -21787,8 +21957,10 @@
           } catch (error) {
             if (signal.aborted || token !== state.loadToken) return;
             if (sourceNeedsAqi) {
+              const outcome = loader.classifyAqiTransitionOutcome({ error });
+              applyAqiSwitchOutcome(outcome);
               aqiSourceFailed = true;
-              state.aqiSourceSwitchMessages.fail(aqiSwitchIdentity, error?.message || "aqi_source_request_failed");
+              state.aqiSourceSwitchMessages.fail(aqiSwitchIdentity, outcome.failure_reason);
             }
             if (sourceNeedsObservations) failedAddedStationIds.add(primary.stationId);
             recordWebsiteDebugEvent("station_history_aqi_source_failed", {
@@ -21856,7 +22028,9 @@
             STATION_HISTORY_AQI_CHUNK_CONCURRENCY,
             STATION_HISTORY_FETCH_PRIORITY.primary,
           ).then(async (result) => {
+            applyAqiSwitchOutcome(result);
             if (isAqiSourceChangeOnly && result?.actual_failure) {
+              aqiSourceFailed = true;
               state.aqiSourceSwitchMessages.fail(aqiSwitchIdentity, result.failure_reason);
             }
             await aqiScheduler.flush();
@@ -21962,6 +22136,13 @@
             aqi_source_switch_waited_for_observation_work: false,
             aqi_source_switch_observation_wait_ms: 0,
             aqi_source_switch_failure: Boolean(state.aqiSourceSwitchMessages.error),
+            aqi_source_switch_settlement: aqiSwitchClassification.settlement,
+            aqi_source_switch_retryable_incomplete: aqiSwitchClassification.retryable_incomplete,
+            aqi_source_switch_actual_failure: aqiSwitchClassification.actual_failure,
+            aqi_source_switch_failure_reason: aqiSwitchClassification.failure_reason,
+            aqi_source_switch_partial_reasons: [...aqiSwitchClassification.partial_reasons].slice(0, 8),
+            aqi_source_switch_calculation_statuses: [...aqiSwitchClassification.calculation_statuses].slice(0, 8),
+            aqi_source_switch_missing_reasons: [...aqiSwitchClassification.missing_reasons].slice(0, 8),
           });
         }
         if (failedAddedStationIds.size) {

@@ -400,6 +400,20 @@ const settledPartial = loader.inspectAqiChunk({
 assert.equal(settledPartial.complete, false);
 assert.equal(settledPartial.settled, true, "a confirmed calculation-data partial is settled without becoming complete");
 assert.equal(settledPartial.retryable, false);
+assert.equal(settledPartial.actual_failure, false);
+assert.equal(settledPartial.failure_reason, null);
+const settledPartialOutcome = loader.classifyAqiTransitionOutcome({ settlement: settledPartial });
+assert.deepEqual({
+  settled: settledPartialOutcome.settled,
+  retryable_incomplete: settledPartialOutcome.retryable_incomplete,
+  actual_failure: settledPartialOutcome.actual_failure,
+}, { settled: true, retryable_incomplete: false, actual_failure: false });
+const retainedValidBand = loader.normalizeAqiPoint(settledPartial.rows[0], {
+  daqiField: "daqi_index_level",
+  eaqiField: "eaqi_index_level",
+});
+assert.equal(retainedValidBand.daqi, null);
+assert.equal(retainedValidBand.eaqi, 2, "a valid EAQI band survives beside an authoritative blank DAQI value");
 const settledPartialRecord = loader.createCacheRecord();
 loader.recordCoverageInterval(settledPartialRecord, "aqi", settledPartialRange, "partial", settledPartial);
 assert.equal(loader.getUncoveredRanges(settledPartialRecord, "aqi", settledPartialRange).length, 0, "settled partial AQI is excluded from missing-request planning");
@@ -414,16 +428,59 @@ assert.equal(loader.buildMissingChunkWorkList(
 assert.equal(settledPartialRecord.coverage.aqi.interval_states[0].has_gap, true);
 assert.deepEqual(settledPartialRecord.coverage.aqi.interval_states[0].missing_reasons, ["insufficient_rolling_24h_hours"]);
 
+const statusProvenPartial = loader.inspectAqiSettlement({
+  enabled: true,
+  calculation_source: "calculated_from_observations",
+  response_complete: false,
+  has_gap: true,
+  partial_reasons: [],
+  rows: [{
+    timestamp_hour_utc: "2026-07-10T06:00:00.000Z",
+    daqi_calculation_status: "missing_input",
+    eaqi_calculation_status: "ok",
+    daqi_missing_reason: "breakpoint_not_found",
+    eaqi_missing_reason: null,
+  }],
+});
+assert.equal(statusProvenPartial.authoritative_partial, true, "current calculation status and missing-reason metadata can prove an authoritative gap without a partial reason string");
+assert.equal(statusProvenPartial.settled, true);
+assert.equal(statusProvenPartial.actual_failure, false);
+
+const authoritativeBlankInterval = loader.inspectAqiSettlement({
+  enabled: true,
+  calculation_source: "calculated_from_observations",
+  response_complete: false,
+  has_gap: true,
+  partial_reasons: ["missing_visible_aqi_hours"],
+  rows: [],
+});
+assert.equal(authoritativeBlankInterval.settled, true, "a Worker-confirmed blank AQI interval is settled even with no AQI row to render");
+assert.equal(authoritativeBlankInterval.complete, false);
+
 const unresolvedPartial = loader.inspectAqiChunk({
   enabled: true,
   calculation_source: "calculated_from_observations",
   response_complete: false,
   has_gap: true,
   partial_reasons: ["required_observation_source_incomplete"],
-  points: [],
+  points: [{ period_start_utc: "2026-07-10T07:00:00.000Z", daqi_index_level: 2, eaqi_index_level: 1 }],
 });
 assert.equal(unresolvedPartial.settled, false);
 assert.equal(unresolvedPartial.retryable, true, "an operational or unresolved partial remains retryable");
+assert.equal(unresolvedPartial.actual_failure, false, "an unresolved successful response is not a hard failure");
+const unresolvedOutcome = loader.classifyAqiTransitionOutcome({ settlement: unresolvedPartial });
+assert.equal(unresolvedOutcome.retryable_incomplete, true);
+assert.equal(unresolvedOutcome.actual_failure, false);
+const retryableMessages = loader.createAqiSourceSwitchMessageController();
+const retryableIdentity = retryableMessages.begin({
+  source_id: "retryable-source",
+  range_start_utc: settledPartialRange.start_utc,
+  range_end_utc: settledPartialRange.end_utc,
+  load_token: 30,
+  transition_token: 40,
+});
+if (unresolvedOutcome.actual_failure) retryableMessages.fail(retryableIdentity, unresolvedOutcome.failure_reason);
+assert.equal(retryableMessages.error, null, "a retryable partial does not acquire the user-facing AQI error");
 const unresolvedRecord = loader.createCacheRecord();
 loader.recordCoverageInterval(unresolvedRecord, "aqi", settledPartialRange, "partial", unresolvedPartial);
 assert.equal(loader.getUncoveredRanges(unresolvedRecord, "aqi", settledPartialRange).length, 1);
@@ -432,12 +489,69 @@ let settledPartialVisibleCommits = 0;
 let settledPartialFetches = 0;
 if (loader.getUncoveredRanges(settledPartialRecord, "aqi", settledPartialRange).length) settledPartialFetches += 1;
 const settledPartialSwitch = loader.createAtomicAqiRenderGate();
-await loader.waitForTransition(0);
+const settledPartialTransitionStartedAt = performance.now();
+await loader.waitForTransition(50);
+const settledPartialTransitionElapsedMs = performance.now() - settledPartialTransitionStartedAt;
 settledPartialSwitch.markTerminal();
 settledPartialSwitch.commit(() => { settledPartialVisibleCommits += 1; });
 settledPartialSwitch.commit(() => { settledPartialVisibleCommits += 1; });
 assert.equal(settledPartialFetches, 0, "switching to settled partial AQI performs no AQI fetch");
 assert.equal(settledPartialVisibleCommits, 1, "settled partial AQI performs one visible commit");
+assert.ok(settledPartialTransitionElapsedMs >= 40, "a repeated settled-partial switch is governed by the 50ms transition");
+assert.ok(settledPartialTransitionElapsedMs < 250, "a cached switch has no network-scale wait in the focused harness");
+
+const completeSettlement = loader.inspectAqiSettlement({
+  response_complete: true,
+  has_gap: false,
+  rows: [],
+});
+assert.deepEqual({
+  complete: completeSettlement.complete,
+  settled: completeSettlement.settled,
+  retryable: completeSettlement.retryable,
+  actual_failure: completeSettlement.actual_failure,
+}, { complete: true, settled: true, retryable: false, actual_failure: false });
+
+const networkFailure = loader.classifyAqiTransitionOutcome({ error: new Error("network_failed") });
+assert.equal(networkFailure.actual_failure, true);
+assert.equal(networkFailure.failure_reason, "network_failed");
+if (networkFailure.actual_failure) retryableMessages.fail(retryableIdentity, networkFailure.failure_reason);
+assert.equal(retryableMessages.error?.actual_failure, true, "a classified current network failure may acquire the AQI message");
+const malformedSettlement = loader.inspectAqiSettlement({ response_complete: false });
+assert.equal(malformedSettlement.actual_failure, true);
+assert.equal(loader.classifyAqiTransitionOutcome({ settlement: malformedSettlement }).failure_reason, "aqi_response_malformed");
+assert.equal(loader.classifyAqiTransitionOutcome({
+  settlement: completeSettlement,
+  identity_valid: false,
+}).failure_reason, "station_series_authoritative_identity_invalid");
+assert.equal(loader.classifyAqiTransitionOutcome({
+  settlement: completeSettlement,
+  conflict_count: 1,
+}).failure_reason, "aqi_replacement_contract_error");
+const invalidCalculatedStatus = loader.inspectAqiSettlement({
+  enabled: true,
+  calculation_source: "calculated_from_observations",
+  response_complete: false,
+  has_gap: true,
+  partial_reasons: ["calculated_aqi_status_incomplete"],
+  rows: [{ daqi_calculation_status: "unexpected_status", eaqi_calculation_status: "ok" }],
+});
+assert.equal(invalidCalculatedStatus.actual_failure, true);
+assert.equal(invalidCalculatedStatus.failure_reason, "aqi_calculated_response_contract_violation");
+assert.deepEqual(loader.classifyAqiTransitionOutcome({
+  settlement: unresolvedPartial,
+  aborted: true,
+}), {
+  settled: false,
+  retryable_incomplete: false,
+  actual_failure: false,
+  failure_reason: null,
+  ignored: true,
+  settlement: "ignored",
+  partial_reasons: ["required_observation_source_incomplete"],
+  calculation_statuses: [],
+  missing_reasons: [],
+}, "an aborted transition cannot become a retryable or hard terminal message result");
 loader.recordCoverageInterval(record, "observations", {
   start_utc: "2026-07-14T00:00:00.000Z",
   end_utc: "2026-07-15T00:00:00.000Z",

@@ -22,6 +22,7 @@
   const AUTHORITATIVE_AQI_MISSING_REASONS = new Set([
     "no_input_value",
     "insufficient_rolling_24h_hours",
+    "breakpoint_not_found",
   ]);
 
   function toDate(value) {
@@ -683,6 +684,9 @@
       failed_chunks: value.failed_chunks && typeof value.failed_chunks === "object"
         ? value.failed_chunks
         : {},
+      retryable_chunks: value.retryable_chunks && typeof value.retryable_chunks === "object"
+        ? value.retryable_chunks
+        : {},
       coverage: {
         aqi: normalizeCoverageSection(value.coverage?.aqi),
         observations: normalizeCoverageSection(value.coverage?.observations),
@@ -708,43 +712,121 @@
   }
 
   function inspectAqiSettlement(payload) {
+    const payloadIsObject = Boolean(payload && typeof payload === "object" && !Array.isArray(payload));
     const rows = Array.isArray(payload?.points)
       ? payload.points
       : Array.isArray(payload?.rows)
         ? payload.rows
         : [];
-    const complete = payload?.response_complete === true && payload?.has_gap !== true;
+    const rowsShapeValid = Array.isArray(payload?.points) || Array.isArray(payload?.rows);
     const partialReasons = Array.isArray(payload?.partial_reasons)
       ? payload.partial_reasons.map(function (reason) { return String(reason).trim().toLowerCase(); }).filter(Boolean)
       : [];
-    const calculationStatuses = rows.flatMap(function (row) {
+    const calculationStatuses = Array.from(new Set(rows.flatMap(function (row) {
       return [row?.daqi_calculation_status, row?.eaqi_calculation_status]
         .map(function (status) { return String(status || "").trim().toLowerCase(); })
         .filter(Boolean);
-    });
-    const missingReasons = rows.flatMap(function (row) {
+    })));
+    const missingReasons = Array.from(new Set(rows.flatMap(function (row) {
       return [row?.daqi_missing_reason, row?.eaqi_missing_reason]
         .map(function (reason) { return String(reason || "").trim().toLowerCase(); })
         .filter(Boolean);
+    })));
+    const calculatedResponse = payload?.enabled !== false
+      && payload?.calculation_source === "calculated_from_observations";
+    const unknownPartialReasons = partialReasons.filter(function (reason) {
+      return !AUTHORITATIVE_AQI_PARTIAL_REASONS.has(reason);
     });
-    const authoritativePartial = !complete
-      && payload?.enabled !== false
-      && payload?.calculation_source === "calculated_from_observations"
-      && partialReasons.length > 0
-      && partialReasons.every(function (reason) { return AUTHORITATIVE_AQI_PARTIAL_REASONS.has(reason); })
-      && calculationStatuses.every(function (status) { return AUTHORITATIVE_AQI_CALCULATION_STATUSES.has(status); })
-      && missingReasons.every(function (reason) { return AUTHORITATIVE_AQI_MISSING_REASONS.has(reason); });
+    const unknownCalculationStatuses = calculationStatuses.filter(function (status) {
+      return !AUTHORITATIVE_AQI_CALCULATION_STATUSES.has(status);
+    });
+    const unknownMissingReasons = missingReasons.filter(function (reason) {
+      return !AUTHORITATIVE_AQI_MISSING_REASONS.has(reason);
+    });
+    const malformed = !payloadIsObject || !rowsShapeValid || payload?.malformed === true;
+    const calculatedContractViolation = calculatedResponse
+      && (unknownCalculationStatuses.length > 0 || unknownMissingReasons.length > 0);
+    const actualFailure = malformed || calculatedContractViolation;
+    const complete = !actualFailure
+      && payload?.response_complete === true
+      && payload?.has_gap !== true;
+    const hasAuthoritativeGapEvidence = partialReasons.some(function (reason) {
+      return AUTHORITATIVE_AQI_PARTIAL_REASONS.has(reason);
+    }) || calculationStatuses.some(function (status) {
+      return status !== "ok" && AUTHORITATIVE_AQI_CALCULATION_STATUSES.has(status);
+    }) || missingReasons.some(function (reason) {
+      return AUTHORITATIVE_AQI_MISSING_REASONS.has(reason);
+    });
+    const authoritativePartial = !actualFailure
+      && !complete
+      && calculatedResponse
+      && unknownPartialReasons.length === 0
+      && hasAuthoritativeGapEvidence;
+    const settled = complete || authoritativePartial;
     return {
       complete,
-      settled: complete || authoritativePartial,
-      retryable: !complete && !authoritativePartial,
+      settled,
+      retryable: !settled && !actualFailure,
       authoritative_partial: authoritativePartial,
+      actual_failure: actualFailure,
+      failure_reason: malformed
+        ? "aqi_response_malformed"
+        : calculatedContractViolation
+          ? "aqi_calculated_response_contract_violation"
+          : null,
       response_complete: payload?.response_complete === true,
       has_gap: payload?.has_gap === true,
       gap_ranges: Array.isArray(payload?.gap_ranges) ? payload.gap_ranges : [],
       partial_reasons: partialReasons,
       calculation_statuses: calculationStatuses,
       missing_reasons: missingReasons,
+    };
+  }
+
+  function classifyAqiTransitionOutcome(options) {
+    const config = options && typeof options === "object" ? options : {};
+    const settlement = config.settlement && typeof config.settlement === "object"
+      ? config.settlement
+      : null;
+    const ignored = config.obsolete === true || config.aborted === true;
+    let actualFailure = false;
+    let failureReason = null;
+    if (!ignored) {
+      if (config.error) {
+        actualFailure = true;
+        failureReason = config.error instanceof Error
+          ? config.error.message || "aqi_source_request_failed"
+          : String(config.error || "aqi_source_request_failed");
+      } else if (config.identity_valid === false) {
+        actualFailure = true;
+        failureReason = "station_series_authoritative_identity_invalid";
+      } else if (Number(config.conflict_count) > 0) {
+        actualFailure = true;
+        failureReason = "aqi_replacement_contract_error";
+      } else if (settlement?.actual_failure === true) {
+        actualFailure = true;
+        failureReason = settlement.failure_reason || "aqi_response_contract_error";
+      }
+    }
+    const settled = !ignored && !actualFailure && settlement?.settled === true;
+    return {
+      settled,
+      retryable_incomplete: !ignored && !actualFailure && !settled,
+      actual_failure: actualFailure,
+      failure_reason: failureReason,
+      ignored,
+      settlement: actualFailure
+        ? "actual_failure"
+        : ignored
+          ? "ignored"
+          : settlement?.complete === true
+            ? "complete"
+            : settlement?.authoritative_partial === true
+              ? "authoritative_partial"
+              : "retryable_incomplete",
+      partial_reasons: Array.isArray(settlement?.partial_reasons) ? settlement.partial_reasons : [],
+      calculation_statuses: Array.isArray(settlement?.calculation_statuses) ? settlement.calculation_statuses : [],
+      missing_reasons: Array.isArray(settlement?.missing_reasons) ? settlement.missing_reasons : [],
     };
   }
 
@@ -808,6 +890,7 @@
     createCacheRecord,
     inspectAqiSettlement,
     inspectAqiChunk,
+    classifyAqiTransitionOutcome,
     inspectObservationChunk,
     isCalculatedCombinedResponse,
     resolveStationSeriesHeadBounds,

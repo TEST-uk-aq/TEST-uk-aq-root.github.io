@@ -66,6 +66,8 @@ assert.match(targetedSection, /const sourceNeedsAqi = aqiSourceChanged[\s\S]*get
 assert.match(targetedSection, /const sourceLoadPromise = \(sourceNeedsObservations \|\| sourceNeedsAqi\)/, "a settled AQI-only switch starts no source request");
 assert.doesNotMatch(targetedSection, /const aqiTransitionFailed/, "uncovered cache intervals alone are no longer inferred to be a visible failure");
 assert.match(targetedSection, /aqiSourceSwitchMessages\.fail\(aqiSwitchIdentity/, "confirmed current AQI failures acquire transition-local message ownership");
+assert.doesNotMatch(targetedSection, /aqi_head_incomplete/, "an unsettled head is no longer converted directly into a hard failure");
+assert.match(targetedSection, /if \(aqiHead\.outcome\.actual_failure\)[\s\S]*aqiSourceSwitchMessages\.fail/, "head messages are driven by transition-local hard-failure classification");
 assert.doesNotMatch(page, /AQI bands are incomplete for the selected sensor/, "authoritative blank AQI intervals do not produce the false warning");
 assert.match(targetedSection, /token === state\.loadToken[\s\S]*aqiTransitionToken === state\.aqiTransitionToken/, "obsolete load and transition tokens cannot commit");
 
@@ -90,8 +92,9 @@ assert.match(legacySection, /const displayedAqiSourceRange = isAqiSourceChangeOn
 assert.match(legacySection, /const atomicAqiSourceSwitch = isAqiSourceChangeOnly && frameValid/);
 assert.match(legacySection, /getMissingRangesForRequest\(range, aqiCacheRecord\.settledRanges\)/, "the compatibility path plans AQI requests from settlement coverage");
 assert.match(legacySection, /const aqiProgressPromise = \(async \(\) => \{[\s\S]*if \(!aqiCacheRecord \|\| !aqiMissingRanges\.length\) return;/, "a settled compatibility switch starts no AQI request");
-assert.match(legacySection, /const aqiResultSettled = isAqiCacheResultSettled\(result\)[\s\S]*settled: aqiResultSettled/, "compatibility responses explicitly record settlement");
-assert.match(page, /function isAqiCacheResultSettled\(result\)[\s\S]*inspectAqiSettlement\([\s\S]*\)\.settled/, "compatibility authoritative partials use the shared calculated-gap settlement contract");
+assert.match(legacySection, /const aqiResultOutcome = classifyAqiCacheResult\(result\)[\s\S]*const aqiResultSettled = aqiResultOutcome\.settled[\s\S]*settled: aqiResultSettled/, "compatibility responses explicitly record settlement");
+assert.match(page, /function classifyAqiCacheResult\(result\)[\s\S]*inspectAqiSettlement\([\s\S]*classifyAqiTransitionOutcome/, "compatibility responses use the shared settlement-versus-failure classifier");
+assert.match(legacySection, /if \(atomicAqiSourceSwitch && aqiResultOutcome\.actual_failure\)[\s\S]*aqiSourceSwitchMessages\.fail/, "a compatibility partial displays an error only when classification proves a hard failure");
 assert.match(legacySection, /aqiTransitionGate\.stage\(\);[\s\S]*return;[\s\S]*syncAqiBands/, "legacy fallback also gates per-chunk AQI painting");
 assert.match(legacySection, /completeAtomicAqiSourceSwitch\(\{[\s\S]*commit: commitAqiSourceSwitch/, "legacy fallback also commits once through the isolated AQI terminal helper");
 assert.match(legacySection, /void prefetchAqiBandsForEntries/, "compatibility background prefetch is not awaited by the visible switch");
@@ -100,12 +103,25 @@ assert.match(legacySection, /if \(aqiLoadingActive \|\| hasObservationFetch\)[\s
 
 assert.match(loadSection, /options\.settledAqiCacheHit === true[\s\S]*state\.loadAbortController\?\.abort\(\)/, "a settled combined-path switch immediately supersedes unrelated chart loading");
 assert.match(loadSection, /const displayedAqiSourceRange = isAqiSourceChangeOnly && frameValid[\s\S]*normalizeDisplayedChartRange\(options\.displayedRange\)[\s\S]*getDisplayedChartRange\(existing\)[\s\S]*const range = displayedAqiSourceRange \|\| resolveRange\(windowValue, retainedWindowEndMs\)/, "the combined path reuses the exact displayed range only for the current frame identity");
+const olderChunkStart = page.indexOf("async function loadStationHistoryOlderChunks");
+const olderChunkEnd = page.indexOf("async function prefetchStationHistoryAqi", olderChunkStart);
+const olderChunkSection = page.slice(olderChunkStart, olderChunkEnd);
+assert.doesNotMatch(olderChunkSection, /aqi_history_incomplete/, "an unsettled older AQI chunk is no longer stored as a hard failure");
+assert.match(olderChunkSection, /aqiOutcome\.retryable_incomplete[\s\S]*record\.retryable_chunks/, "retryable older AQI chunks retain a separate non-failure diagnostic");
+assert.match(olderChunkSection, /if \(aqiOutcome\.actual_failure\)[\s\S]*actualFailure = true/, "older chunks set actual failure only from the shared hard-failure classifier");
 for (const field of [
   "aqi_source_switch_total_ms",
   "aqi_source_switch_transition_ms",
   "aqi_source_switch_cache_hit",
   "aqi_source_switch_network_required",
   "aqi_source_switch_commit_count",
+  "aqi_source_switch_settlement",
+  "aqi_source_switch_retryable_incomplete",
+  "aqi_source_switch_actual_failure",
+  "aqi_source_switch_failure_reason",
+  "aqi_source_switch_partial_reasons",
+  "aqi_source_switch_calculation_statuses",
+  "aqi_source_switch_missing_reasons",
 ]) {
   assert.match(page, new RegExp(field), `bounded source-switch diagnostics include ${field}`);
 }

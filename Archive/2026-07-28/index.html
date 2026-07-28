@@ -333,7 +333,7 @@
     .readings-header {
       display: grid;
       grid-template-columns: minmax(0, 1fr) auto;
-      gap: 1rem;
+      gap: 1.5rem 2rem;
       align-items: start;
     }
 
@@ -351,58 +351,19 @@
       line-height: 1.45;
     }
 
-    .readings-controls {
+    .readings-meta {
       display: flex;
       flex-wrap: wrap;
       justify-content: flex-end;
-      align-items: center;
+      align-items: end;
       gap: 0.75rem 1rem;
-      margin-top: 1rem;
     }
 
     .readings-updated {
-      margin: 0;
+      margin: 0 0 0.6rem;
       color: #65717d;
       font-size: 0.88rem;
       white-space: nowrap;
-    }
-
-    .btn-refresh {
-      padding: 5px 12px;
-      border: 1px solid #3C78AC;
-      border-radius: 6px;
-      background: #3C78AC;
-      color: #fff;
-      box-shadow: 0 1px 4px rgba(16, 24, 34, 0.12);
-      font-family: inherit;
-      font-size: 14px;
-      font-weight: 600;
-      cursor: pointer;
-      transition: transform 0.15s, box-shadow 0.15s, background-color 0.15s, border-color 0.15s;
-    }
-
-    .btn-refresh:hover:not(:disabled) {
-      transform: translateY(-1px);
-      border-color: #285A84;
-      background: #285A84;
-      box-shadow: 0 4px 10px rgba(16, 24, 34, 0.16);
-    }
-
-    .btn-refresh:active:not(:disabled) {
-      transform: translateY(0);
-      box-shadow: none;
-    }
-
-    .btn-refresh:focus-visible {
-      outline: 2px solid rgba(60, 120, 172, 0.5);
-      outline-offset: 2px;
-    }
-
-    .btn-refresh:disabled {
-      opacity: 0.65;
-      cursor: wait;
-      transform: none;
-      box-shadow: none;
     }
 
     .home-network-picker {
@@ -1719,16 +1680,17 @@
       }
 
       .readings-header {
-        grid-template-columns: minmax(0, 1fr) auto;
-        gap: 0.75rem;
+        grid-template-columns: 1fr;
+        gap: 1rem;
       }
 
-      .readings-controls {
+      .readings-meta {
         justify-content: flex-start;
-        align-items: center;
+        align-items: end;
       }
 
       .readings-updated {
+        width: 100%;
         margin: 0;
       }
 
@@ -1922,51 +1884,50 @@
           <h2 id="highest-readings-heading" class="readings-title">Highest sensor readings</h2>
           <p class="readings-subtitle" id="dashboard-window-subtitle">Latest readings from active sensors.</p>
         </div>
-        <button type="button" class="btn-refresh" id="dashboard-refresh">Refresh</button>
-      </div>
 
-      <div class="readings-controls">
-        <div class="home-network-picker" id="home-network-picker">
-          <button
-            type="button"
-            class="home-network-picker-button"
-            id="network-picker-button"
-            aria-haspopup="dialog"
-            aria-expanded="false"
-            aria-controls="network-picker-panel"
-          >
-            <span id="network-picker-button-text">Networks: 0 / 0</span>
-            <svg class="home-network-picker-chevron" width="10" height="6" viewBox="0 0 10 6" fill="none" aria-hidden="true">
-              <path d="M1 1l4 4 4-4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"></path>
-            </svg>
-          </button>
-          <div
-            class="home-network-picker-panel"
-            id="network-picker-panel"
-            role="dialog"
-            aria-label="Choose dashboard networks"
-            hidden
-          >
-            <div class="home-network-picker-header">
-              <span>NETWORKS</span>
-              <span class="home-network-picker-count" id="network-picker-count">0 / 0</span>
+        <div class="readings-meta">
+          <p class="readings-updated">
+            <time id="dashboard-updated">Updated —</time>
+          </p>
+          <div class="home-network-picker" id="home-network-picker">
+            <button
+              type="button"
+              class="home-network-picker-button"
+              id="network-picker-button"
+              aria-haspopup="dialog"
+              aria-expanded="false"
+              aria-controls="network-picker-panel"
+            >
+              <span id="network-picker-button-text">Networks: 0 / 0</span>
+              <svg class="home-network-picker-chevron" width="10" height="6" viewBox="0 0 10 6" fill="none" aria-hidden="true">
+                <path d="M1 1l4 4 4-4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"></path>
+              </svg>
+            </button>
+            <div
+              class="home-network-picker-panel"
+              id="network-picker-panel"
+              role="dialog"
+              aria-label="Choose dashboard networks"
+              hidden
+            >
+              <div class="home-network-picker-header">
+                <span>NETWORKS</span>
+                <span class="home-network-picker-count" id="network-picker-count">0 / 0</span>
+              </div>
+              <div class="home-network-picker-actions">
+                <button type="button" class="home-network-picker-action" id="network-picker-select-all" aria-label="Select all networks" title="Select all networks">
+                  <span class="home-network-picker-action-icon home-network-picker-action-icon--select-all" aria-hidden="true"></span>
+                </button>
+                <span class="home-network-picker-actions-divider" aria-hidden="true">/</span>
+                <button type="button" class="home-network-picker-action" id="network-picker-clear-all" aria-label="Clear all networks" title="Clear all networks">
+                  <span class="home-network-picker-action-icon home-network-picker-action-icon--clear-all" aria-hidden="true"></span>
+                </button>
+              </div>
+              <div class="home-network-picker-list" id="network-picker-list"></div>
+              <div class="home-network-picker-footer" id="network-picker-footer"></div>
             </div>
-            <div class="home-network-picker-actions">
-              <button type="button" class="home-network-picker-action" id="network-picker-select-all" aria-label="Select all networks" title="Select all networks">
-                <span class="home-network-picker-action-icon home-network-picker-action-icon--select-all" aria-hidden="true"></span>
-              </button>
-              <span class="home-network-picker-actions-divider" aria-hidden="true">/</span>
-              <button type="button" class="home-network-picker-action" id="network-picker-clear-all" aria-label="Clear all networks" title="Clear all networks">
-                <span class="home-network-picker-action-icon home-network-picker-action-icon--clear-all" aria-hidden="true"></span>
-              </button>
-            </div>
-            <div class="home-network-picker-list" id="network-picker-list"></div>
-            <div class="home-network-picker-footer" id="network-picker-footer"></div>
           </div>
         </div>
-        <p class="readings-updated">
-          <time id="dashboard-updated">Updated —</time>
-        </p>
       </div>
       <p id="dashboard-status" class="dashboard-status" role="status">Loading latest readings…</p>
 

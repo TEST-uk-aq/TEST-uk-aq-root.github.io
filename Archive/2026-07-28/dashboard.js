@@ -13,7 +13,6 @@
   ];
   const DASHBOARD_ACTIVE_WINDOW_HOURS = 6;
   const DASHBOARD_ACTIVE_WINDOW = `${DASHBOARD_ACTIVE_WINDOW_HOURS}h`;
-  const DASHBOARD_REFRESH_INTERVAL_MS = 5 * 60 * 1000;
   let networkCatalog = [...FALLBACK_NETWORKS];
   const selectedNetworks = new Set(FALLBACK_NETWORKS.map(({ code }) => code));
   let hasInitializedNetworkSelection = false;
@@ -33,7 +32,6 @@
   const activeSensorsCaption = document.getElementById("active-sensors-caption");
   const statusEl = document.getElementById("dashboard-status");
   const updatedEl = document.getElementById("dashboard-updated");
-  const refreshButton = document.getElementById("dashboard-refresh");
   const debugEnabled = parseBooleanFlag(
     typeof WEBSITE_DEBUG_LOG_ENABLED_PLACEHOLDER === "string"
       ? WEBSITE_DEBUG_LOG_ENABLED_PLACEHOLDER
@@ -46,10 +44,6 @@
   const capabilityRowsByPollutant = new Map();
   const connectorRefreshByCode = new Map();
   let dashboardLoadedAt = null;
-  let lastCompletedDashboardRequestAt = null;
-  let hasCompletedDashboardRequestCycle = false;
-  let dashboardRefreshInFlight = null;
-  let dashboardRefreshTimeout = null;
   let fitValuesFrame = null;
   let fitValuesTimer = null;
 
@@ -150,7 +144,7 @@
         `[UK AQ dashboard] Optional connector refresh metadata unavailable (${response.status}). `
         + "Dashboard will use its successful load time.",
       );
-      throw new Error(`Connector refresh metadata request failed: ${response.status}`);
+      return [];
     }
     const payload = await response.json();
     return Array.isArray(payload) ? payload : [];
@@ -671,152 +665,84 @@
     schedulePollutantValueFit();
   }
 
-  function setDashboardBusy(isBusy) {
-    dashboard?.classList.toggle("is-loading", isBusy);
-    dashboard?.setAttribute("aria-busy", String(isBusy));
-    if (refreshButton) {
-      refreshButton.disabled = isBusy;
-      refreshButton.setAttribute("aria-busy", String(isBusy));
-    }
-  }
-
-  function requestDashboardRefresh() {
-    if (dashboardRefreshInFlight) return dashboardRefreshInFlight;
-
-    const isInitialLoad = !hasCompletedDashboardRequestCycle;
-    setDashboardBusy(true);
-    dashboardRefreshInFlight = (async () => {
-      try {
-        const [results, capabilityResults, catalogResult, areaNamesResult, refreshMetadataResult] = await Promise.all([
-          Promise.allSettled(POLLUTANTS.map(({ key }) => fetchRows(key))),
-          Promise.allSettled(POLLUTANTS.map(({ key }) => fetchRows(key, "all"))),
-          Promise.resolve(fetchNetworkCatalog()).then(
-            (value) => ({ status: "fulfilled", value }),
-            (reason) => ({ status: "rejected", reason }),
-          ),
-          Promise.resolve(fetchAreaNames()).then(
-            () => ({ status: "fulfilled" }),
-            (reason) => ({ status: "rejected", reason }),
-          ),
-          Promise.resolve(fetchConnectorRefreshMetadata()).then(
-            (value) => ({ status: "fulfilled", value }),
-            (reason) => ({ status: "rejected", reason }),
-          ),
-        ]);
-        if (catalogResult.status === "fulfilled" && catalogResult.value.length) {
-          networkCatalog = catalogResult.value;
-          networkLabels.clear();
-          networkCatalog.forEach(({ code, label }) => networkLabels.set(code, label));
-        } else if (catalogResult.status === "rejected") {
-          debugLog("Unable to load network catalog", catalogResult.reason);
-        }
-        if (areaNamesResult.status === "rejected") {
-          debugLog("Unable to load area names", areaNamesResult.reason);
-        }
-        reconcileSelectedNetworks();
-        let loaded = 0;
-        results.forEach((result, index) => {
-          const key = POLLUTANTS[index].key;
-          if (result.status === "fulfilled") {
-            rowsByPollutant.set(key, result.value);
-            loaded += 1;
-          } else if (isInitialLoad) {
-            rowsByPollutant.set(key, []);
-            debugLog(`Unable to load ${key}`, result.reason);
-          } else {
-            debugLog(`Unable to refresh ${key}; retaining existing rows`, result.reason);
-          }
-        });
-        capabilityResults.forEach((result, index) => {
-          const key = POLLUTANTS[index].key;
-          if (result.status === "fulfilled") {
-            capabilityRowsByPollutant.set(key, result.value);
-          } else if (isInitialLoad) {
-            capabilityRowsByPollutant.set(key, null);
-            debugLog(`Unable to load ${key} capability baseline`, result.reason);
-          } else {
-            debugLog(`Unable to refresh ${key} capability baseline; retaining existing rows`, result.reason);
-          }
-        });
-        if (refreshMetadataResult.status === "fulfilled") {
-          connectorRefreshByCode.clear();
-          refreshMetadataResult.value.forEach((row) => {
-            const code = String(row?.connector_code || "").trim();
-            const polledAt = row?.last_polled_at ? new Date(row.last_polled_at) : null;
-            if (code && polledAt && !Number.isNaN(polledAt.getTime())) {
-              connectorRefreshByCode.set(code, polledAt);
-            }
-          });
-        } else {
-          debugLog(
-            isInitialLoad
-              ? "Unable to load connector refresh metadata"
-              : "Unable to refresh connector metadata; retaining existing metadata",
-            refreshMetadataResult.reason,
-          );
-        }
-        if (loaded) dashboardLoadedAt = new Date();
-        render();
-        if (!loaded) throw new Error("All latest-reading requests failed.");
-        statusEl.hidden = loaded === POLLUTANTS.length;
-        statusEl.classList.toggle("dashboard-status--error", loaded !== POLLUTANTS.length);
-        statusEl.textContent = loaded === POLLUTANTS.length
-          ? "" : "Some dashboard readings are temporarily unavailable.";
-      } catch (error) {
-        render();
-        statusEl.hidden = false;
-        statusEl.classList.add("dashboard-status--error");
-        statusEl.textContent = "Live dashboard data is temporarily unavailable.";
-        debugLog("Dashboard load failed", error);
-      } finally {
-        lastCompletedDashboardRequestAt = Date.now();
-        hasCompletedDashboardRequestCycle = true;
-        setDashboardBusy(false);
+  async function load() {
+    dashboard?.classList.add("is-loading");
+    try {
+      const [results, capabilityResults, catalogResult, areaNamesResult, refreshMetadataResult] = await Promise.all([
+        Promise.allSettled(POLLUTANTS.map(({ key }) => fetchRows(key))),
+        Promise.allSettled(POLLUTANTS.map(({ key }) => fetchRows(key, "all"))),
+        Promise.resolve(fetchNetworkCatalog()).then(
+          (value) => ({ status: "fulfilled", value }),
+          (reason) => ({ status: "rejected", reason }),
+        ),
+        Promise.resolve(fetchAreaNames()).then(
+          () => ({ status: "fulfilled" }),
+          (reason) => ({ status: "rejected", reason }),
+        ),
+        Promise.resolve(fetchConnectorRefreshMetadata()).then(
+          (value) => ({ status: "fulfilled", value }),
+          (reason) => ({ status: "rejected", reason }),
+        ),
+      ]);
+      if (catalogResult.status === "fulfilled" && catalogResult.value.length) {
+        networkCatalog = catalogResult.value;
+        networkLabels.clear();
+        networkCatalog.forEach(({ code, label }) => networkLabels.set(code, label));
+      } else if (catalogResult.status === "rejected") {
+        debugLog("Unable to load network catalog", catalogResult.reason);
       }
-    })().finally(() => {
-      dashboardRefreshInFlight = null;
-    });
-
-    return dashboardRefreshInFlight;
-  }
-
-  function isDashboardActive() {
-    return document.hidden === false && document.hasFocus() === true;
-  }
-
-  function clearDashboardRefreshTimeout() {
-    if (dashboardRefreshTimeout !== null) {
-      window.clearTimeout(dashboardRefreshTimeout);
-      dashboardRefreshTimeout = null;
+      if (areaNamesResult.status === "rejected") {
+        debugLog("Unable to load area names", areaNamesResult.reason);
+      }
+      reconcileSelectedNetworks();
+      let loaded = 0;
+      results.forEach((result, index) => {
+        const key = POLLUTANTS[index].key;
+        if (result.status === "fulfilled") {
+          rowsByPollutant.set(key, result.value);
+          loaded += 1;
+        } else {
+          rowsByPollutant.set(key, []);
+          debugLog(`Unable to load ${key}`, result.reason);
+        }
+      });
+      capabilityResults.forEach((result, index) => {
+        const key = POLLUTANTS[index].key;
+        if (result.status === "fulfilled") {
+          capabilityRowsByPollutant.set(key, result.value);
+        } else {
+          capabilityRowsByPollutant.set(key, null);
+          debugLog(`Unable to load ${key} capability baseline`, result.reason);
+        }
+      });
+      connectorRefreshByCode.clear();
+      if (refreshMetadataResult.status === "fulfilled") {
+        refreshMetadataResult.value.forEach((row) => {
+          const code = String(row?.connector_code || "").trim();
+          const polledAt = row?.last_polled_at ? new Date(row.last_polled_at) : null;
+          if (code && polledAt && !Number.isNaN(polledAt.getTime())) {
+            connectorRefreshByCode.set(code, polledAt);
+          }
+        });
+      } else {
+        debugLog("Unable to load connector refresh metadata", refreshMetadataResult.reason);
+      }
+      dashboardLoadedAt = new Date();
+      render();
+      if (!loaded) throw new Error("All latest-reading requests failed.");
+      statusEl.hidden = loaded === POLLUTANTS.length;
+      statusEl.classList.toggle("dashboard-status--error", loaded !== POLLUTANTS.length);
+      statusEl.textContent = loaded === POLLUTANTS.length
+        ? "" : "Some dashboard readings are temporarily unavailable.";
+    } catch (error) {
+      render();
+      statusEl.hidden = false;
+      statusEl.classList.add("dashboard-status--error");
+      statusEl.textContent = "Live dashboard data is temporarily unavailable.";
+      debugLog("Dashboard load failed", error);
+    } finally {
+      dashboard?.classList.remove("is-loading");
     }
-  }
-
-  function scheduleNextDashboardRefresh() {
-    clearDashboardRefreshTimeout();
-    if (!isDashboardActive()) return;
-
-    const now = Date.now();
-    const nextBoundary = (Math.floor(now / DASHBOARD_REFRESH_INTERVAL_MS) + 1)
-      * DASHBOARD_REFRESH_INTERVAL_MS;
-    dashboardRefreshTimeout = window.setTimeout(() => {
-      dashboardRefreshTimeout = null;
-      if (!isDashboardActive()) return;
-      requestDashboardRefresh();
-      scheduleNextDashboardRefresh();
-    }, nextBoundary - now);
-  }
-
-  function syncDashboardRefreshSchedule() {
-    clearDashboardRefreshTimeout();
-    if (!isDashboardActive()) return;
-
-    if (
-      lastCompletedDashboardRequestAt !== null
-      && Date.now() - lastCompletedDashboardRequestAt > DASHBOARD_REFRESH_INTERVAL_MS
-    ) {
-      requestDashboardRefresh();
-    }
-    scheduleNextDashboardRefresh();
   }
 
   networkPickerButton?.addEventListener("click", () => {
@@ -845,12 +771,7 @@
     window.clearTimeout(fitValuesTimer);
     fitValuesTimer = window.setTimeout(schedulePollutantValueFit, 120);
   });
-  refreshButton?.addEventListener("click", requestDashboardRefresh);
-  document.addEventListener("visibilitychange", syncDashboardRefreshSchedule);
-  window.addEventListener("focus", syncDashboardRefreshSchedule);
-  window.addEventListener("blur", clearDashboardRefreshTimeout);
   document.fonts?.ready?.then(schedulePollutantValueFit);
   applyDashboardWindowCopy();
-  requestDashboardRefresh();
-  scheduleNextDashboardRefresh();
+  load();
 })();

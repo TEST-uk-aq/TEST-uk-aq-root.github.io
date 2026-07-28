@@ -351,16 +351,21 @@
       line-height: 1.45;
     }
 
-    .readings-actions {
+    .readings-header-controls {
       display: grid;
-      grid-template-columns: auto auto;
-      align-items: center;
       gap: 15px;
       justify-items: end;
     }
 
-    .readings-actions > .home-network-picker {
-      grid-column: 2;
+    .readings-actions {
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+    }
+
+    .readings-controls {
+      display: flex;
+      justify-content: flex-end;
     }
 
     .readings-updated {
@@ -1726,8 +1731,8 @@
         gap: 0.75rem;
       }
 
-      .readings-actions {
-        justify-self: end;
+      .readings-header-controls {
+        justify-self: start;
       }
 
       .readings-updated {
@@ -1924,47 +1929,51 @@
           <h2 id="highest-readings-heading" class="readings-title">Highest sensor readings</h2>
           <p class="readings-subtitle" id="dashboard-window-subtitle">Latest readings from active sensors.</p>
         </div>
-        <div class="readings-actions">
-          <p class="readings-updated">
-            <time id="dashboard-updated">Updated —</time>
-          </p>
-          <button type="button" class="btn-refresh" id="dashboard-refresh">Refresh</button>
-          <div class="home-network-picker" id="home-network-picker">
-            <button
-              type="button"
-              class="home-network-picker-button"
-              id="network-picker-button"
-              aria-haspopup="dialog"
-              aria-expanded="false"
-              aria-controls="network-picker-panel"
-            >
-              <span id="network-picker-button-text">Networks: 0 / 0</span>
-              <svg class="home-network-picker-chevron" width="10" height="6" viewBox="0 0 10 6" fill="none" aria-hidden="true">
-                <path d="M1 1l4 4 4-4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"></path>
-              </svg>
-            </button>
-            <div
-              class="home-network-picker-panel"
-              id="network-picker-panel"
-              role="dialog"
-              aria-label="Choose dashboard networks"
-              hidden
-            >
-              <div class="home-network-picker-header">
-                <span>NETWORKS</span>
-                <span class="home-network-picker-count" id="network-picker-count">0 / 0</span>
+        <div class="readings-header-controls">
+          <div class="readings-actions">
+            <p class="readings-updated">
+              <time id="dashboard-updated">Updated —</time>
+            </p>
+            <button type="button" class="btn-refresh" id="dashboard-refresh">Refresh</button>
+          </div>
+          <div class="readings-controls">
+            <div class="home-network-picker" id="home-network-picker">
+              <button
+                type="button"
+                class="home-network-picker-button"
+                id="network-picker-button"
+                aria-haspopup="dialog"
+                aria-expanded="false"
+                aria-controls="network-picker-panel"
+              >
+                <span id="network-picker-button-text">Networks: 0 / 0</span>
+                <svg class="home-network-picker-chevron" width="10" height="6" viewBox="0 0 10 6" fill="none" aria-hidden="true">
+                  <path d="M1 1l4 4 4-4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"></path>
+                </svg>
+              </button>
+              <div
+                class="home-network-picker-panel"
+                id="network-picker-panel"
+                role="dialog"
+                aria-label="Choose dashboard networks"
+                hidden
+              >
+                <div class="home-network-picker-header">
+                  <span>NETWORKS</span>
+                  <span class="home-network-picker-count" id="network-picker-count">0 / 0</span>
+                </div>
+                <div class="home-network-picker-actions">
+                  <button type="button" class="home-network-picker-action" id="network-picker-select-all" aria-label="Select all networks" title="Select all networks">
+                    <span class="home-network-picker-action-icon home-network-picker-action-icon--select-all" aria-hidden="true"></span>
+                  </button>
+                  <span class="home-network-picker-actions-divider" aria-hidden="true">/</span>
+                  <button type="button" class="home-network-picker-action" id="network-picker-clear-all" aria-label="Clear all networks" title="Clear all networks">
+                    <span class="home-network-picker-action-icon home-network-picker-action-icon--clear-all" aria-hidden="true"></span>
+                  </button>
+                </div>
+                <div class="home-network-picker-list" id="network-picker-list"></div>
+                <div class="home-network-picker-footer" id="network-picker-footer"></div>
               </div>
-              <div class="home-network-picker-actions">
-                <button type="button" class="home-network-picker-action" id="network-picker-select-all" aria-label="Select all networks" title="Select all networks">
-                  <span class="home-network-picker-action-icon home-network-picker-action-icon--select-all" aria-hidden="true"></span>
-                </button>
-                <span class="home-network-picker-actions-divider" aria-hidden="true">/</span>
-                <button type="button" class="home-network-picker-action" id="network-picker-clear-all" aria-label="Clear all networks" title="Clear all networks">
-                  <span class="home-network-picker-action-icon home-network-picker-action-icon--clear-all" aria-hidden="true"></span>
-                </button>
-              </div>
-              <div class="home-network-picker-list" id="network-picker-list"></div>
-              <div class="home-network-picker-footer" id="network-picker-footer"></div>
             </div>
           </div>
         </div>

@@ -44,9 +44,7 @@
   );
   const rowsByPollutant = new Map();
   const capabilityRowsByPollutant = new Map();
-  const connectorRefreshByCode = new Map();
   let dashboardLoadedAt = null;
-  let lastCompletedDashboardRequestAt = null;
   let hasCompletedDashboardRequestCycle = false;
   let dashboardRefreshInFlight = null;
   let dashboardRefreshTimeout = null;
@@ -121,39 +119,6 @@
         type: row.network_type || null,
       }))
       .filter((row) => row.code && row.label);
-  }
-
-  async function fetchConnectorRefreshMetadata() {
-    const projectRef = typeof PROJECT_REF_PLACEHOLDER === "string"
-      && !PROJECT_REF_PLACEHOLDER.includes("__SUPABASE_PROJECT_REF__")
-      ? PROJECT_REF_PLACEHOLDER.trim()
-      : "";
-    const publishableKey = typeof ANON_KEY_PLACEHOLDER === "string"
-      && !ANON_KEY_PLACEHOLDER.includes("__SB_PUBLISHABLE_DEFAULT_KEY__")
-      ? ANON_KEY_PLACEHOLDER.trim()
-      : "";
-    if (!projectRef || !publishableKey) {
-      throw new Error("Public Supabase configuration is unavailable.");
-    }
-    const url = new URL(
-      `https://${projectRef}.supabase.co/rest/v1/connector_refresh_metadata`,
-    );
-    url.searchParams.set("select", "connector_code,last_polled_at");
-    const response = await fetch(url, {
-      headers: {
-        apikey: publishableKey,
-        "Accept-Profile": "uk_aq_public",
-      },
-    });
-    if (!response.ok) {
-      console.warn(
-        `[UK AQ dashboard] Optional connector refresh metadata unavailable (${response.status}). `
-        + "Dashboard will use its successful load time.",
-      );
-      throw new Error(`Connector refresh metadata request failed: ${response.status}`);
-    }
-    const payload = await response.json();
-    return Array.isArray(payload) ? payload : [];
   }
 
   async function fetchAreaNames() {
@@ -631,26 +596,7 @@
   }
 
   function renderUpdated() {
-    const connectorCodes = new Set();
-    POLLUTANTS.forEach(({ key }) => {
-      const baselineRows = capabilityRowsByPollutant.get(key);
-      const rows = Array.isArray(baselineRows) ? baselineRows : (rowsByPollutant.get(key) || []);
-      rows.forEach((row) => {
-        if (!selectedNetworks.has(networkCode(row))) return;
-        const code = String(row?.connector_code || row?.connector?.connector_code || "").trim();
-        if (code) connectorCodes.add(code);
-      });
-    });
-    // For multiple selected networks, use the most recent successful connector
-    // poll: this communicates when UK AQ most recently refreshed any selected data.
-    let refreshedAt = null;
-    connectorCodes.forEach((code) => {
-      const candidate = connectorRefreshByCode.get(code);
-      if (candidate && (!refreshedAt || candidate > refreshedAt)) refreshedAt = candidate;
-    });
-    // TODO: Remove this load-time fallback once refresh metadata is guaranteed on
-    // the public connector surface. Never substitute a sensor observation time.
-    const displayedAt = refreshedAt || dashboardLoadedAt;
+    const displayedAt = dashboardLoadedAt;
     updatedEl.textContent = displayedAt ? `Updated ${formatDate(displayedAt)}` : "Updated —";
     updatedEl.setAttribute(
       "aria-label",
@@ -687,7 +633,7 @@
     setDashboardBusy(true);
     dashboardRefreshInFlight = (async () => {
       try {
-        const [results, capabilityResults, catalogResult, areaNamesResult, refreshMetadataResult] = await Promise.all([
+        const [results, capabilityResults, catalogResult, areaNamesResult] = await Promise.all([
           Promise.allSettled(POLLUTANTS.map(({ key }) => fetchRows(key))),
           Promise.allSettled(POLLUTANTS.map(({ key }) => fetchRows(key, "all"))),
           Promise.resolve(fetchNetworkCatalog()).then(
@@ -696,10 +642,6 @@
           ),
           Promise.resolve(fetchAreaNames()).then(
             () => ({ status: "fulfilled" }),
-            (reason) => ({ status: "rejected", reason }),
-          ),
-          Promise.resolve(fetchConnectorRefreshMetadata()).then(
-            (value) => ({ status: "fulfilled", value }),
             (reason) => ({ status: "rejected", reason }),
           ),
         ]);
@@ -738,30 +680,14 @@
             debugLog(`Unable to refresh ${key} capability baseline; retaining existing rows`, result.reason);
           }
         });
-        if (refreshMetadataResult.status === "fulfilled") {
-          connectorRefreshByCode.clear();
-          refreshMetadataResult.value.forEach((row) => {
-            const code = String(row?.connector_code || "").trim();
-            const polledAt = row?.last_polled_at ? new Date(row.last_polled_at) : null;
-            if (code && polledAt && !Number.isNaN(polledAt.getTime())) {
-              connectorRefreshByCode.set(code, polledAt);
-            }
-          });
-        } else {
-          debugLog(
-            isInitialLoad
-              ? "Unable to load connector refresh metadata"
-              : "Unable to refresh connector metadata; retaining existing metadata",
-            refreshMetadataResult.reason,
-          );
-        }
-        if (loaded) dashboardLoadedAt = new Date();
-        render();
         if (!loaded) throw new Error("All latest-reading requests failed.");
         statusEl.hidden = loaded === POLLUTANTS.length;
         statusEl.classList.toggle("dashboard-status--error", loaded !== POLLUTANTS.length);
         statusEl.textContent = loaded === POLLUTANTS.length
           ? "" : "Some dashboard readings are temporarily unavailable.";
+        render();
+        dashboardLoadedAt = new Date();
+        renderUpdated();
       } catch (error) {
         render();
         statusEl.hidden = false;
@@ -769,7 +695,6 @@
         statusEl.textContent = "Live dashboard data is temporarily unavailable.";
         debugLog("Dashboard load failed", error);
       } finally {
-        lastCompletedDashboardRequestAt = Date.now();
         hasCompletedDashboardRequestCycle = true;
         setDashboardBusy(false);
       }
@@ -811,8 +736,8 @@
     if (!isDashboardActive()) return;
 
     if (
-      lastCompletedDashboardRequestAt !== null
-      && Date.now() - lastCompletedDashboardRequestAt > DASHBOARD_REFRESH_INTERVAL_MS
+      dashboardLoadedAt !== null
+      && Date.now() - dashboardLoadedAt.getTime() > DASHBOARD_REFRESH_INTERVAL_MS
     ) {
       requestDashboardRefresh();
     }

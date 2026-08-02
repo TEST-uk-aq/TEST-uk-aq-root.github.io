@@ -107,7 +107,6 @@
   }
 }
 
-.home-main > .ukaq-beta-notice-mount,
-main > header + .ukaq-beta-notice-mount {
-  margin-bottom: 1rem;
+.home-main > .ukaq-beta-notice-mount {
+  margin-bottom: -10px;
 }

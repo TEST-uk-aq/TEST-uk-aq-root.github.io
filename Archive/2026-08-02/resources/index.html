@@ -1,0 +1,703 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Resources | Chronic Illness Channel</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="Resources and organisations campaigning for cleaner air and reduced pollution from domestic wood burning.">
+  <meta property="og:type" content="website">
+  <meta property="og:title" content="Resources | Chronic Illness Channel">
+  <meta property="og:description" content="Resources and organisations campaigning for cleaner air and reduced pollution from domestic wood burning.">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="Resources | Chronic Illness Channel">
+  <meta name="twitter:description" content="Resources and organisations campaigning for cleaner air and reduced pollution from domestic wood burning.">
+  <link rel="icon" href="/images/favicon.ico" type="image/png">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="preload" as="image" href="./images/GAP-CAN-2026.svg">
+  <link rel="preload" as="image" href="./images/awair-logo-699x200.svg">
+  <link rel="preload" as="image" href="./images/ERF logo.svg">
+  <style>
+    body {
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      background: #FBFAF7;
+      color: #111827;
+      margin: 0;
+    }
+
+    .chart-shell {
+      width: 100%;
+      max-width: none;
+      margin: 0;
+    }
+
+    .resources-shell {
+      padding: 28px;
+      margin: 0;
+      background: #FBFAF7;
+    }
+
+    .resources-frame {
+      width: 100%;
+      margin: 0;
+      padding: 0 104px 0 0;
+      background: #FBFAF7;
+      border-radius: 6px;
+      box-sizing: border-box;
+    }
+
+    .title-row {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      margin-bottom: 1.5rem;
+    }
+
+    .resources-title-link-icon {
+      height: 42px;
+      width: auto;
+      flex-shrink: 0;
+    }
+
+    .main-title {
+      font-size: clamp(1.9rem, 3.2vw, 2.4rem);
+      line-height: 1.2;
+      color: #101822;
+      font-weight: 700;
+    }
+
+    .resources-page-title {
+      height: 42px;
+      width: auto;
+      display: block;
+      max-width: 100%;
+    }
+
+    .resources-title {
+      margin: 0;
+    }
+
+    .resources-table-section {
+      background: #FBFAF7;
+      margin-top: 1rem;
+    }
+
+    .resources-table-section + .resources-table-section {
+      margin-top: 3rem;
+    }
+
+    .resources-list {
+      display: flex;
+      flex-direction: column;
+      gap: 0.5625rem;
+      margin: 0;
+      padding: 0;
+      list-style: none;
+    }
+
+    .resource-section-heading {
+      font-size: 1.25rem;
+      font-weight: 700;
+      color: #0f172a;
+      margin: 0 0 1.5rem 0;
+    }
+
+    .resource-card {
+      display: grid;
+      grid-template-columns: 150px 1fr;
+      align-items: center;
+      gap: 36px;
+      padding: 10px 28px;
+      border-radius: 20px;
+      border: none;
+      background: #FBFAF7;
+      box-shadow: none;
+    }
+
+    .resource-logo-cell {
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      min-height: 82px;
+    }
+
+    .resource-logo-cell--wide {
+      justify-content: flex-start;
+    }
+
+    .resource-logo {
+      display: block;
+      width: 100%;
+      max-width: 95px;
+      height: auto;
+      transition: transform 160ms ease-in-out;
+    }
+
+    .resource-logo-link {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .resource-logo-link:hover .resource-logo,
+    .resource-logo-link:focus-visible .resource-logo {
+      transform: scale(1.08);
+    }
+
+    .resource-info {
+      flex: 1 1 auto;
+    }
+
+    .resource-info-name {
+      display: inline-block;
+      margin: 0 0 8px 0;
+      font-weight: 700;
+      color: #3C78AC;
+      text-decoration: underline;
+      font-size: 1.65rem;
+      line-height: 1.25;
+      text-decoration-thickness: 2px;
+      text-underline-offset: 4px;
+      transition: color 120ms ease-out;
+    }
+
+    .resource-info-name:focus-visible {
+      outline: 2px solid rgba(255, 140, 26, 0.45);
+      outline-offset: 3px;
+    }
+
+    .resource-info-name:hover,
+    .resource-info-name:focus-visible {
+      color: #004D80;
+    }
+
+    .resource-info-desc {
+      margin: 0;
+      color: #374151;
+      line-height: 1.55;
+      font-size: 1rem;
+    }
+
+    .resource-inline-link {
+      color: #3C78AC;
+      text-decoration: underline;
+      text-decoration-thickness: 2px;
+      text-underline-offset: 3px;
+      transition: color 120ms ease-out;
+    }
+
+    .resource-inline-link:hover,
+    .resource-inline-link:focus-visible {
+      color: #004D80;
+    }
+
+    .resource-logo--caw {
+      max-width: 100px;
+    }
+
+    .resource-logo--dsawsp {
+      max-width: 140px;
+    }
+
+    .resource-logo--asthma-lung {
+      max-width: 100px;
+    }
+
+    .resource-logo--awair {
+      max-width: 140px;
+    }
+
+    .resource-logo--clean-air-fund {
+      max-width: 140px;
+    }
+
+    .resource-logo--clean-air-london {
+      max-width: 140px;
+    }
+
+    .resource-logo--clientearth {
+      max-width: 140px;
+    }
+
+    .resource-logo--friends-earth {
+      max-width: 140px;
+    }
+
+    .resource-logo--ella-roberta {
+      max-width: 140px;
+    }
+
+    .resource-logo--global-action-plan {
+      max-width: 168px;
+    }
+
+    .resource-logo--greenpeace {
+      max-width: 140px;
+      margin-top: 10px;
+    }
+
+    .resource-logo--healthy-air {
+      max-width: 140px;
+    }
+
+    .resource-logo--iouh {
+      max-width: 140px;
+    }
+
+    .resource-logo--mums {
+      max-width: 100px;
+    }
+
+    .resource-logo--rcpch {
+      max-width: 160px;
+    }
+
+    .resource-logo--rcp {
+      max-width: 140px;
+    }
+
+    .resource-logo--who {
+      max-width: 140px;
+    }
+
+    @media (max-width: 620px) {
+      .resources-shell {
+        padding: 18px;
+      }
+    }
+
+    @media (max-width: 900px) {
+      .resources-frame {
+        padding-right: 0;
+      }
+    }
+
+    @media (max-width: 720px) {
+      .resource-card {
+        grid-template-columns: 1fr;
+        gap: 18px;
+        padding: 10px 20px;
+      }
+
+      .resource-logo-cell {
+        justify-content: flex-start;
+      }
+
+      .resource-logo {
+        max-width: 140px;
+      }
+    }
+  </style>
+</head>
+<body data-page-slug="resources">
+  <div id="cic-sidebar-mount"></div>
+  <main class="chart-shell resources-shell">
+    <div class="resources-frame" id="mainContent">
+      <div class="title-row">
+        <img
+          class="resources-title-link-icon"
+          src="./images/chain-link-icon-ukaqblue-200h.svg"
+          alt=""
+          aria-hidden="true"
+        >
+        <img
+          class="main-title resources-title resources-page-title"
+          src="./images/UK-AQ-resources.svg"
+          alt="Resources"
+        >
+      </div>
+
+      <section class="resources-table-section" aria-label="Organisations focused on wood burning">
+        <h2 class="resource-section-heading">Organisations who focus specifically on pollution from domestic wood burning</h2>
+        <div class="resources-list" role="list">
+          <article class="resource-card" role="listitem">
+            <div class="resource-logo-cell">
+              <a class="resource-logo-link" href="https://www.communitiesagainstwoodsmoke.com/" target="_blank" rel="noopener" aria-label="Visit Communities Against Woodsmoke">
+                <img src="./images/CAW-logo-alpha.svg" alt="Communities Against Woodsmoke logo" class="resource-logo resource-logo--caw">
+              </a>
+            </div>
+            <div class="resource-info">
+              <a class="resource-info-name" href="https://www.communitiesagainstwoodsmoke.com/" target="_blank" rel="noopener">Communities Against Woodsmoke</a>
+              <p class="resource-info-desc">This grassroots organisation supports people experiencing the health impacts from woodsmoke pollution and campaigns on both local and national levels for legislation to reduce solid fuel burning.</p>
+            </div>
+          </article>
+
+          <article class="resource-card" role="listitem">
+            <div class="resource-logo-cell">
+              <a class="resource-logo-link" href="https://www.dsawsp.org/" target="_blank" rel="noopener" aria-label="Visit Doctors and Scientists Against Wood Smoke Pollution">
+                <img src="./images/DSAWSP-2018.svg" alt="Doctors and Scientists Against Wood Smoke Pollution logo" class="resource-logo resource-logo--dsawsp">
+              </a>
+            </div>
+            <div class="resource-info">
+              <a class="resource-info-name" href="https://www.dsawsp.org/" target="_blank" rel="noopener">Doctors and Scientists Against Wood Smoke Pollution (DSAWSP)</a>
+              <p class="resource-info-desc">Formed in 2016, DSAWSP is an international coalition of doctors, scientists and others dedicated to reducing harm to human health and the climate by decreasing wood burning. The Stories section shares personal accounts from people around the world whose health has been affected by wood smoke pollution.<br>The <a class="resource-inline-link" href="https://www.dsawsp.org/resources/wood-smoke-references" target="_blank" rel="noopener">Wood Smoke Pollution References</a> section includes more than 600 links to research studies, articles and other sources providing evidence of the health and environmental harms caused by wood smoke.</p>
+            </div>
+          </article>
+        </div>
+      </section>
+
+      <section class="resources-table-section" aria-label="Organisations campaigning for clean air">
+        <h2 class="resource-section-heading">Organisations campaigning for clean air</h2>
+        <div class="resources-list" role="list">
+          <article class="resource-card" role="listitem">
+            <div class="resource-logo-cell">
+              <a class="resource-logo-link" href="https://www.asthmaandlung.org.uk/support-us/campaign-with-us/clean-air-campaigns" target="_blank" rel="noopener" aria-label="Visit Asthma plus Lung UK">
+                <img src="./images/asthma%2Blung-logo2.svg" alt="Asthma plus Lung UK logo" class="resource-logo resource-logo--asthma-lung">
+              </a>
+            </div>
+            <div class="resource-info">
+              <a class="resource-info-name" href="https://www.asthmaandlung.org.uk/support-us/campaign-with-us/clean-air-campaigns" target="_blank" rel="noopener">Asthma + Lung UK</a>
+              <p class="resource-info-desc">Asthma + Lung UK campaign locally and nationally for urgent action to clean up toxic air. They influence government policy, protect people in the most polluted communities, raise awareness of health impacts, and support those affected by lung conditions through stronger laws, cleaner transport and fairer policies.</p>
+            </div>
+          </article>
+
+          <article class="resource-card" role="listitem">
+            <div class="resource-logo-cell">
+              <a class="resource-logo-link" href="https://www.awairproject.co.uk/" target="_blank" rel="noopener" aria-label="Visit the AWAIR Project">
+                <img src="./images/awair-logo-699x200.svg" alt="AWAIR Project logo" class="resource-logo resource-logo--awair">
+              </a>
+            </div>
+            <div class="resource-info">
+              <a class="resource-info-name" href="https://www.awairproject.co.uk/" target="_blank" rel="noopener">AWAIR Project</a>
+              <p class="resource-info-desc">Run by Imperial College London, the AWAIR project installs solar-powered street displays in neighbourhoods such as Peckham, Gipsy Hill and White City. The screens combine real-time monitoring with high-resolution forecasts to visualise local pollution levels, helping communities raise awareness and understand the health risks posed by dirty air.</p>
+            </div>
+          </article>
+
+          <article class="resource-card" role="listitem">
+            <div class="resource-logo-cell">
+              <a class="resource-logo-link" href="https://www.cleanairfund.org/" target="_blank" rel="noopener" aria-label="Visit Clean Air Fund">
+                <img src="./images/clean_air_fund-logo-820x483.svg" alt="Clean Air Fund logo" class="resource-logo resource-logo--clean-air-fund">
+              </a>
+            </div>
+            <div class="resource-info">
+              <a class="resource-info-name" href="https://www.cleanairfund.org/" target="_blank" rel="noopener">Clean Air Fund</a>
+              <p class="resource-info-desc">A global philanthropic organisation funding clean-air campaigns, research, policy change and community projects around the world to reduce pollution and protect public health.</p>
+            </div>
+          </article>
+
+          <article class="resource-card" role="listitem">
+            <div class="resource-logo-cell">
+              <a class="resource-logo-link" href="https://cleanair.london/" target="_blank" rel="noopener" aria-label="Visit Clean Air London">
+                <img src="./images/clean-air-london-logo.svg" alt="Clean Air London logo" class="resource-logo resource-logo--clean-air-london">
+              </a>
+            </div>
+            <div class="resource-info">
+              <a class="resource-info-name" href="https://cleanair.london/" target="_blank" rel="noopener">Clean Air in London</a>
+              <p class="resource-info-desc">Campaigns for stronger clean-air laws and strict enforcement of legal pollution limits across London. They push for policies that cut emissions from transport, wood burning and other major sources while holding leaders to account for delivering cleaner air in every borough.</p>
+            </div>
+          </article>
+
+          <article class="resource-card" role="listitem">
+            <div class="resource-logo-cell">
+              <a class="resource-logo-link" href="https://www.clientearth.org/" target="_blank" rel="noopener" aria-label="Visit ClientEarth">
+                <img src="./images/ClientEarth-logo-alpha.svg" alt="ClientEarth logo" class="resource-logo resource-logo--clientearth">
+              </a>
+            </div>
+            <div class="resource-info">
+              <a class="resource-info-name" href="https://www.clientearth.org/" target="_blank" rel="noopener">ClientEarth</a>
+              <p class="resource-info-desc">An environmental law charity using legal action to compel governments and companies to clean up air pollution. They have won major cases forcing stronger UK and EU action on illegal pollution levels.</p>
+            </div>
+          </article>
+
+          <article class="resource-card" role="listitem">
+            <div class="resource-logo-cell">
+              <a class="resource-logo-link" href="https://ellaroberta.org/" target="_blank" rel="noopener" aria-label="Visit the Ella Roberta Foundation">
+                <img src="./images/ERF logo.svg" alt="Ella Roberta Foundation logo" class="resource-logo resource-logo--ella-roberta">
+              </a>
+            </div>
+            <div class="resource-info">
+              <a class="resource-info-name" href="https://ellaroberta.org/" target="_blank" rel="noopener">Ella Roberta Foundation</a>
+              <p class="resource-info-desc">Founded in memory of Ella Adoo-Kissi-Debrah, the first person to have air pollution listed as a cause of death, the foundation campaigns to make clean air a human right in the UK. They push for legally binding air-quality standards, raise public awareness of pollution’s health impacts, and train health professionals to recognise and treat air pollution as a medical issue.</p>
+            </div>
+          </article>
+
+          <article class="resource-card" role="listitem">
+            <div class="resource-logo-cell">
+              <a class="resource-logo-link" href="https://friendsoftheearth.uk/climate/air-pollution" target="_blank" rel="noopener" aria-label="Visit Friends of the Earth">
+                <img src="./images/Friends-of-the-earth-logo-720x279.svg" alt="Friends of the Earth logo" class="resource-logo resource-logo--friends-earth">
+              </a>
+            </div>
+            <div class="resource-info">
+              <a class="resource-info-name" href="https://friendsoftheearth.uk/climate/air-pollution" target="_blank" rel="noopener">Friends of the Earth</a>
+              <p class="resource-info-desc">Friends of the Earth UK works for cleaner air by pushing for stronger national targets, supporting local action, and tackling the biggest pollution sources. They help people monitor local air quality, challenge decision-makers, and call for policies such as more Clean Air Zones, faster phase-out of diesel, better public transport and a new Clean Air Act.</p>
+            </div>
+          </article>
+
+          <article class="resource-card" role="listitem">
+            <div class="resource-logo-cell resource-logo-cell--wide">
+              <a class="resource-logo-link" href="https://www.actionforcleanair.org.uk/campaigns/clean-air-night" target="_blank" rel="noopener" aria-label="Visit Global Action Plan">
+                <img src="./images/GAP-CAN-2026.svg" alt="Global Action Plan logo" class="resource-logo resource-logo--global-action-plan">
+              </a>
+            </div>
+            <div class="resource-info">
+              <a class="resource-info-name" href="https://www.actionforcleanair.org.uk/campaigns/clean-air-night" target="_blank" rel="noopener">Global Action Plan / Action for Clean Air</a>
+              <p class="resource-info-desc">Supports communities to measure and understand local pollution, works with businesses to reduce emissions, and runs national public-awareness initiatives such as Clean Air Night.</p>
+            </div>
+          </article>
+
+          <article class="resource-card" role="listitem">
+            <div class="resource-logo-cell">
+              <a class="resource-logo-link" href="https://www.greenpeace.org.uk/news/topic/air-pollution/" target="_blank" rel="noopener" aria-label="Visit Greenpeace">
+                <img src="./images/Greenpeace_logo.svg" alt="Greenpeace logo" class="resource-logo resource-logo--greenpeace">
+              </a>
+            </div>
+            <div class="resource-info">
+              <a class="resource-info-name" href="https://www.greenpeace.org.uk/news/topic/air-pollution/" target="_blank" rel="noopener">Greenpeace</a>
+              <p class="resource-info-desc">Campaigns globally for cleaner transport, reduced fossil-fuel use and environmental justice. Their clean-air work includes investigations, public campaigns and pressure on governments to adopt strong air-quality laws.</p>
+            </div>
+          </article>
+
+          <article class="resource-card" role="listitem">
+            <div class="resource-logo-cell">
+              <a class="resource-logo-link" href="https://www.healthyair.org.uk/" target="_blank" rel="noopener" aria-label="Visit Healthy Air Coalition">
+                <img src="./images/Heathly%20Air%20Coalition%20Logo.svg" alt="Healthy Air Coalition logo" class="resource-logo resource-logo--healthy-air">
+              </a>
+            </div>
+            <div class="resource-info">
+              <a class="resource-info-name" href="https://www.healthyair.org.uk/" target="_blank" rel="noopener">Healthy Air Coalition</a>
+              <p class="resource-info-desc">A collective of leading health, environment and transport organisations with the shared vision of a UK free from toxic air.</p>
+            </div>
+          </article>
+
+          <article class="resource-card" role="listitem">
+            <div class="resource-logo-cell">
+              <a class="resource-logo-link" href="https://urbanhealth.org.uk/insights/health-effects-of-air-pollution" target="_blank" rel="noopener" aria-label="Visit Impact on Urban Health">
+                <img src="./images/IoUH%20Logo-alpha.svg" alt="Impact on Urban Health logo" class="resource-logo resource-logo--iouh">
+              </a>
+            </div>
+            <div class="resource-info">
+              <a class="resource-info-name" href="https://urbanhealth.org.uk/insights/health-effects-of-air-pollution" target="_blank" rel="noopener">Impact on Urban Health</a>
+              <p class="resource-info-desc">Works to improve health in cities by tackling environmental inequalities, including air pollution. They support research, community projects and policy change in high-pollution urban areas.</p>
+            </div>
+          </article>
+
+          <article class="resource-card" role="listitem">
+            <div class="resource-logo-cell">
+              <a class="resource-logo-link" href="https://www.mumsforlungs.org/about-air-pollution" target="_blank" rel="noopener" aria-label="Visit Mums for Lungs">
+                <img src="./images/mums-for-lungs-logo.svg" alt="Mums for Lungs logo" class="resource-logo resource-logo--mums">
+              </a>
+            </div>
+            <div class="resource-info">
+              <a class="resource-info-name" href="https://www.mumsforlungs.org/about-air-pollution" target="_blank" rel="noopener">Mums For Lungs</a>
+              <p class="resource-info-desc">An organisation of people across the UK campaigning for cleaner air to improve children's health. They raise awareness of the health impacts of air pollution and champion effective solutions for tackling it.</p>
+            </div>
+          </article>
+
+          <article class="resource-card" role="listitem">
+            <div class="resource-logo-cell">
+              <a class="resource-logo-link" href="https://www.rcpch.ac.uk/resources/air-pollution-uk-position-statement" target="_blank" rel="noopener" aria-label="Visit the Royal College of Paediatrics and Child Health">
+                <img src="./images/RCPCH-logo-desktop.svg" alt="Royal College of Paediatrics and Child Health logo" class="resource-logo resource-logo--rcpch">
+              </a>
+            </div>
+            <div class="resource-info">
+              <a class="resource-info-name" href="https://www.rcpch.ac.uk/resources/air-pollution-uk-position-statement" target="_blank" rel="noopener">Royal College of Paediatrics and Child Health (RCPCH)</a>
+              <p class="resource-info-desc">Highlights air pollution as a serious threat to children's health and calls for stronger UK policies to reduce exposure. The college advocates for stricter regulation, better monitoring near schools, support in deprived communities, and provides paediatricians with training and resources to address air quality in clinical practice.</p>
+            </div>
+          </article>
+
+          <article class="resource-card" role="listitem">
+            <div class="resource-logo-cell">
+              <a class="resource-logo-link" href="https://www.rcp.ac.uk/news-and-media/news-and-opinion/air-pollution-linked-to-30-000-uk-deaths-in-2025-and-costs-the-economy-and-nhs-billions-warns-rcp/" target="_blank" rel="noopener" aria-label="Visit the Royal College of Physicians">
+                <img src="./images/RCP-logo-blue-200h-alpha.svg" alt="Royal College of Physicians logo" class="resource-logo resource-logo--rcp">
+              </a>
+            </div>
+            <div class="resource-info">
+              <a class="resource-info-name" href="https://www.rcp.ac.uk/news-and-media/news-and-opinion/air-pollution-linked-to-30-000-uk-deaths-in-2025-and-costs-the-economy-and-nhs-billions-warns-rcp/" target="_blank" rel="noopener">Royal College of Physicians</a>
+              <p class="resource-info-desc">Focuses on air quality alongside other key determinants of health, and leads the Inequalities in Health Alliance to make the case for a cross-government strategy that reduces health inequalities and addresses the social drivers of ill health.</p>
+            </div>
+          </article>
+
+          <article class="resource-card" role="listitem">
+            <div class="resource-logo-cell">
+              <a class="resource-logo-link" href="https://www.who.int/health-topics/air-pollution" target="_blank" rel="noopener" aria-label="Visit the World Health Organization">
+                <img src="./images/World_Health_Organization_Logo.svg" alt="World Health Organization logo" class="resource-logo resource-logo--who">
+              </a>
+            </div>
+            <div class="resource-info">
+              <a class="resource-info-name" href="https://www.who.int/health-topics/air-pollution" target="_blank" rel="noopener">World Health Organization (WHO)</a>
+              <p class="resource-info-desc">Sets global air-quality guidelines, publishes research on the health impacts of air pollution, and supports governments worldwide as they work to reduce exposure and improve environmental health.</p>
+            </div>
+          </article>
+        </div>
+      </section>
+    </div>
+  </main>
+
+  <script>
+    (function() {
+      function preventHyphenWordSplits() {
+        const containers = document.querySelectorAll(
+          '.resource-section-heading, .resource-info-name, .resource-info-desc'
+        );
+        containers.forEach((container) => {
+          const walker = document.createTreeWalker(container, NodeFilter.SHOW_TEXT);
+          const textNodes = [];
+          let currentNode = walker.nextNode();
+          while (currentNode) {
+            textNodes.push(currentNode);
+            currentNode = walker.nextNode();
+          }
+
+          textNodes.forEach((node) => {
+            node.nodeValue = node.nodeValue.replace(
+              /([A-Za-z])-([A-Za-z])/g,
+              '$1\u2011$2'
+            );
+          });
+        });
+      }
+
+      document.addEventListener('DOMContentLoaded', preventHyphenWordSplits);
+    })();
+  </script>
+
+  <script>
+    (function() {
+      const MIN_HEIGHT_DELTA = 8;
+      let lastReportedHeight = 0;
+      let heightUpdateTimer = null;
+
+      function measureHeight() {
+        const shell = document.querySelector('.resources-shell');
+        const frame = document.querySelector('.resources-frame');
+        const frameRect = frame ? frame.getBoundingClientRect() : null;
+        const frameHeight = frameRect?.height || frame?.offsetHeight || frame?.scrollHeight || 0;
+        const shellStyles = shell ? window.getComputedStyle(shell) : null;
+        const paddingTop = shellStyles ? parseFloat(shellStyles.paddingTop) || 0 : 0;
+        const paddingBottom = shellStyles ? parseFloat(shellStyles.paddingBottom) || 0 : 0;
+        let measured = frameHeight + paddingTop + paddingBottom;
+
+        if (!Number.isFinite(measured) || measured <= 0) {
+          const body = document.body;
+          measured = Math.max(body?.scrollHeight || 0, 320);
+        }
+
+        return Math.max(Math.ceil(measured), 320);
+      }
+
+      function sendHeightToParent(force = false) {
+        try {
+          if (!(window.parent && window.parent !== window)) {
+            return;
+          }
+          const height = measureHeight();
+          if (!force && lastReportedHeight && Math.abs(height - lastReportedHeight) < MIN_HEIGHT_DELTA) {
+            return;
+          }
+          lastReportedHeight = height;
+          window.parent.postMessage({
+            type: 'contentHeight',
+            chart: 'resources',
+            height
+          }, '*');
+        } catch (error) {
+          console.warn('Unable to send resources height to parent:', error);
+        }
+      }
+
+      function scheduleHeightUpdate(delay = 50, force = false) {
+        if (heightUpdateTimer) {
+          clearTimeout(heightUpdateTimer);
+        }
+        heightUpdateTimer = setTimeout(() => {
+          heightUpdateTimer = null;
+          requestAnimationFrame(() => sendHeightToParent(force));
+        }, delay);
+      }
+
+      document.addEventListener('DOMContentLoaded', () => {
+        const resourceImages = document.querySelectorAll('.resource-logo');
+        resourceImages.forEach(img => {
+          if (img.complete) {
+            scheduleHeightUpdate(40);
+          } else {
+            img.addEventListener('load', () => scheduleHeightUpdate(40), { once: true });
+            img.addEventListener('error', () => scheduleHeightUpdate(40), { once: true });
+          }
+        });
+        scheduleHeightUpdate(30, true);
+
+        if (window.ResizeObserver) {
+          const frame = document.querySelector('.resources-frame') || document.body;
+          const resizeObserver = new ResizeObserver(() => scheduleHeightUpdate(20));
+          if (frame) {
+            resizeObserver.observe(frame);
+          }
+        } else {
+          window.addEventListener('resize', () => scheduleHeightUpdate(20));
+        }
+      });
+
+      window.addEventListener('load', () => {
+        sendHeightToParent(true);
+        scheduleHeightUpdate(40);
+      });
+
+      window.addEventListener('message', event => {
+        const payload = event?.data;
+        if (!payload) {
+          return;
+        }
+
+        if (payload.type === 'requestHeight') {
+          scheduleHeightUpdate(20, true);
+        }
+      });
+    })();
+  </script>
+
+  <script>
+    (function() {
+      function safeNumber(value) {
+        const parsed = parseFloat(value);
+        return Number.isFinite(parsed) ? parsed : value;
+      }
+
+      function logElementMetrics(element, label) {
+        if (!window.__NAEI_LAYOUT_DEBUG__) {
+          return;
+        }
+        if (!element) {
+          console.warn(`Resources layout: missing ${label}`);
+          return;
+        }
+
+        const rect = element.getBoundingClientRect();
+        const styles = window.getComputedStyle(element);
+        console.groupCollapsed(`Resources layout metrics → ${label}`);
+        console.log('rect', {
+          top: Math.round(rect.top),
+          left: Math.round(rect.left),
+          width: Math.round(rect.width),
+          height: Math.round(rect.height)
+        });
+        console.log('margins', {
+          marginTop: safeNumber(styles.marginTop),
+          marginRight: safeNumber(styles.marginRight),
+          marginBottom: safeNumber(styles.marginBottom),
+          marginLeft: safeNumber(styles.marginLeft)
+        });
+        console.log('paddingRight', safeNumber(styles.paddingRight));
+        console.log('font', {
+          family: styles.fontFamily,
+          size: styles.fontSize,
+          weight: styles.fontWeight,
+          lineHeight: styles.lineHeight
+        });
+        console.groupEnd();
+      }
+
+      document.addEventListener('DOMContentLoaded', () => {
+        const title = document.querySelector('.main-title');
+        const shell = document.querySelector('.chart-shell');
+        const frame = document.querySelector('.resources-frame');
+        logElementMetrics(title, 'main-title');
+        logElementMetrics(shell, 'chart-shell');
+        logElementMetrics(frame, 'resources-frame');
+      });
+    })();
+  </script>
+  <script src="../sidebar.js"></script>
+</body>
+</html>

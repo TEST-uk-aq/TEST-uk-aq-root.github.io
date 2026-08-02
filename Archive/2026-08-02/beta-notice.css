@@ -1,0 +1,128 @@
+.ukaq-beta-notice-mount {
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.ukaq-beta-notice {
+  box-sizing: border-box;
+  color: #fff;
+  font-family: inherit;
+}
+
+.ukaq-beta-notice--expanded {
+  display: grid;
+  gap: 0.45rem;
+  width: 100%;
+  padding: 0.75rem 0.9rem;
+  border-radius: 14px;
+  background: rgba(180, 48, 48, 0.82);
+  box-shadow: 0 4px 14px rgba(16, 24, 34, 0.13);
+  font-size: 0.88rem;
+  font-weight: 700;
+  line-height: 1.38;
+}
+
+.ukaq-beta-notice__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+
+.ukaq-beta-notice__title {
+  font-weight: 800;
+}
+
+.ukaq-beta-notice__body {
+  max-width: 76rem;
+}
+
+.ukaq-beta-notice a {
+  color: #fff;
+  font-weight: 800;
+  text-decoration: underline;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 2px;
+}
+
+.ukaq-beta-notice a:hover,
+.ukaq-beta-notice a:focus-visible {
+  color: #fff;
+  text-decoration-thickness: 2px;
+}
+
+.ukaq-beta-notice__dismiss,
+.ukaq-beta-notice__pill {
+  appearance: none;
+  border: 1px solid rgba(16, 24, 34, 0.16);
+  border-radius: 999px;
+  font: inherit;
+  font-size: 0.78rem;
+  font-weight: 800;
+  line-height: 1;
+  cursor: pointer;
+  transition: transform 0.15s ease, box-shadow 0.15s ease, border-color 0.15s ease;
+}
+
+.ukaq-beta-notice__dismiss {
+  flex: 0 0 auto;
+  padding: 0.42rem 0.7rem;
+  background: #fff;
+  color: #1b2a38;
+}
+
+.ukaq-beta-notice__pill {
+  display: inline-flex;
+  align-items: center;
+  width: auto;
+  padding: 0.52rem 0.78rem;
+  background: rgba(180, 48, 48, 0.82);
+  color: #fff;
+  box-shadow: 0 2px 8px rgba(16, 24, 34, 0.12);
+}
+
+.ukaq-beta-notice__dismiss:hover,
+.ukaq-beta-notice__pill:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 8px 18px rgba(16, 24, 34, 0.16);
+  border-color: rgba(180, 48, 48, 0.9);
+}
+
+.ukaq-beta-notice__dismiss:active,
+.ukaq-beta-notice__pill:active {
+  transform: translateY(0);
+  box-shadow: none;
+}
+
+.ukaq-beta-notice__dismiss:focus-visible,
+.ukaq-beta-notice__pill:focus-visible {
+  outline: 3px solid rgba(60, 120, 172, 0.45);
+  outline-offset: 3px;
+}
+
+.ukaq-beta-notice-mount--narrow .ukaq-beta-notice--expanded {
+  max-width: 640px;
+  margin-inline: auto;
+}
+
+@media (max-width: 640px) {
+  .ukaq-beta-notice--expanded {
+    padding: 0.7rem 0.8rem;
+    font-size: 0.82rem;
+  }
+}
+
+.home-main > .ukaq-beta-notice-mount,
+main > header + .ukaq-beta-notice-mount,
+.resources-frame > .ukaq-beta-notice-mount,
+.contact-content > .ukaq-beta-notice-mount {
+  margin-bottom: 1rem;
+}
+
+.resources-frame > .ukaq-beta-notice-mount {
+  margin-top: -0.5rem;
+}
+
+.contact-content > .ukaq-beta-notice-mount {
+  margin-bottom: 1.25rem;
+}

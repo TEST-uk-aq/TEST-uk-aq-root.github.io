@@ -22965,8 +22965,14 @@
     loadChartData("window-change");
   });
   backButton?.addEventListener("click", exit);
-  window.addEventListener("pollutantchange", () => {
-    if (state.isChartMode) window.setTimeout(() => syncFromMap(state.mapKey, { preserveChartMode: true }), 0);
+  window.addEventListener("pollutantchange", (event) => {
+    if (!state.isChartMode) return;
+    const nextPollutant = normalizeAqiSupportedPollutant(event?.detail?.pollutant || "");
+    if (nextPollutant) state.chartModeTargetPollutant = nextPollutant;
+    if (state.chartModePollutant && nextPollutant && state.chartModePollutant !== nextPollutant) {
+      state.pendingLoadReason = "pollutant-change";
+      state.pendingLoadOptions = null;
+    }
   });
   window.addEventListener("resize", () => {
     if (state.isChartMode) loadChartData("resize");

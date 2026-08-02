@@ -227,14 +227,10 @@
       z-index: 10011;
       display: block;
       border-radius: 16px;
-      overflow: visible;
-      cursor: pointer;
+      overflow: hidden;
+      transition: transform 0.2s ease, box-shadow 0.2s ease;
     }
-    #ukaq-home-logo:hover { cursor: pointer; }
-    #ukaq-home-logo:focus-visible {
-      outline: 3px solid rgba(60, 120, 172, 0.55);
-      outline-offset: 4px;
-    }
+    #ukaq-home-logo:hover { transform: translateY(-1px); box-shadow: 0 8px 14px rgba(20,34,37,0.12); }
     #ukaq-home-logo img {
       width: 104px; height: 104px;
       object-fit: contain; display: block;

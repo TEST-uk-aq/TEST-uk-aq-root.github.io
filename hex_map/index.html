@@ -123,15 +123,20 @@
         position: relative;
         padding: 34px 28px 64px;
         display: grid;
-        gap: 20px;
+        gap: 6px;
       }
 
       header {
         display: flex;
         align-items: center;
         gap: 24px;
-        padding-top: 0;
-        margin-bottom: 14px;
+        min-height: 92px;
+        padding: 0 132px 0 0;
+        margin-bottom: 0;
+      }
+
+      .hex-map-page main > header + .ukaq-beta-notice-mount {
+        margin-bottom: 0;
       }
 
       .logo {
@@ -2534,7 +2539,7 @@
         }
 
         header {
-          margin-bottom: 24px;
+          margin-bottom: 0;
         }
 
         .card {
@@ -5076,7 +5081,7 @@
     </style>
     <link rel="stylesheet" href="/beta-notice.css">
 </head>
-  <body>
+  <body class="hex-map-page">
     <div id="cic-sidebar-mount"></div>
     <script src="/sidebar.js"></script>
     <main>

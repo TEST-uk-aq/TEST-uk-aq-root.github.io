@@ -31,7 +31,7 @@
     <style>
       :root {
         --ukaq-sidebar-offset: 0px;
-        --ukaq-header-h: 122px;
+        --ukaq-chrome-h: 122px;
       }
 
       html,
@@ -53,18 +53,25 @@
         --ukaq-sidebar-offset: 0px;
       }
 
-      #uk-aq-header {
+      #uk-aq-page-chrome {
         position: fixed;
         top: 0; left: var(--ukaq-sidebar-offset); right: 0;
-        height: var(--ukaq-header-h);
         z-index: 250;
         background: #ffffff;
         border-bottom: 1px solid #e4e6ea;
         box-sizing: border-box;
+        display: grid;
+        gap: 6px;
+        padding: 12px 12px 6px;
+      }
+
+      #uk-aq-header {
+        min-height: 104px;
+        box-sizing: border-box;
         display: flex;
         align-items: center;
         gap: 24px;
-        padding: 0 12px;
+        padding: 0 132px 0 0;
       }
       #uk-aq-header .logo {
         height: 54px;
@@ -79,21 +86,19 @@
         margin-top: 0;
       }
 
-      .sensor-map-overlay-stack {
+      .sensor-map-controls {
         position: fixed;
-        top: calc(var(--ukaq-header-h) + 12px);
+        top: calc(var(--ukaq-chrome-h) + 12px);
         left: calc(var(--ukaq-sidebar-offset) + 12px);
         right: 12px;
         z-index: 1000;
-        display: grid;
-        gap: 12px;
         max-width: 920px;
         box-sizing: border-box;
       }
 
       #map {
         position: absolute;
-        top: var(--ukaq-header-h); left: var(--ukaq-sidebar-offset); right: 0; bottom: 0;
+        top: var(--ukaq-chrome-h); left: var(--ukaq-sidebar-offset); right: 0; bottom: 0;
         background: #f4f7f8;
       }
 
@@ -219,11 +224,10 @@
       }
 
       @media (max-width: 720px) {
-        .sensor-map-overlay-stack {
-          top: calc(var(--ukaq-header-h) + 8px);
+        .sensor-map-controls {
+          top: calc(var(--ukaq-chrome-h) + 8px);
           left: calc(var(--ukaq-sidebar-offset) + 8px);
           right: 8px;
-          gap: 8px;
         }
 
         .control-bar {
@@ -241,11 +245,13 @@
   <body>
     <div id="cic-sidebar-mount"></div>
     <script src="/sidebar.js"></script>
-    <header id="uk-aq-header">
-      <img src="/images/UK-AQ-sensor-map-1line.svg" alt="Sensor Map" class="page-title" />
-    </header>
-    <div class="sensor-map-overlay-stack">
+    <div id="uk-aq-page-chrome">
+      <header id="uk-aq-header">
+        <img src="/images/UK-AQ-sensor-map-1line.svg" alt="Sensor Map" class="page-title" />
+      </header>
       <div class="ukaq-beta-notice-mount" data-ukaq-beta-notice-mount></div>
+    </div>
+    <div class="sensor-map-controls">
       <div class="control-bar" role="region" aria-label="Map controls">
       <div class="bar-top">
         <span class="spacer"></span>
@@ -331,6 +337,23 @@
           maxZoom: 19,
           attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
         }).addTo(map);
+
+        const pageChrome = document.getElementById("uk-aq-page-chrome");
+        function syncPageChromeHeight() {
+          if (!pageChrome) return;
+          const chromeHeight = Math.ceil(pageChrome.getBoundingClientRect().height);
+          document.documentElement.style.setProperty("--ukaq-chrome-h", `${chromeHeight}px`);
+          window.requestAnimationFrame(() => map.invalidateSize());
+        }
+        if (pageChrome) {
+          syncPageChromeHeight();
+          if ("ResizeObserver" in window) {
+            const pageChromeObserver = new ResizeObserver(syncPageChromeHeight);
+            pageChromeObserver.observe(pageChrome);
+          } else {
+            window.addEventListener("resize", syncPageChromeHeight);
+          }
+        }
 
         const markerLayer = L.layerGroup().addTo(map);
         const markerRenderer = L.canvas({ padding: 0.25 });

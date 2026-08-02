@@ -16846,6 +16846,7 @@
     mapKey: null,
     chartModeAreaCode: null,
     chartModeSessionIdentity: null,
+    chartModePollutant: null,
     lastChartModeSessionIdentity: null,
     chartModeSelectedSensors: new Set(),
     selectedEntries: new Map(),
@@ -18807,6 +18808,10 @@
     };
   }
 
+  function getChartContextPollutant(context = null) {
+    return normalizeAqiSupportedPollutant(context?.pollutant || getCurrentContext()?.pollutant || "") || "";
+  }
+
   function syncChartSortHeaders(context = null) {
     const dom = domByMap[state.mapKey];
     if (!dom) return;
@@ -18866,6 +18871,7 @@
     state.mapKey = mapKey;
     state.chartModeAreaCode = nextAreaCode;
     state.chartModeSessionIdentity = nextSession.identity;
+    state.chartModePollutant = getChartContextPollutant(context);
     state.lastChartModeSessionIdentity = nextSession.identity;
     state.visibleEntries = entries;
     const requestedSensorIdRaw = options.initialSensorId ?? options.initialStationId;
@@ -18892,6 +18898,7 @@
     state.mapKey = null;
     state.chartModeAreaCode = null;
     state.chartModeSessionIdentity = null;
+    state.chartModePollutant = null;
     state.chartModeSelectedSensors.clear();
     state.selectedEntries.clear();
     state.selectedAqiSensorId = null;
@@ -18923,6 +18930,10 @@
       return;
     }
     const entries = (context.entries || []).map(normalizeEntry).filter(Boolean);
+    const previousPollutant = state.chartModePollutant;
+    const nextPollutant = getChartContextPollutant(context);
+    const pollutantChanged = Boolean(previousPollutant && nextPollutant && previousPollutant !== nextPollutant);
+    state.chartModePollutant = nextPollutant;
     state.visibleEntries = entries;
     rememberVisibleSelectedEntries(entries);
     if (!state.chartModeSelectedSensors.size && entries.length) {
@@ -18936,7 +18947,7 @@
     notifySelectionChange();
     // updateChart: false lets the caller handle the chart refresh (e.g. delta-only refresh).
     if (options.updateChart !== false) {
-      loadChartData("sensor-change");
+      loadChartData(pollutantChanged ? "pollutant-change" : "sensor-change");
     }
   }
 
@@ -20134,7 +20145,8 @@
       const frameIdentityValid = !!(cf
         && cf.areaCode === state.chartModeAreaCode
         && cf.sessionIdentity === state.chartModeSessionIdentity
-        && cf.mapKey === state.mapKey);
+        && cf.mapKey === state.mapKey
+        && (reason !== "pollutant-change" || cf.pollutant === state.chartModePollutant));
       const frameSizeChanged = !!(frameIdentityValid
         && (cf.width !== svgWidth || cf.height !== svgHeight));
       const frameValid = frameIdentityValid;
@@ -21322,7 +21334,8 @@
       const frameIdentityValid = Boolean(existing
         && existing.areaCode === state.chartModeAreaCode
         && existing.sessionIdentity === state.chartModeSessionIdentity
-        && existing.mapKey === state.mapKey);
+        && existing.mapKey === state.mapKey
+        && (reason !== "pollutant-change" || existing.pollutant === state.chartModePollutant));
       const frameSizeChanged = Boolean(frameIdentityValid
         && (existing.width !== svgWidth || existing.height !== svgHeight));
       const frameValid = frameIdentityValid;
@@ -22558,6 +22571,7 @@
       frame: { width, height, margin, startMs: range.startMs, endMs: range.endMs },
       areaCode: state.chartModeAreaCode,
       sessionIdentity: state.chartModeSessionIdentity,
+      pollutant: state.chartModePollutant,
       mapKey: state.mapKey,
       animFrameId: null,
       currentGuideline: null,

@@ -29,10 +29,13 @@
       crossorigin="anonymous"
     />
     <style>
-      :root {
-        --ukaq-sidebar-offset: 0px;
-        --ukaq-chrome-h: 122px;
-      }
+    :root {
+      --ukaq-sidebar-offset: 0px;
+      --ukaq-chrome-h: 122px;
+      --ukaq-controls-top: 12px;
+      --ukaq-controls-h: 0px;
+      --ukaq-controls-gap: 8px;
+	}
 
       html,
       body {
@@ -86,15 +89,15 @@
         margin-top: 0;
       }
 
-      .sensor-map-controls {
-        position: fixed;
-        top: calc(var(--ukaq-chrome-h) + 12px);
-        left: calc(var(--ukaq-sidebar-offset) + 12px);
-        right: 12px;
-        z-index: 1000;
-        max-width: 920px;
-        box-sizing: border-box;
-      }
+	  .sensor-map-controls {
+	    position: fixed;
+	    top: calc(var(--ukaq-chrome-h) + var(--ukaq-controls-top));
+	    left: calc(var(--ukaq-sidebar-offset) + 12px);
+	    right: 12px;
+	    z-index: 1000;
+	    max-width: 920px;
+	    box-sizing: border-box;
+	  }
 
       #map {
         position: absolute;
@@ -117,6 +120,16 @@
         gap: 8px;
       }
 
+	  .leaflet-top.leaflet-left {
+	    top: calc(
+	      var(--ukaq-controls-top)
+	      + var(--ukaq-controls-h)
+	      + var(--ukaq-controls-gap)
+	    );
+	  }
+	  .leaflet-top.leaflet-left .leaflet-control-zoom {
+	    margin-top: 0;
+	  }
       .bar-top,
       .bar-bottom {
         display: flex;
@@ -223,16 +236,20 @@
         color: #334449;
       }
 
-      @media (max-width: 720px) {
-        .sensor-map-controls {
-          top: calc(var(--ukaq-chrome-h) + 8px);
-          left: calc(var(--ukaq-sidebar-offset) + 8px);
-          right: 8px;
-        }
+	  @media (max-width: 720px) {
+	    :root {
+	      --ukaq-controls-top: 8px;
+	      --ukaq-controls-gap: 8px;
+	    }
 
-        .control-bar {
-          padding: 8px 10px;
-        }
+	    .sensor-map-controls {
+	      left: calc(var(--ukaq-sidebar-offset) + 8px);
+	      right: 8px;
+	    }
+
+	    .control-bar {
+	      padding: 8px 10px;
+	    }
 
         #endpoint-hint {
           white-space: normal;
@@ -339,12 +356,25 @@
         }).addTo(map);
 
         const pageChrome = document.getElementById("uk-aq-page-chrome");
+        const controlBar = document.querySelector(".control-bar");
         function syncPageChromeHeight() {
           if (!pageChrome) return;
           const chromeHeight = Math.ceil(pageChrome.getBoundingClientRect().height);
           document.documentElement.style.setProperty("--ukaq-chrome-h", `${chromeHeight}px`);
           window.requestAnimationFrame(() => map.invalidateSize());
         }
+		function syncControlBarHeight() {
+		  if (!controlBar) return;
+
+		  const controlHeight = Math.ceil(
+		    controlBar.getBoundingClientRect().height
+		  );
+
+		  document.documentElement.style.setProperty(
+		    "--ukaq-controls-h",
+		    `${controlHeight}px`
+		  );
+		}
         if (pageChrome) {
           syncPageChromeHeight();
           if ("ResizeObserver" in window) {
@@ -354,6 +384,17 @@
             window.addEventListener("resize", syncPageChromeHeight);
           }
         }
+		
+		if (controlBar) {
+		  syncControlBarHeight();
+
+		  if ("ResizeObserver" in window) {
+		    const controlBarObserver = new ResizeObserver(syncControlBarHeight);
+		    controlBarObserver.observe(controlBar);
+		  } else {
+		    window.addEventListener("resize", syncControlBarHeight);
+		  }
+		}
 
         const markerLayer = L.layerGroup().addTo(map);
         const markerRenderer = L.canvas({ padding: 0.25 });

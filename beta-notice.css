@@ -34,7 +34,7 @@
 }
 
 .ukaq-beta-notice__body {
-  max-width: 76rem;
+  max-width: none;
 }
 
 .ukaq-beta-notice a {

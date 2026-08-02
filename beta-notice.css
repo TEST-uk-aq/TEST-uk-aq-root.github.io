@@ -110,3 +110,7 @@
 .home-main > .ukaq-beta-notice-mount {
   margin-bottom: -10px;
 }
+
+main > header + .ukaq-beta-notice-mount {
+  margin-bottom: 1rem;
+}

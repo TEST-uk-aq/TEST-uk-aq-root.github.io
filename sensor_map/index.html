@@ -79,13 +79,16 @@
         margin-top: 0;
       }
 
-      .sensor-map-beta-row {
+      .sensor-map-overlay-stack {
         position: fixed;
         top: calc(var(--ukaq-header-h) + 12px);
         left: calc(var(--ukaq-sidebar-offset) + 12px);
         right: 12px;
-        z-index: 1001;
+        z-index: 1000;
+        display: grid;
+        gap: 12px;
         max-width: 920px;
+        box-sizing: border-box;
       }
 
       #map {
@@ -95,12 +98,11 @@
       }
 
       .control-bar {
-        position: fixed;
-        top: calc(var(--ukaq-header-h) + 112px);
-        left: calc(var(--ukaq-sidebar-offset) + 12px);
-        right: 12px;
-        z-index: 1000;
+        position: relative;
+        z-index: 0;
+        width: 100%;
         max-width: 920px;
+        box-sizing: border-box;
         background: rgba(255, 255, 255, 0.96);
         border: 1px solid rgba(20, 34, 37, 0.14);
         border-radius: 12px;
@@ -217,16 +219,14 @@
       }
 
       @media (max-width: 720px) {
-        .sensor-map-beta-row {
+        .sensor-map-overlay-stack {
           top: calc(var(--ukaq-header-h) + 8px);
           left: calc(var(--ukaq-sidebar-offset) + 8px);
           right: 8px;
+          gap: 8px;
         }
 
         .control-bar {
-          top: calc(var(--ukaq-header-h) + 120px);
-          left: calc(var(--ukaq-sidebar-offset) + 8px);
-          right: 8px;
           padding: 8px 10px;
         }
 
@@ -244,9 +244,9 @@
     <header id="uk-aq-header">
       <img src="/images/UK-AQ-sensor-map-1line.svg" alt="Sensor Map" class="page-title" />
     </header>
-    <div class="sensor-map-beta-row"><div class="ukaq-beta-notice-mount" data-ukaq-beta-notice-mount></div></div>
-    <div id="map" role="application" aria-label="UK AQ sensor map"></div>
-    <div class="control-bar" role="region" aria-label="Map controls">
+    <div class="sensor-map-overlay-stack">
+      <div class="ukaq-beta-notice-mount" data-ukaq-beta-notice-mount></div>
+      <div class="control-bar" role="region" aria-label="Map controls">
       <div class="bar-top">
         <span class="spacer"></span>
         <label for="reading-scope">Readings</label>
@@ -273,7 +273,10 @@
       </div>
       <div id="endpoint-hint"></div>
       <div id="error"></div>
+      </div>
     </div>
+    <div id="map" role="application" aria-label="UK AQ sensor map"></div>
+    <div id="log" hidden></div>
 
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" crossorigin="anonymous"></script>
     <script src="/js/uk-aq-cache-auth.js"></script>

@@ -387,7 +387,7 @@
       circle.hidden = !row && !showInactiveCircle;
       unavailable.hidden = Boolean(row) || showInactiveCircle;
       scale.hidden = !row;
-      actionsContainer.hidden = !row;
+      actionsContainer?.toggleAttribute("hidden", !row);
       circle.classList.toggle("pollutant-circle--inactive", showInactiveCircle);
       unit.hidden = showInactiveCircle;
       if (row) {

@@ -16847,6 +16847,7 @@
     chartModeAreaCode: null,
     chartModeSessionIdentity: null,
     chartModePollutant: null,
+    chartModeTargetPollutant: null,
     lastChartModeSessionIdentity: null,
     chartModeSelectedSensors: new Set(),
     selectedEntries: new Map(),
@@ -17102,24 +17103,54 @@
     return normalized;
   }
 
-  function rememberVisibleSelectedEntries(entries = state.visibleEntries) {
+  function getTargetChartPollutant(context = getCurrentContext()) {
+    return getChartContextPollutant(context) || state.chartModeTargetPollutant || state.chartModePollutant || null;
+  }
+
+  function entryMatchesChartPollutant(entry, pollutant = getTargetChartPollutant()) {
+    if (!pollutant) return true;
+    const entryPollutant = normalizeAqiSupportedPollutant(entry?.pollutant || "");
+    return entryPollutant === pollutant;
+  }
+
+  function rememberVisibleSelectedEntries(entries = state.visibleEntries, pollutant = getTargetChartPollutant()) {
     (Array.isArray(entries) ? entries : []).forEach((entry) => {
       const stationId = String(entry?.stationId || "").trim();
-      if (stationId && state.chartModeSelectedSensors.has(stationId)) rememberSelectedEntry(entry);
+      if (stationId && state.chartModeSelectedSensors.has(stationId) && entryMatchesChartPollutant(entry, pollutant)) rememberSelectedEntry(entry);
     });
+  }
+
+  function rebuildSelectedEntriesForPollutant(entries = state.visibleEntries, pollutant = getTargetChartPollutant()) {
+    const rebuilt = new Map();
+    const targetStationIds = new Set();
+    (Array.isArray(entries) ? entries : []).forEach((entry) => {
+      const normalized = normalizeEntry(entry);
+      if (!normalized?.stationId || !entryMatchesChartPollutant(normalized, pollutant)) return;
+      targetStationIds.add(normalized.stationId);
+      if (state.chartModeSelectedSensors.has(normalized.stationId)) rebuilt.set(normalized.stationId, normalized);
+    });
+    if (targetStationIds.size) {
+      Array.from(state.chartModeSelectedSensors).forEach((stationId) => {
+        if (!targetStationIds.has(stationId)) state.chartModeSelectedSensors.delete(stationId);
+      });
+    }
+    state.selectedEntries = rebuilt;
   }
 
   function resolveSelectedChartEntries() {
     const loader = window.UkAqStationHistoryLoader;
     const selectedIds = getSelectedSensorIdsOrdered();
+    const targetPollutant = getTargetChartPollutant();
+    const visibleEntries = (state.visibleEntries || []).filter((entry) => entryMatchesChartPollutant(entry, targetPollutant));
+    const retainedEntries = new Map(Array.from(state.selectedEntries || new Map()).filter(([, entry]) => entryMatchesChartPollutant(entry, targetPollutant)));
     if (loader?.resolveSelectedStationEntries) {
-      return loader.resolveSelectedStationEntries(selectedIds, state.visibleEntries, state.selectedEntries);
+      return loader.resolveSelectedStationEntries(selectedIds, visibleEntries, retainedEntries);
     }
-    const visibleByStationId = new Map((state.visibleEntries || []).map((entry) => [String(entry?.stationId || "").trim(), entry]));
+    const visibleByStationId = new Map(visibleEntries.map((entry) => [String(entry?.stationId || "").trim(), entry]));
     const entries = [];
     const unresolvedIds = [];
     selectedIds.forEach((stationId) => {
-      const entry = visibleByStationId.get(stationId) || state.selectedEntries.get(stationId);
+      const entry = visibleByStationId.get(stationId) || retainedEntries.get(stationId);
       if (entry) entries.push(entry);
       else unresolvedIds.push(stationId);
     });
@@ -18872,6 +18903,7 @@
     state.chartModeAreaCode = nextAreaCode;
     state.chartModeSessionIdentity = nextSession.identity;
     state.chartModePollutant = getChartContextPollutant(context);
+    state.chartModeTargetPollutant = state.chartModePollutant;
     state.lastChartModeSessionIdentity = nextSession.identity;
     state.visibleEntries = entries;
     const requestedSensorIdRaw = options.initialSensorId ?? options.initialStationId;
@@ -18899,6 +18931,7 @@
     state.chartModeAreaCode = null;
     state.chartModeSessionIdentity = null;
     state.chartModePollutant = null;
+    state.chartModeTargetPollutant = null;
     state.chartModeSelectedSensors.clear();
     state.selectedEntries.clear();
     state.selectedAqiSensorId = null;
@@ -18930,12 +18963,18 @@
       return;
     }
     const entries = (context.entries || []).map(normalizeEntry).filter(Boolean);
-    const previousPollutant = state.chartModePollutant;
+    const renderedPollutant = state.chartModePollutant;
+    const previousTargetPollutant = state.chartModeTargetPollutant || renderedPollutant;
     const nextPollutant = getChartContextPollutant(context);
-    const pollutantChanged = Boolean(previousPollutant && nextPollutant && previousPollutant !== nextPollutant);
-    state.chartModePollutant = nextPollutant;
+    const pollutantChanged = Boolean(renderedPollutant && nextPollutant && renderedPollutant !== nextPollutant);
+    const targetPollutantChanged = Boolean(previousTargetPollutant && nextPollutant && previousTargetPollutant !== nextPollutant);
+    state.chartModeTargetPollutant = nextPollutant || previousTargetPollutant || null;
     state.visibleEntries = entries;
-    rememberVisibleSelectedEntries(entries);
+    if (pollutantChanged || targetPollutantChanged) {
+      rebuildSelectedEntriesForPollutant(entries, state.chartModeTargetPollutant);
+    } else {
+      rememberVisibleSelectedEntries(entries, state.chartModeTargetPollutant);
+    }
     if (!state.chartModeSelectedSensors.size && entries.length) {
       state.chartModeSelectedSensors.add(entries[0].stationId);
       rememberSelectedEntry(entries[0]);
@@ -18947,7 +18986,16 @@
     notifySelectionChange();
     // updateChart: false lets the caller handle the chart refresh (e.g. delta-only refresh).
     if (options.updateChart !== false) {
-      loadChartData(pollutantChanged ? "pollutant-change" : "sensor-change");
+      const pendingPollutantChange = state.pendingLoadReason === "pollutant-change";
+      loadChartData((pollutantChanged || targetPollutantChanged || pendingPollutantChange) ? "pollutant-change" : "sensor-change");
+    } else if (pollutantChanged || targetPollutantChanged || state.pendingLoadReason === "pollutant-change") {
+      state.pendingLoadReason = "pollutant-change";
+      state.pendingLoadOptions = null;
+      window.setTimeout(() => {
+        if (state.isChartMode && state.mapKey === mapKey && state.pendingLoadReason === "pollutant-change") {
+          syncFromMap(mapKey, { preserveChartMode: true });
+        }
+      }, 0);
     }
   }
 
@@ -20029,11 +20077,12 @@
     return domainRange || normalizeDisplayedChartRange(chartFrame?.frame);
   }
 
-  function isCurrentChartFrame(chartFrame) {
+  function isCurrentChartFrame(chartFrame, pollutant = getTargetChartPollutant()) {
     return Boolean(chartFrame
       && chartFrame.areaCode === state.chartModeAreaCode
       && chartFrame.sessionIdentity === state.chartModeSessionIdentity
-      && chartFrame.mapKey === state.mapKey);
+      && chartFrame.mapKey === state.mapKey
+      && (!pollutant || chartFrame.pollutant === pollutant));
   }
 
   function isAqiSourceRangeSettled(entry, displayedRange) {
@@ -20057,6 +20106,11 @@
   }
 
   async function loadChartData(reason = "sensor-change", options = {}) {
+    if (reason === "pollutant-change") {
+      state.pendingLoadReason = null;
+      state.pendingLoadOptions = null;
+      state.chartModePollutant = state.chartModeTargetPollutant || state.chartModePollutant;
+    }
     if (reason !== "resize" && reason !== "aqi-source-change") {
       aqiSourceController.invalidate();
     }
@@ -20078,7 +20132,9 @@
         state.pendingLoadOptions = null;
         state.loadAbortController?.abort();
       } else {
-        state.pendingLoadReason = reason;
+        state.pendingLoadReason = state.pendingLoadReason === "pollutant-change" || reason === "pollutant-change"
+          ? "pollutant-change"
+          : reason;
         state.pendingLoadOptions = options;
         state.loadAbortController?.abort();
         return;
@@ -20146,7 +20202,7 @@
         && cf.areaCode === state.chartModeAreaCode
         && cf.sessionIdentity === state.chartModeSessionIdentity
         && cf.mapKey === state.mapKey
-        && (reason !== "pollutant-change" || cf.pollutant === state.chartModePollutant));
+        && cf.pollutant === getTargetChartPollutant());
       const frameSizeChanged = !!(frameIdentityValid
         && (cf.width !== svgWidth || cf.height !== svgHeight));
       const frameValid = frameIdentityValid;
@@ -21267,7 +21323,9 @@
         state.pendingLoadOptions = null;
         state.loadAbortController?.abort();
       } else {
-        state.pendingLoadReason = reason;
+        state.pendingLoadReason = state.pendingLoadReason === "pollutant-change" || reason === "pollutant-change"
+          ? "pollutant-change"
+          : reason;
         state.pendingLoadOptions = options;
         state.loadAbortController?.abort();
         return;
@@ -21335,7 +21393,7 @@
         && existing.areaCode === state.chartModeAreaCode
         && existing.sessionIdentity === state.chartModeSessionIdentity
         && existing.mapKey === state.mapKey
-        && (reason !== "pollutant-change" || existing.pollutant === state.chartModePollutant));
+        && existing.pollutant === getTargetChartPollutant());
       const frameSizeChanged = Boolean(frameIdentityValid
         && (existing.width !== svgWidth || existing.height !== svgHeight));
       const frameValid = frameIdentityValid;
@@ -22571,7 +22629,7 @@
       frame: { width, height, margin, startMs: range.startMs, endMs: range.endMs },
       areaCode: state.chartModeAreaCode,
       sessionIdentity: state.chartModeSessionIdentity,
-      pollutant: state.chartModePollutant,
+      pollutant: getTargetChartPollutant(),
       mapKey: state.mapKey,
       animFrameId: null,
       currentGuideline: null,

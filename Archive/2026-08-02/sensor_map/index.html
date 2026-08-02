@@ -79,15 +79,6 @@
         margin-top: 0;
       }
 
-      .sensor-map-beta-row {
-        position: fixed;
-        top: calc(var(--ukaq-header-h) + 12px);
-        left: calc(var(--ukaq-sidebar-offset) + 12px);
-        right: 12px;
-        z-index: 1001;
-        max-width: 920px;
-      }
-
       #map {
         position: absolute;
         top: var(--ukaq-header-h); left: var(--ukaq-sidebar-offset); right: 0; bottom: 0;
@@ -96,7 +87,7 @@
 
       .control-bar {
         position: fixed;
-        top: calc(var(--ukaq-header-h) + 112px);
+        top: calc(var(--ukaq-header-h) + 12px);
         left: calc(var(--ukaq-sidebar-offset) + 12px);
         right: 12px;
         z-index: 1000;
@@ -217,14 +208,8 @@
       }
 
       @media (max-width: 720px) {
-        .sensor-map-beta-row {
-          top: calc(var(--ukaq-header-h) + 8px);
-          left: calc(var(--ukaq-sidebar-offset) + 8px);
-          right: 8px;
-        }
-
         .control-bar {
-          top: calc(var(--ukaq-header-h) + 120px);
+          top: calc(var(--ukaq-header-h) + 8px);
           left: calc(var(--ukaq-sidebar-offset) + 8px);
           right: 8px;
           padding: 8px 10px;
@@ -236,15 +221,13 @@
         }
       }
     </style>
-    <link rel="stylesheet" href="/beta-notice.css">
-</head>
+  </head>
   <body>
     <div id="cic-sidebar-mount"></div>
     <script src="/sidebar.js"></script>
     <header id="uk-aq-header">
       <img src="/images/UK-AQ-sensor-map-1line.svg" alt="Sensor Map" class="page-title" />
     </header>
-    <div class="sensor-map-beta-row"><div class="ukaq-beta-notice-mount" data-ukaq-beta-notice-mount></div></div>
     <div id="map" role="application" aria-label="UK AQ sensor map"></div>
     <div class="control-bar" role="region" aria-label="Map controls">
       <div class="bar-top">
@@ -1296,6 +1279,5 @@
         loadData();
       })();
     </script>
-    <script src="/beta-notice.js"></script>
-</body>
+  </body>
 </html>

@@ -6433,8 +6433,6 @@
     <script src="/station_chart/station-chart-cache.js"></script>
     <script src="/station_chart/station-chart-diagnostics.js"></script>
     <script src="/station_chart/aqi-source-controller.js"></script>
-    <script src="/station_chart/pollutant-context-controller.js"></script>
-    <script src="/hex_map/hex-map-station-chart-adapter.js"></script>
     <script src="/station-history-loader.js"></script>
     <script>
       // ── Top summary boxes — shared updater ───────────────────────────────────
@@ -7353,7 +7351,6 @@
       let scopedLatestRowsAllWindow = [];
       let latestRows = [];
       let latestPollutant = null;
-      let chartDataStatus = "loading";
       let ukRefreshTimer = null;
       let ukWasHidden = true;
       let ukBootstrapReady = false;
@@ -8481,7 +8478,6 @@
         const cachedAllRows = getPollutantCache(getLatestCacheKey(activePollutant, "all"));
         baseLatestRowsAllWindow = cachedAllRows?.latestRows || cached.latestRows || [];
         latestPollutant = cached.latestPollutant || activePollutant;
-        chartDataStatus = latestPollutant === activePollutant ? "ready" : "loading";
         const networkRowsForWindow = getNetworkRowsForWindow();
         const windowNetworkDefs = buildNetworkDefs(networkRowsForWindow);
         const coverageByCode = buildNetworkCoverageByCode(networkRowsForWindow);
@@ -8523,7 +8519,6 @@
           return;
         }
         activePollutant = normalized;
-        chartDataStatus = "loading";
         updatePollutantLabels();
         syncPollutantButtons();
         setQueryParam("pollutant", activePollutant);
@@ -10697,7 +10692,6 @@
           renderMap();
           updateDetailsPanel();
           persistNetworkSelection();
-          window.hexChartMode?.syncFromMap?.("uk", { preserveChartMode: true, updateChart: false });
           return;
         }
         const networkCodes = getActiveNetworkCodes();
@@ -10959,7 +10953,6 @@
           return;
         }
         const requestPollutant = activePollutant;
-        chartDataStatus = "loading";
         const requestWindow = currentWindow;
         const requestId = ++latestLoadId;
         const timingId = nextHexMapTimingId();
@@ -10982,25 +10975,21 @@
           ? networkInputs.every((input) => input.checked)
           : storedSelection.defaultAll;
         if (!REST_URL) {
-          chartDataStatus = "failed";
           if (errorEl) {
             errorEl.textContent = "Missing cache endpoint base URL. Provide ?cache_base=... if needed.";
             errorEl.hidden = false;
           }
           setStatus("Error");
           setMapLoading(false);
-          window.hexChartMode?.syncFromMap?.("uk", { preserveChartMode: true, dataStatus: "failed" });
           return;
         }
         if (!cacheSessionUrl) {
-          chartDataStatus = "failed";
           if (errorEl) {
             errorEl.textContent = "Missing cache session URL. Provide ?cache_session_url=... if needed.";
             errorEl.hidden = false;
           }
           setStatus("Error");
           setMapLoading(false);
-          window.hexChartMode?.syncFromMap?.("uk", { preserveChartMode: true, dataStatus: "failed" });
           return;
         }
         try {
@@ -11278,7 +11267,6 @@
           } else {
             populationLookup = new Map();
           }
-          chartDataStatus = latestPollutant === requestPollutant ? "ready" : "failed";
           applyNetworkFilters();
           markHexMapTiming(timingId, "colored-ready");
           measureHexMapTiming(timingId, "load-to-colored-ready", "load:start", "colored-ready");
@@ -11289,8 +11277,6 @@
           if (isStale()) {
             return;
           }
-          chartDataStatus = "failed";
-          window.hexChartMode?.syncFromMap?.("uk", { preserveChartMode: true, dataStatus: "failed" });
           if (maybeRedirectToAccessLogin(error)) {
             if (errorEl) {
               errorEl.textContent = "Cloudflare Access login required. Redirecting...";
@@ -11739,8 +11725,6 @@
             metricColor: colorScale && Number.isFinite(metricValue) ? colorScale(metricValue) : "var(--no-data)",
             methodLabel: currentMetric === "median" ? "Typical (median)" : "Average (mean)",
             pollutant: activePollutant,
-            loadedPollutant: latestPollutant,
-            dataStatus: chartDataStatus,
             pollutantLabel: getPollutantLabel(activePollutant),
             units: getPollutantUnits(activePollutant),
           };
@@ -12389,7 +12373,6 @@
       let scopedLatestRowsAllWindow = [];
       let latestRows = [];
       let latestPollutant = null;
-      let chartDataStatus = "loading";
       let allRegionsMetricLookup = new Map();
       let allRegionsFetchState = "idle"; // "idle" | "fetching" | "done"
       let allRegionsFetchPollutant = null;
@@ -12979,7 +12962,6 @@
         const cachedAllRows = getPollutantCache(getLatestCacheKey(activePollutant, "all", activeRegion));
         baseLatestRowsAllWindow = cachedAllRows?.latestRows || cached.latestRows || [];
         latestPollutant = cached.latestPollutant || activePollutant;
-        chartDataStatus = latestPollutant === activePollutant ? "ready" : "loading";
         const networkRowsForWindow = getNetworkRowsForWindow();
         const windowNetworkDefs = buildNetworkDefs(networkRowsForWindow);
         const coverageByCode = buildNetworkCoverageByCode(networkRowsForWindow);
@@ -13008,7 +12990,6 @@
           return;
         }
         activePollutant = normalized;
-        chartDataStatus = "loading";
         updatePollutantLabels();
         if (options.deferFetch) {
           return;
@@ -15570,7 +15551,6 @@
           renderMap();
           updateDetailsPanel();
           persistNetworkSelection();
-          window.hexChartMode?.syncFromMap?.("cr", { preserveChartMode: true, updateChart: false });
           return;
         }
         const networkCodes = getActiveNetworkCodes();
@@ -15847,7 +15827,6 @@
           return;
         }
         const requestPollutant = activePollutant;
-        chartDataStatus = "loading";
         const requestWindow = currentWindow;
         const requestRegion = activeRegion;
         const requestId = ++latestLoadId;
@@ -16225,7 +16204,6 @@
 	          if (isStale()) {
 	            return;
 	          }
-	          chartDataStatus = latestPollutant === requestPollutant ? "ready" : "failed";
 	          applyNetworkFilters();
 	          applyPendingAreaSelection();
 	          setStatus("Live");
@@ -16235,8 +16213,6 @@
           if (isStale()) {
             return;
           }
-          chartDataStatus = "failed";
-          window.hexChartMode?.syncFromMap?.("cr", { preserveChartMode: true, dataStatus: "failed" });
           if (maybeRedirectToAccessLogin(error)) {
             if (errorEl) {
               errorEl.textContent = "Cloudflare Access login required. Redirecting...";
@@ -16727,8 +16703,6 @@
             metricColor: colorScale && Number.isFinite(metricValue) ? colorScale(metricValue) : "var(--no-data)",
             methodLabel: currentMetric === "median" ? "Typical (median)" : "Average (mean)",
             pollutant: activePollutant,
-            loadedPollutant: latestPollutant,
-            dataStatus: chartDataStatus,
             pollutantLabel: getPollutantLabel(activePollutant),
             units: getPollutantUnits(activePollutant),
           };
@@ -16885,8 +16859,6 @@
     pendingLoadReason: null,
     pendingLoadOptions: null,
   };
-  let pollutantContextController = null;
-  let hexMapStationChartAdapter = null;
   const NO_SELECTED_SENSOR_CHART_MESSAGE = "Select a sensor from the list to draw a chart.";
 
   // key: `${timeseriesId}|connector:${connectorId}|pollutant:${pollutantKey}`
@@ -17243,9 +17215,10 @@
     return { title: "", readingHtml: chipsHtml };
   }
 
-  function buildYAxisLabel(units, pollutantLabelValue) {
-    const pollutantLabel = String(pollutantLabelValue || "Pollutant").trim();
-    const unitText = String(units || "").trim();
+  function buildYAxisLabel(units) {
+    const context = getCurrentContext() || {};
+    const pollutantLabel = String(context.pollutantLabel || "Pollutant").trim();
+    const unitText = String(units || context.units || "").trim();
     return unitText ? `${pollutantLabel} ${unitText}` : pollutantLabel;
   }
 
@@ -18506,15 +18479,13 @@
     });
   }
 
-  function buildObservationSeriesRequestUrl(entry, chunk) {
-    const timeseriesId = entry?.timeseriesId;
-    const pollutant = normalizeAqiSupportedPollutant(entry?.pollutant || "");
-    if (!seriesUrl || !timeseriesId || !pollutant) return null;
+  function buildObservationSeriesRequestUrl(timeseriesId, chunk) {
+    if (!seriesUrl || !timeseriesId) return null;
     if (sharedTimeseriesClient?.buildCanonicalTimeseriesUrl) {
       return sharedTimeseriesClient.buildCanonicalTimeseriesUrl({
         baseUrl: seriesUrl,
         timeseriesId,
-        pollutant,
+        pollutant: activePollutant,
         windowLabel: normalizeChartRangeValue(state.chartModeTimeRange),
         startIso: chunk?.startIso || null,
         endIso: chunk?.endIso || null,
@@ -18524,7 +18495,7 @@
     }
     const url = new URL(seriesUrl);
     url.searchParams.set("timeseries_id", String(timeseriesId));
-    url.searchParams.set("pollutant", pollutant);
+    url.searchParams.set("pollutant", activePollutant);
     url.searchParams.set("start", chunk.startIso);
     url.searchParams.set("end", chunk.endIso);
     url.searchParams.set("format", "compact");
@@ -18879,63 +18850,6 @@
     domByMap[state.mapKey]?.chartWrap?.classList.toggle("is-loading", Boolean(isLoading));
   }
 
-  function getPollutantDisplayLabel(pollutant) {
-    const normalized = normalizeAqiSupportedPollutant(pollutant || "");
-    if (normalized === "pm25") return "PM2.5";
-    if (normalized === "pm10") return "PM10";
-    if (normalized === "no2") return "NO₂";
-    return "pollutant";
-  }
-
-  function getPollutantSelectionSnapshot() {
-    return {
-      selectedStationIds: getSelectedSensorIdsOrdered(),
-      primaryStationId: state.selectedPrimaryId,
-      aqiSourceStationId: state.selectedAqiSensorId,
-    };
-  }
-
-  function cancelActiveChartLoad() {
-    state.loadAbortController?.abort();
-    state.loadAbortController = null;
-    state.loadInFlight = false;
-    state.pendingLoadReason = null;
-    state.pendingLoadOptions = null;
-    state.loadToken += 1;
-    aqiSourceController.invalidate();
-    setLoading(false);
-  }
-
-  function showPollutantContextMessage(load, message, options = {}) {
-    load.commitVisible(() => {
-      renderEmptyChart(message);
-      setMessage(message, options);
-    });
-  }
-
-  async function renderPollutantContext(load) {
-    if (!load?.isCurrent?.()) return;
-    state.visibleEntries = load.entries.slice();
-    state.chartModeSelectedSensors = new Set(load.selectedStationIds);
-    state.selectedEntries = new Map(load.selectedEntries.map((entry) => [String(entry.stationId || ""), entry]));
-    state.selectedPrimaryId = load.primaryStationId;
-    state.selectedAqiSensorId = load.aqiSourceStationId;
-    renderSensorList(getCurrentContext() || {});
-    notifySelectionChange();
-    if (load.empty) {
-      const label = getPollutantDisplayLabel(load.pollutant);
-      load.complete(() => {
-        renderEmptyChart(`No selected sensors are available for ${label}.`);
-        setMessage("");
-      });
-      return;
-    }
-    await loadChartData(load.renderMode === "initial" ? "initial" : "pollutant-change", {
-      pollutantLoad: load,
-      renderMode: load.renderMode,
-    });
-  }
-
   function enter(options = {}) {
     const mapKey = options.mapKey || window.mapTabController?.getActiveTab?.() || "uk";
     const context = getCurrentContext(mapKey);
@@ -18969,7 +18883,7 @@
     syncWindowControl();
     renderSensorList(context);
     notifySelectionChange();
-    hexMapStationChartAdapter?.sync(context, context?.dataStatus);
+    loadChartData("area-change");
   }
 
   function exit() {
@@ -18982,8 +18896,7 @@
     state.selectedEntries.clear();
     state.selectedAqiSensorId = null;
     state.visibleEntries = [];
-    cancelActiveChartLoad();
-    pollutantContextController?.reset("chart-exit");
+    state.loadToken += 1;
     syncPanels();
     if (previousMapKey) {
       syncInlineTableModeControls(previousMapKey);
@@ -19007,19 +18920,6 @@
         return;
       }
       exit();
-      return;
-    }
-    const contextPollutant = normalizeAqiSupportedPollutant(context?.pollutant || "");
-    const renderedPollutant = pollutantContextController?.renderedPollutant || null;
-    const targetPollutant = pollutantContextController?.targetPollutant || null;
-    if (options.dataStatus === "failed" && contextPollutant === renderedPollutant && targetPollutant === renderedPollutant) {
-      return;
-    }
-    if (
-      (contextPollutant && contextPollutant !== renderedPollutant)
-      || (targetPollutant && targetPollutant !== renderedPollutant)
-    ) {
-      hexMapStationChartAdapter?.sync({ ...context, dataStatus: options.dataStatus || context?.dataStatus }, options.dataStatus);
       return;
     }
     const entries = (context.entries || []).map(normalizeEntry).filter(Boolean);
@@ -19249,7 +19149,7 @@
 
   async function fetchObservationSeriesChunk(entry, chunk, signal) {
     if (!seriesUrl || !entry?.timeseriesId) return { entry, points: [], guideline: null, cacheState: "unknown" };
-    const url = buildObservationSeriesRequestUrl(entry, chunk);
+    const url = buildObservationSeriesRequestUrl(entry.timeseriesId, chunk);
     if (!url) return { entry, points: [], guideline: null, cacheState: "unknown" };
     const init = { credentials: "include", headers: { Accept: "application/json" }, signal };
     const cacheFetch = getCacheFetch();
@@ -20118,13 +20018,11 @@
     return domainRange || normalizeDisplayedChartRange(chartFrame?.frame);
   }
 
-  function isCurrentChartFrame(chartFrame, pollutant = pollutantContextController?.renderedPollutant) {
-    const expectedPollutant = normalizeAqiSupportedPollutant(pollutant || "");
+  function isCurrentChartFrame(chartFrame) {
     return Boolean(chartFrame
       && chartFrame.areaCode === state.chartModeAreaCode
       && chartFrame.sessionIdentity === state.chartModeSessionIdentity
-      && chartFrame.mapKey === state.mapKey
-      && (!expectedPollutant || chartFrame.pollutant === expectedPollutant));
+      && chartFrame.mapKey === state.mapKey);
   }
 
   function isAqiSourceRangeSettled(entry, displayedRange) {
@@ -20148,12 +20046,6 @@
   }
 
   async function loadChartData(reason = "sensor-change", options = {}) {
-    if (options.pollutantLoad && !options.pollutantLoad.isCurrent()) return;
-    if (
-      !options.pollutantLoad
-      && pollutantContextController?.targetPollutant
-      && pollutantContextController.targetPollutant !== pollutantContextController.renderedPollutant
-    ) return;
     if (reason !== "resize" && reason !== "aqi-source-change") {
       aqiSourceController.invalidate();
     }
@@ -20183,15 +20075,9 @@
     }
     state.loadInFlight = true;
     const abortController = new AbortController();
-    options.pollutantLoad?.signal?.addEventListener("abort", () => abortController.abort(), { once: true });
     state.loadAbortController = abortController;
     const signal = abortController.signal;
     const token = ++state.loadToken;
-    const chartLoadPollutant = normalizeAqiSupportedPollutant(
-      options.pollutantLoad?.pollutant || getCurrentContext()?.pollutant || "",
-    );
-    const renderMode = options.renderMode
-      || (reason === "initial" ? "initial" : reason === "pollutant-change" ? "pollutant-replacement" : "incremental-selection");
     let dom = null;
 
     try {
@@ -20209,7 +20095,6 @@
       if (!selectedEntries.length) {
         renderEmptyChart(NO_SELECTED_SENSOR_CHART_MESSAGE);
         setMessage(NO_SELECTED_SENSOR_CHART_MESSAGE);
-        options.pollutantLoad?.complete();
         return;
       }
       if (!state.selectedAqiSensorId || !selectedEntries.some((entry) => entry.stationId === state.selectedAqiSensorId)) {
@@ -20219,7 +20104,6 @@
       if (!usableEntries.length) {
         renderEmptyChart("This pollutant is not available for the selected sensor.");
         setMessage("This pollutant is not available for the selected sensor.", { error: true });
-        options.pollutantLoad?.complete();
         return;
       }
       const aqiSourceEntry = usableEntries.find((entry) => entry.stationId === state.selectedAqiSensorId) || usableEntries[0];
@@ -20250,8 +20134,7 @@
       const frameIdentityValid = !!(cf
         && cf.areaCode === state.chartModeAreaCode
         && cf.sessionIdentity === state.chartModeSessionIdentity
-        && cf.mapKey === state.mapKey
-        && cf.pollutant === chartLoadPollutant);
+        && cf.mapKey === state.mapKey);
       const frameSizeChanged = !!(frameIdentityValid
         && (cf.width !== svgWidth || cf.height !== svgHeight));
       const frameValid = frameIdentityValid;
@@ -20528,10 +20411,8 @@
 
       // Build or reuse the SVG frame.
       if (!frameValid) {
-        initChartFrame(dom, range, MAX_SELECTED_SENSORS, chartLoadPollutant, renderMode);
+        initChartFrame(dom, range, MAX_SELECTED_SENSORS);
         if (token !== state.loadToken) return;
-      } else {
-        dom.chartFrame.renderMode = renderMode;
       }
 
       const hasCachedData = Array.from(seriesPointsMap.values()).some((points) => points.length > 0);
@@ -20633,7 +20514,6 @@
           loadToken: token,
           concurrency: BACKGROUND_AQI_PREFETCH_CONCURRENCY,
         });
-        options.pollutantLoad?.complete();
         return;
       }
 
@@ -20744,7 +20624,7 @@
             if (signal.aborted || token !== state.loadToken) return;
             let debugUrl = null;
             try {
-              debugUrl = buildObservationSeriesRequestUrl(workItem.entry, workItem.chunk)?.toString?.() || null;
+              debugUrl = buildObservationSeriesRequestUrl(workItem.entry?.timeseriesId, workItem.chunk)?.toString?.() || null;
             } catch (_err) {
               debugUrl = null;
             }
@@ -20804,7 +20684,6 @@
       } else {
         setMessage("");
       }
-      options.pollutantLoad?.complete();
       void prefetchAqiBandsForEntries(usableEntries, range, {
         activeSourceStationId: aqiSourceId,
         loadToken: token,
@@ -21384,15 +21263,9 @@
     }
     state.loadInFlight = true;
     const abortController = new AbortController();
-    options.pollutantLoad?.signal?.addEventListener("abort", () => abortController.abort(), { once: true });
     state.loadAbortController = abortController;
     const signal = abortController.signal;
     const token = ++state.loadToken;
-    const chartLoadPollutant = normalizeAqiSupportedPollutant(
-      options.pollutantLoad?.pollutant || getCurrentContext()?.pollutant || "",
-    );
-    const renderMode = options.renderMode
-      || (reason === "initial" ? "initial" : reason === "pollutant-change" ? "pollutant-replacement" : "incremental-selection");
     const isAqiSourceChangeOnly = reason === "aqi-source-change";
     const selectedIds = getSelectedSensorIdsOrdered();
     const currentObservationStationIds = new Set(isAqiSourceChangeOnly ? selectedIds : []);
@@ -21434,7 +21307,6 @@
       if (!entries.length) {
         renderEmptyChart(NO_SELECTED_SENSOR_CHART_MESSAGE);
         setMessage(NO_SELECTED_SENSOR_CHART_MESSAGE);
-        options.pollutantLoad?.complete();
         return;
       }
       const primary = entries.find((entry) => entry.stationId === state.selectedAqiSensorId) || entries[0];
@@ -21450,8 +21322,7 @@
       const frameIdentityValid = Boolean(existing
         && existing.areaCode === state.chartModeAreaCode
         && existing.sessionIdentity === state.chartModeSessionIdentity
-        && existing.mapKey === state.mapKey
-        && existing.pollutant === chartLoadPollutant);
+        && existing.mapKey === state.mapKey);
       const frameSizeChanged = Boolean(frameIdentityValid
         && (existing.width !== svgWidth || existing.height !== svgHeight));
       const frameValid = frameIdentityValid;
@@ -21486,8 +21357,7 @@
         selected_series_count: entries.length,
       });
       if (frameSizeChanged) resizeChartFrame(dom, svgWidth, svgHeight);
-      if (!frameValid) initChartFrame(dom, range, MAX_SELECTED_SENSORS, chartLoadPollutant, renderMode);
-      else dom.chartFrame.renderMode = renderMode;
+      if (!frameValid) initChartFrame(dom, range, MAX_SELECTED_SENSORS);
 
       // Sensor selection and AQI-source changes keep the existing frame and use
       // a targeted loading path. Retained observation series are never fetched
@@ -22189,7 +22059,6 @@
       } else {
         setMessage("");
       }
-      options.pollutantLoad?.complete();
     } catch (error) {
       if (!signal.aborted && token === state.loadToken) {
         console.warn("Could not load station-history chart data.", error);
@@ -22517,7 +22386,7 @@
     }
   }
 
-  function initChartFrame(dom, range, numSeries, pollutant, renderMode = "initial") {
+  function initChartFrame(dom, range, numSeries) {
     if (!dom?.svg?.node()) return;
     const svgEl = dom.svg.node();
     const width  = svgEl.clientWidth  || 960;
@@ -22690,8 +22559,6 @@
       areaCode: state.chartModeAreaCode,
       sessionIdentity: state.chartModeSessionIdentity,
       mapKey: state.mapKey,
-      pollutant: normalizeAqiSupportedPollutant(pollutant || ""),
-      renderMode,
       animFrameId: null,
       currentGuideline: null,
       currentSeriesData: null,
@@ -22849,8 +22716,6 @@
   function updateChart(dom, seriesPointsMap, usableEntries, range, guideline, units, aqiPoints, renderOptions = {}) {
     const cf = dom.chartFrame;
     if (!cf) return;
-    const renderMode = renderOptions.renderMode || cf.renderMode || "incremental-selection";
-    cf.renderMode = renderMode;
 
     if (cf.emptyStateGroup?.remove) {
       cf.emptyStateGroup.remove();
@@ -22884,7 +22749,7 @@
     cf.currentSeriesData = { entries: usableEntries, pointsMap: seriesPointsMap, seriesSegments, units };
 
     updateAqiLayer(cf, aqiPoints, renderOptions);
-    if (cf.yAxisLabelEl) cf.yAxisLabelEl.text(buildYAxisLabel(units, usableEntries[0]?.pollutantLabel));
+    if (cf.yAxisLabelEl) cf.yAxisLabelEl.text(buildYAxisLabel(units));
 
     if (renderOptions.aqiChangeOnly && !xChanged && !yChanged) {
       updateGuidelineLayer(cf, guideline, seriesPointsMap, usableEntries);
@@ -22965,14 +22830,6 @@
       return;
     }
 
-    if (renderMode === "pollutant-replacement") {
-      cf.yScale.domain(newYDomain);
-      cf.yAxisGroup.call(d3.axisLeft(cf.yScale).ticks(5).tickSizeOuter(0));
-      drawPaths(allStationIds);
-      finish(allStationIds);
-      return;
-    }
-
     cf.seriesLayers?.forEach((layer) => layer.symbolGroup?.style("opacity", 0));
     const startY = currentYDomain;
     const t0 = performance.now();
@@ -23005,34 +22862,6 @@
     cf.animFrameId = requestAnimationFrame(frame);
   }
 
-  pollutantContextController = window.UkAqPollutantContextController.createPollutantContextController({
-    onCancel: cancelActiveChartLoad,
-    onLoading: (load) => {
-      cancelActiveChartLoad();
-      showPollutantContextMessage(load, `Loading ${getPollutantDisplayLabel(load.pollutant)} chart…`);
-    },
-    onFailed: (load) => {
-      cancelActiveChartLoad();
-      showPollutantContextMessage(
-        load,
-        `${getPollutantDisplayLabel(load.pollutant)} map data is unavailable. Try Refresh.`,
-        { error: true },
-      );
-    },
-    onRender: renderPollutantContext,
-    onCommit: (load) => {
-      const chartFrame = domByMap[state.mapKey]?.chartFrame;
-      if (chartFrame && load.isCurrent()) chartFrame.pollutant = load.pollutant;
-    },
-  });
-  hexMapStationChartAdapter = window.UkAqHexMapStationChartAdapter.createHexMapStationChartAdapter({
-    controller: pollutantContextController,
-    eventTarget: window,
-    isActive: (mapKey = null) => Boolean(state.isChartMode && (!mapKey || state.mapKey === mapKey)),
-    getSelection: getPollutantSelectionSnapshot,
-  });
-  hexMapStationChartAdapter.mount();
-
   Object.values(domByMap).forEach((dom) => {
     dom.reading?.addEventListener("click", (event) => {
       const target = event.target instanceof Element ? event.target : event.target?.parentElement;
@@ -23064,6 +22893,9 @@
     loadChartData("window-change");
   });
   backButton?.addEventListener("click", exit);
+  window.addEventListener("pollutantchange", () => {
+    if (state.isChartMode) window.setTimeout(() => syncFromMap(state.mapKey, { preserveChartMode: true }), 0);
+  });
   window.addEventListener("resize", () => {
     if (state.isChartMode) loadChartData("resize");
   });

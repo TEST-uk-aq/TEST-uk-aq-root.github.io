@@ -11674,7 +11674,6 @@
             updatedText: formatSummaryTimestamp(entry.timestamp),
             timestamp: entry.timestamp instanceof Date ? entry.timestamp.toISOString() : null,
             pollutant: activePollutant,
-            loadedPollutant: latestPollutant,
             pollutantLabel: getPollutantLabel(activePollutant),
             units: getPollutantUnits(activePollutant),
             row: entry.row,
@@ -11726,7 +11725,6 @@
             metricColor: colorScale && Number.isFinite(metricValue) ? colorScale(metricValue) : "var(--no-data)",
             methodLabel: currentMetric === "median" ? "Typical (median)" : "Average (mean)",
             pollutant: activePollutant,
-            loadedPollutant: latestPollutant,
             pollutantLabel: getPollutantLabel(activePollutant),
             units: getPollutantUnits(activePollutant),
           };
@@ -16650,7 +16648,6 @@
             updatedText: formatSummaryTimestamp(entry.timestamp),
             timestamp: entry.timestamp instanceof Date ? entry.timestamp.toISOString() : null,
             pollutant: activePollutant,
-            loadedPollutant: latestPollutant,
             pollutantLabel: getPollutantLabel(activePollutant),
             units: getPollutantUnits(activePollutant),
             row: entry.row,
@@ -16706,7 +16703,6 @@
             metricColor: colorScale && Number.isFinite(metricValue) ? colorScale(metricValue) : "var(--no-data)",
             methodLabel: currentMetric === "median" ? "Typical (median)" : "Average (mean)",
             pollutant: activePollutant,
-            loadedPollutant: latestPollutant,
             pollutantLabel: getPollutantLabel(activePollutant),
             units: getPollutantUnits(activePollutant),
           };
@@ -17109,38 +17105,6 @@
 
   function getTargetChartPollutant(context = getCurrentContext()) {
     return getChartContextPollutant(context) || state.chartModeTargetPollutant || state.chartModePollutant || null;
-  }
-
-  function getLoadedMapPollutant(context = getCurrentContext()) {
-    return normalizeAqiSupportedPollutant(context?.loadedPollutant || "");
-  }
-
-  function isTargetPollutantMapDataReady(context = getCurrentContext()) {
-    const targetPollutant = normalizeAqiSupportedPollutant(state.chartModeTargetPollutant || state.chartModePollutant || "");
-    const loadedPollutant = getLoadedMapPollutant(context);
-    return Boolean(targetPollutant && loadedPollutant && targetPollutant === loadedPollutant);
-  }
-
-  function deferPollutantChartLoadUntilMapReady(options = {}) {
-    state.pendingLoadReason = "pollutant-change";
-    state.pendingLoadOptions = options || null;
-  }
-
-  function takePendingChartLoad() {
-    const pendingReason = state.pendingLoadReason;
-    const pendingOptions = state.pendingLoadOptions || {};
-    if (pendingReason === "pollutant-change" && !isTargetPollutantMapDataReady()) {
-      return { reason: null, options: {} };
-    }
-    state.pendingLoadReason = null;
-    state.pendingLoadOptions = null;
-    return { reason: pendingReason, options: pendingOptions };
-  }
-
-  function commitRenderedChartPollutant(reason, token, signal) {
-    if (reason === "pollutant-change" && token === state.loadToken && !signal?.aborted) {
-      state.chartModePollutant = state.chartModeTargetPollutant || state.chartModePollutant;
-    }
   }
 
   function entryMatchesChartPollutant(entry, pollutant = getTargetChartPollutant()) {
@@ -20143,12 +20107,9 @@
 
   async function loadChartData(reason = "sensor-change", options = {}) {
     if (reason === "pollutant-change") {
-      if (!isTargetPollutantMapDataReady()) {
-        deferPollutantChartLoadUntilMapReady(options);
-        return;
-      }
       state.pendingLoadReason = null;
       state.pendingLoadOptions = null;
+      state.chartModePollutant = state.chartModeTargetPollutant || state.chartModePollutant;
     }
     if (reason !== "resize" && reason !== "aqi-source-change") {
       aqiSourceController.invalidate();
@@ -20201,7 +20162,6 @@
       if (!selectedEntries.length) {
         renderEmptyChart(NO_SELECTED_SENSOR_CHART_MESSAGE);
         setMessage(NO_SELECTED_SENSOR_CHART_MESSAGE);
-        commitRenderedChartPollutant(reason, token, signal);
         return;
       }
       if (!state.selectedAqiSensorId || !selectedEntries.some((entry) => entry.stationId === state.selectedAqiSensorId)) {
@@ -20211,7 +20171,6 @@
       if (!usableEntries.length) {
         renderEmptyChart("This pollutant is not available for the selected sensor.");
         setMessage("This pollutant is not available for the selected sensor.", { error: true });
-        commitRenderedChartPollutant(reason, token, signal);
         return;
       }
       const aqiSourceEntry = usableEntries.find((entry) => entry.stationId === state.selectedAqiSensorId) || usableEntries[0];
@@ -20618,7 +20577,6 @@
         } else if (!atomicAqiSourceSwitch) {
           setMessage("");
         }
-        commitRenderedChartPollutant(reason, token, signal);
         void prefetchAqiBandsForEntries(usableEntries, range, {
           activeSourceStationId: aqiSourceId,
           loadToken: token,
@@ -20794,7 +20752,6 @@
       } else {
         setMessage("");
       }
-      commitRenderedChartPollutant(reason, token, signal);
       void prefetchAqiBandsForEntries(usableEntries, range, {
         activeSourceStationId: aqiSourceId,
         loadToken: token,
@@ -20827,9 +20784,12 @@
           if (dom?.chartFrame) dom.chartFrame.progressBar = null;
           setLoading(false);
         }
-        const pendingLoad = takePendingChartLoad();
-        if (pendingLoad.reason && state.isChartMode) {
-          queueMicrotask(() => loadChartData(pendingLoad.reason, pendingLoad.options));
+        const pendingReason = state.pendingLoadReason;
+        const pendingOptions = state.pendingLoadOptions || {};
+        state.pendingLoadReason = null;
+        state.pendingLoadOptions = null;
+        if (pendingReason && state.isChartMode) {
+          queueMicrotask(() => loadChartData(pendingReason, pendingOptions));
         }
       }
     }
@@ -21417,7 +21377,6 @@
       if (!entries.length) {
         renderEmptyChart(NO_SELECTED_SENSOR_CHART_MESSAGE);
         setMessage(NO_SELECTED_SENSOR_CHART_MESSAGE);
-        commitRenderedChartPollutant(reason, token, signal);
         return;
       }
       const primary = entries.find((entry) => entry.stationId === state.selectedAqiSensorId) || entries[0];
@@ -21893,7 +21852,6 @@
       if (requestedRangeCovered) {
         entries.forEach((entry) => currentObservationStationIds.add(entry.stationId));
         renderStationHistoryChart(dom, entries, range, units, primary, false, false, { currentObservationStationIds });
-        commitRenderedChartPollutant(reason, token, signal);
         recordWebsiteDebugEvent("station_history_window_cache_hit", {
           route: "chart",
           range_start_utc: range.startIso,
@@ -21989,7 +21947,6 @@
         await historyRenderScheduler.flush();
         if (signal.aborted || token !== state.loadToken) return;
         renderStationHistoryChart(dom, entries, range, units, primary, false, false, { currentObservationStationIds, skipAqiRepaint: !isAqiSourceChangeOnly, aqiChangeOnly: isAqiSourceChangeOnly });
-        commitRenderedChartPollutant(reason, token, signal);
         recordWebsiteDebugEvent("station_history_window_cache_extended", {
           route: "chart",
           range_start_utc: range.startIso,
@@ -22167,7 +22124,6 @@
       await historyRenderScheduler.flush();
       if (signal.aborted || token !== state.loadToken) return;
       renderStationHistoryChart(dom, entries, range, units, primary, false, false, { currentObservationStationIds, aqiChangeOnly: isAqiSourceChangeOnly });
-      commitRenderedChartPollutant(reason, token, signal);
       if (failedCurrentObservationStationIds.size) {
         const count = failedCurrentObservationStationIds.size;
         setMessage(`Current data is unavailable for ${count} selected sensor${count === 1 ? "" : "s"}. Cached line${count === 1 ? " is" : "s are"} hidden.`, { error: true });
@@ -22211,8 +22167,11 @@
         state.loadAbortController = null;
         state.loadInFlight = false;
         if (token === state.loadToken) setLoading(false);
-        const pendingLoad = takePendingChartLoad();
-        if (pendingLoad.reason && state.isChartMode) queueMicrotask(() => loadChartData(pendingLoad.reason, pendingLoad.options));
+        const pendingReason = state.pendingLoadReason;
+        const pendingOptions = state.pendingLoadOptions || {};
+        state.pendingLoadReason = null;
+        state.pendingLoadOptions = null;
+        if (pendingReason && state.isChartMode) queueMicrotask(() => loadChartData(pendingReason, pendingOptions));
       }
     }
   }

@@ -17137,9 +17137,16 @@
     return { reason: pendingReason, options: pendingOptions };
   }
 
-  function commitRenderedChartPollutant(reason, token, signal) {
-    if (reason === "pollutant-change" && token === state.loadToken && !signal?.aborted) {
-      state.chartModePollutant = state.chartModeTargetPollutant || state.chartModePollutant;
+  function commitRenderedChartPollutant(reason, token, signal, renderedPollutant = null) {
+    const normalizedRenderedPollutant = normalizeAqiSupportedPollutant(renderedPollutant || "");
+    if (
+      reason === "pollutant-change"
+      && token === state.loadToken
+      && !signal?.aborted
+      && normalizedRenderedPollutant
+      && normalizedRenderedPollutant === normalizeAqiSupportedPollutant(state.chartModeTargetPollutant || "")
+    ) {
+      state.chartModePollutant = normalizedRenderedPollutant;
     }
   }
 
@@ -20180,6 +20187,9 @@
       }
     }
     state.loadInFlight = true;
+    const chartLoadPollutant = reason === "pollutant-change"
+      ? normalizeAqiSupportedPollutant(state.chartModeTargetPollutant || "")
+      : null;
     const abortController = new AbortController();
     state.loadAbortController = abortController;
     const signal = abortController.signal;
@@ -20201,7 +20211,7 @@
       if (!selectedEntries.length) {
         renderEmptyChart(NO_SELECTED_SENSOR_CHART_MESSAGE);
         setMessage(NO_SELECTED_SENSOR_CHART_MESSAGE);
-        commitRenderedChartPollutant(reason, token, signal);
+        commitRenderedChartPollutant(reason, token, signal, chartLoadPollutant);
         return;
       }
       if (!state.selectedAqiSensorId || !selectedEntries.some((entry) => entry.stationId === state.selectedAqiSensorId)) {
@@ -20211,7 +20221,7 @@
       if (!usableEntries.length) {
         renderEmptyChart("This pollutant is not available for the selected sensor.");
         setMessage("This pollutant is not available for the selected sensor.", { error: true });
-        commitRenderedChartPollutant(reason, token, signal);
+        commitRenderedChartPollutant(reason, token, signal, chartLoadPollutant);
         return;
       }
       const aqiSourceEntry = usableEntries.find((entry) => entry.stationId === state.selectedAqiSensorId) || usableEntries[0];
@@ -20618,7 +20628,7 @@
         } else if (!atomicAqiSourceSwitch) {
           setMessage("");
         }
-        commitRenderedChartPollutant(reason, token, signal);
+        commitRenderedChartPollutant(reason, token, signal, chartLoadPollutant);
         void prefetchAqiBandsForEntries(usableEntries, range, {
           activeSourceStationId: aqiSourceId,
           loadToken: token,
@@ -20794,7 +20804,7 @@
       } else {
         setMessage("");
       }
-      commitRenderedChartPollutant(reason, token, signal);
+      commitRenderedChartPollutant(reason, token, signal, chartLoadPollutant);
       void prefetchAqiBandsForEntries(usableEntries, range, {
         activeSourceStationId: aqiSourceId,
         loadToken: token,
@@ -21372,6 +21382,9 @@
       }
     }
     state.loadInFlight = true;
+    const chartLoadPollutant = reason === "pollutant-change"
+      ? normalizeAqiSupportedPollutant(state.chartModeTargetPollutant || "")
+      : null;
     const abortController = new AbortController();
     state.loadAbortController = abortController;
     const signal = abortController.signal;
@@ -21417,7 +21430,7 @@
       if (!entries.length) {
         renderEmptyChart(NO_SELECTED_SENSOR_CHART_MESSAGE);
         setMessage(NO_SELECTED_SENSOR_CHART_MESSAGE);
-        commitRenderedChartPollutant(reason, token, signal);
+        commitRenderedChartPollutant(reason, token, signal, chartLoadPollutant);
         return;
       }
       const primary = entries.find((entry) => entry.stationId === state.selectedAqiSensorId) || entries[0];
@@ -21893,7 +21906,7 @@
       if (requestedRangeCovered) {
         entries.forEach((entry) => currentObservationStationIds.add(entry.stationId));
         renderStationHistoryChart(dom, entries, range, units, primary, false, false, { currentObservationStationIds });
-        commitRenderedChartPollutant(reason, token, signal);
+        commitRenderedChartPollutant(reason, token, signal, chartLoadPollutant);
         recordWebsiteDebugEvent("station_history_window_cache_hit", {
           route: "chart",
           range_start_utc: range.startIso,
@@ -21989,7 +22002,7 @@
         await historyRenderScheduler.flush();
         if (signal.aborted || token !== state.loadToken) return;
         renderStationHistoryChart(dom, entries, range, units, primary, false, false, { currentObservationStationIds, skipAqiRepaint: !isAqiSourceChangeOnly, aqiChangeOnly: isAqiSourceChangeOnly });
-        commitRenderedChartPollutant(reason, token, signal);
+        commitRenderedChartPollutant(reason, token, signal, chartLoadPollutant);
         recordWebsiteDebugEvent("station_history_window_cache_extended", {
           route: "chart",
           range_start_utc: range.startIso,
@@ -22167,7 +22180,7 @@
       await historyRenderScheduler.flush();
       if (signal.aborted || token !== state.loadToken) return;
       renderStationHistoryChart(dom, entries, range, units, primary, false, false, { currentObservationStationIds, aqiChangeOnly: isAqiSourceChangeOnly });
-      commitRenderedChartPollutant(reason, token, signal);
+      commitRenderedChartPollutant(reason, token, signal, chartLoadPollutant);
       if (failedCurrentObservationStationIds.size) {
         const count = failedCurrentObservationStationIds.size;
         setMessage(`Current data is unavailable for ${count} selected sensor${count === 1 ? "" : "s"}. Cached line${count === 1 ? " is" : "s are"} hidden.`, { error: true });

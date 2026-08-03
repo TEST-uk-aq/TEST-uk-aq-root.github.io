@@ -155,18 +155,6 @@
       const status = normalizeStatus(rawConfig.status);
       if (!pollutant || !status) throw new Error("pollutant_context_identity_invalid");
       const config = { ...rawConfig, pollutant, status };
-      if (
-        pollutant === targetPollutant
-        && targetStatus === DATA_STATUSES.ready
-        && status === DATA_STATUSES.loading
-      ) {
-        return {
-          status: "ignored",
-          reason: "same-target-ready-not-downgraded",
-          generation: generations.current,
-          committed: false,
-        };
-      }
       const targetChanged = pollutant !== targetPollutant;
       let generation;
       if (targetChanged || targetPollutant === null) {

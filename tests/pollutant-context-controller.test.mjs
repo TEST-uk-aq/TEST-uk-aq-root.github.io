@@ -9,6 +9,50 @@ function entry(stationId, pollutant, timeseriesId = `${stationId}-${pollutant}`)
   return { stationId, pollutant, timeseriesId };
 }
 
+function deferred() {
+  let resolve;
+  const promise = new Promise((resolvePromise) => { resolve = resolvePromise; });
+  return { promise, resolve };
+}
+
+function createControlledHarness() {
+  const events = [];
+  const renderGates = new Map();
+  const controller = createPollutantContextController({
+    onCancel: (load) => events.push({ type: "cancel", ...load }),
+    onLoading: (load) => events.push({ type: "loading", pollutant: load.pollutant, generation: load.generation }),
+    onFailed: (load) => events.push({ type: "failed", pollutant: load.pollutant, generation: load.generation }),
+    onRender: async (load) => {
+      events.push({ type: "render", pollutant: load.pollutant, generation: load.generation, load });
+      const gate = renderGates.get(load.pollutant);
+      if (gate) await gate.promise;
+      load.complete(() => events.push({ type: "visible-commit", pollutant: load.pollutant, generation: load.generation }));
+    },
+  });
+  return {
+    controller,
+    events,
+    holdRender(pollutant) {
+      const gate = deferred();
+      renderGates.set(pollutant, gate);
+      return gate;
+    },
+  };
+}
+
+function readyContext(pollutant, stationId = "A") {
+  return {
+    pollutant,
+    entries: [entry(stationId, pollutant)],
+    status: "ready",
+    selectedStationIds: [stationId],
+    primaryStationId: stationId,
+    aqiSourceStationId: stationId,
+  };
+}
+
+const nextTurn = () => new Promise((resolve) => setImmediate(resolve));
+
 const calls = [];
 const pending = new Map();
 const controller = createPollutantContextController({
@@ -187,5 +231,141 @@ assert.equal(
   false,
   "same-pollutant additions and removals stay on the incremental renderer path",
 );
+
+// A same-target loading notification cannot downgrade an authoritative ready
+// context while that ready render is still active.
+{
+  const harness = createControlledHarness();
+  await harness.controller.setPollutantContext(readyContext("pm25"));
+  await harness.controller.setPollutantContext({ pollutant: "pm10", entries: [], status: "loading", selectedStationIds: ["A"] });
+  const pm10Gate = harness.holdRender("pm10");
+  const readyResultPromise = harness.controller.setPollutantContext(readyContext("pm10"));
+  await nextTurn();
+
+  const activeReadyLoad = harness.controller.active;
+  const loadingCount = harness.events.filter((event) => event.type === "loading").length;
+  const redundantResult = await harness.controller.setPollutantContext({
+    pollutant: "pm10",
+    entries: [],
+    status: "loading",
+    selectedStationIds: ["A"],
+  });
+
+  assert.equal(redundantResult.status, "ignored", "same-target loading is explicitly non-committing");
+  assert.equal(activeReadyLoad.signal.aborted, false, "the active ready PM10 load is not aborted");
+  assert.equal(harness.controller.active, activeReadyLoad, "the active ready PM10 load remains current");
+  assert.equal(harness.controller.targetStatus, "ready", "target status does not regress to loading");
+  assert.equal(
+    harness.events.filter((event) => event.type === "loading").length,
+    loadingCount,
+    "redundant loading does not emit another loading callback",
+  );
+
+  pm10Gate.resolve();
+  const readyResult = await readyResultPromise;
+  assert.equal(readyResult.status, "committed");
+  assert.equal(harness.controller.renderedPollutant, "pm10");
+  assert.equal(harness.controller.targetStatus, "ready", "the controller does not remain stranded in loading state");
+
+  const loadingCountAfterCommit = harness.events.filter((event) => event.type === "loading").length;
+  const duplicateAfterCommit = await harness.controller.setPollutantContext({
+    pollutant: "pm10",
+    entries: [],
+    status: "loading",
+    selectedStationIds: ["A"],
+  });
+  assert.equal(duplicateAfterCommit.status, "ignored");
+  assert.equal(harness.controller.renderedPollutant, "pm10", "rendered PM10 remains visible");
+  assert.equal(harness.controller.targetStatus, "ready");
+  assert.equal(
+    harness.events.filter((event) => event.type === "loading").length,
+    loadingCountAfterCommit,
+    "already-rendered PM10 is not replaced by a loading message",
+  );
+}
+
+// Reproduce the browser's real cached Countries and Regions listener order:
+// the map listener is registered first and synchronously supplies ready cache
+// entries before the adapter's pollutantchange listener requests loading.
+{
+  const harness = createControlledHarness();
+  await harness.controller.setPollutantContext(readyContext("pm25"));
+  const pm10Gate = harness.holdRender("pm10");
+  const eventTarget = new EventTarget();
+  let orderedAdapter;
+  eventTarget.addEventListener("pollutantchange", () => {
+    orderedAdapter.sync({
+      mapKey: "cr",
+      pollutant: "pm10",
+      loadedPollutant: "pm10",
+      dataStatus: "ready",
+      entries: [entry("A", "pm10")],
+    });
+  });
+  orderedAdapter = createHexMapStationChartAdapter({
+    controller: harness.controller,
+    eventTarget,
+    isActive: () => true,
+    getSelection: () => ({ selectedStationIds: ["A"], primaryStationId: "A", aqiSourceStationId: "A" }),
+  });
+  orderedAdapter.mount();
+
+  const pollutantEvent = new Event("pollutantchange");
+  Object.defineProperty(pollutantEvent, "detail", { value: { pollutant: "pm10" } });
+  eventTarget.dispatchEvent(pollutantEvent);
+  await nextTurn();
+
+  assert.equal(harness.events.filter((event) => event.type === "loading").length, 0, "cached listener order emits no late loading callback");
+  assert.equal(harness.controller.targetPollutant, "pm10");
+  assert.equal(harness.controller.targetStatus, "ready");
+  pm10Gate.resolve();
+  await nextTurn();
+  assert.equal(
+    harness.events.filter((event) => event.type === "visible-commit" && event.pollutant === "pm10").length,
+    1,
+    "cached PM10 visibly commits exactly once",
+  );
+  assert.equal(harness.controller.renderedPollutant, "pm10");
+  assert.equal(harness.controller.targetStatus, "ready");
+  orderedAdapter.destroy();
+}
+
+// A genuine uncached loading -> ready sequence is unchanged.
+{
+  const harness = createControlledHarness();
+  await harness.controller.setPollutantContext({ pollutant: "pm10", entries: [], status: "loading", selectedStationIds: ["A"] });
+  await harness.controller.setPollutantContext(readyContext("pm10"));
+  assert.equal(harness.events.filter((event) => event.type === "loading").length, 1);
+  assert.equal(harness.events.filter((event) => event.type === "render" && event.pollutant === "pm10").length, 1);
+  assert.equal(harness.events.filter((event) => event.type === "visible-commit" && event.pollutant === "pm10").length, 1);
+  assert.equal(harness.controller.renderedPollutant, "pm10");
+  assert.equal(harness.controller.targetStatus, "ready");
+}
+
+// A genuinely different target still invalidates an active ready render.
+{
+  const harness = createControlledHarness();
+  await harness.controller.setPollutantContext(readyContext("pm25"));
+  await harness.controller.setPollutantContext({ pollutant: "pm10", entries: [], status: "loading", selectedStationIds: ["A"] });
+  const pm10Gate = harness.holdRender("pm10");
+  const pm10ResultPromise = harness.controller.setPollutantContext(readyContext("pm10"));
+  await nextTurn();
+  const pm10Load = harness.controller.active;
+
+  await harness.controller.setPollutantContext({ pollutant: "no2", entries: [], status: "loading", selectedStationIds: ["A"] });
+  assert.equal(pm10Load.signal.aborted, true, "different-target loading aborts active PM10 work");
+  await harness.controller.setPollutantContext(readyContext("no2"));
+  pm10Gate.resolve();
+  const pm10Result = await pm10ResultPromise;
+  assert.equal(pm10Result.status, "obsolete");
+  assert.equal(
+    harness.events.filter((event) => event.type === "visible-commit" && event.pollutant === "pm10").length,
+    0,
+    "obsolete PM10 never commits",
+  );
+  assert.equal(harness.events.filter((event) => event.type === "visible-commit").at(-1).pollutant, "no2");
+  assert.equal(harness.controller.targetPollutant, "no2");
+  assert.equal(harness.controller.renderedPollutant, "no2");
+}
 
 console.log("shared pollutant-context controller harness passed");

@@ -1,1 +1,0 @@
-Temporary trigger for the chart live refresh patch.

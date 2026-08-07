@@ -185,3 +185,37 @@ footer {
   justify-self: start;
   white-space: nowrap;
 }
+
+/* A total adds no information when the table contains only one selected network. */
+.home-page #network-summary-body > tr[data-network="total"]:nth-child(2) {
+  display: none;
+}
+
+/* Keep the UK AQ tool cards centred as a group. Two cards straddle the page
+   centreline; restoring the commented Sensors card gives three centred cards. */
+.home-page .home-section[aria-labelledby="home-ukaq-heading"] .tool-grid {
+  display: flex;
+  justify-content: center;
+  align-items: stretch;
+  flex-wrap: wrap;
+  gap: 1.5rem;
+}
+
+.home-page .home-section[aria-labelledby="home-ukaq-heading"] .tool-card {
+  flex: 0 1 calc((100% - 3rem) / 3);
+  max-width: calc((100% - 3rem) / 3);
+}
+
+@media (max-width: 980px) {
+  .home-page .home-section[aria-labelledby="home-ukaq-heading"] .tool-card {
+    flex-basis: calc((100% - 1.5rem) / 2);
+    max-width: calc((100% - 1.5rem) / 2);
+  }
+}
+
+@media (max-width: 640px) {
+  .home-page .home-section[aria-labelledby="home-ukaq-heading"] .tool-card {
+    flex-basis: 100%;
+    max-width: 100%;
+  }
+}

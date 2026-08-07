@@ -1,0 +1,39 @@
+name: Apply chart live refresh fix from PR
+
+on:
+  pull_request:
+    branches:
+      - main
+    types:
+      - opened
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    if: github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out PR branch
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.head_ref }}
+          fetch-depth: 0
+
+      - name: Apply and structurally check chart patch
+        run: python3 .github/scripts/_apply_chart_live_refresh_fix.py
+
+      - name: Commit patch and remove temporary helpers
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git rm .github/scripts/_apply_chart_live_refresh_fix.py
+          git rm .github/workflows/_apply_chart_live_refresh_fix_pr.yml
+          git rm .github/_chart_live_refresh_trigger.txt
+          git add hex_map/index.html
+          git diff --cached --check
+          git commit -m "Fix chart progress and live refresh"
+          git push origin HEAD:${GITHUB_HEAD_REF}

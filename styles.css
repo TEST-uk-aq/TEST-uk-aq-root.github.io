@@ -145,3 +145,43 @@ footer {
     margin-top: 1.4rem;
   }
 }
+
+.home-page .dashboard-table--areas {
+  table-layout: fixed;
+}
+
+.home-page .dashboard-table--areas col {
+  width: 25%;
+}
+
+.home-page .dashboard-table--areas .area-reading {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 1.17rem 6.4rem;
+  align-items: center;
+  column-gap: 0.35rem;
+  max-width: 100%;
+  min-width: 0;
+}
+
+.home-page .dashboard-table--areas .area-reading-name {
+  grid-column: 1;
+  min-width: 0;
+  overflow-wrap: anywhere;
+  word-break: normal;
+  line-height: 1.15;
+}
+
+.home-page .dashboard-table--areas .area-reading-metric {
+  display: contents;
+}
+
+.home-page .dashboard-table--areas .area-marker {
+  grid-column: 2;
+  justify-self: start;
+}
+
+.home-page .dashboard-table--areas .area-reading-value {
+  grid-column: 3;
+  justify-self: start;
+  white-space: nowrap;
+}

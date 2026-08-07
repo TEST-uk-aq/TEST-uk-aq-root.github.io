@@ -1,5 +1,6 @@
 name: Apply chart live refresh fix
 
+# Trigger after the workflow is present on main.
 on:
   push:
     branches:

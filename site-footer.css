@@ -183,6 +183,17 @@ body.ukaq-site-footer-after-viewport {
   overscroll-behavior-y: none;
 }
 
+/*
+ * Sensor Map chrome is normally fixed by the page stylesheet. Once the shared
+ * footer makes the page scrollable, move the title/beta notice and controls
+ * into the same scrolling coordinate space as the map so the whole page moves
+ * together while the sidebar remains fixed.
+ */
+body.ukaq-site-footer-after-viewport #uk-aq-page-chrome,
+body.ukaq-site-footer-after-viewport .sensor-map-controls {
+  position: absolute !important;
+}
+
 body.ukaq-site-footer-after-viewport #map {
   bottom: auto !important;
   height: calc(100vh - var(--ukaq-chrome-h, 0px));

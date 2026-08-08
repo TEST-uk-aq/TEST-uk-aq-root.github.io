@@ -388,21 +388,10 @@
   `;
 
   // ─── HTML builders ────────────────────────────────────────────────────────────
-  const UK_AQ_ROOT_HOSTS = new Set([
-    'test-uk-aq.ukaq.co.uk',
-  ]);
-
-  function resolveHref(href) {
-    if (href === '#' || typeof href !== 'string') return href;
-    if (!href.startsWith('/uk-aq/')) return href;
-    const host = (location.hostname || '').toLowerCase();
-    return UK_AQ_ROOT_HOSTS.has(host) ? href.replace(/^\/uk-aq/, '') : href;
-  }
-
   function buildNavItem(item) {
     const path = location.pathname;
     const pathWithSearch = location.pathname + location.search;
-    const href = resolveHref(item.href);
+    const href = item.href;
     const isActive = href !== '#' && (
       href === '/' || href === '/index.html'
         ? isHomePage()
@@ -635,7 +624,7 @@
       clearTimeout(autoCollapseTimer);
     });
 
-    // Resume auto-collapse on mouse leave (non-home pages)
+    // Resume auto-collapse on mouse leave
     document.getElementById('cic-sidebar').addEventListener('mouseleave', () => {
       if (!pinnedOpenDesktop && getBreakpoint() === 'desktop' && getState() === EXPANDED) {
         scheduleAutoCollapse();

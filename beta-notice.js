@@ -7,6 +7,19 @@
   const EXPANDED_VALUE = "false";
   const mounts = Array.from(document.querySelectorAll("[data-ukaq-beta-notice-mount]"));
 
+  function updateFooterGovPill() {
+    const pill = document.querySelector(".ukaq-site-footer-gov-pill");
+    if (!pill) return;
+    pill.textContent = "GOV.UK AURN";
+    pill.setAttribute("aria-label", "GOV.UK AURN");
+  }
+
+  if (document.readyState === "loading") {
+    document.addEventListener("DOMContentLoaded", updateFooterGovPill, { once: true });
+  } else {
+    updateFooterGovPill();
+  }
+
   if (!mounts.length) return;
 
   const safeStorage = (() => {

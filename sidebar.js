@@ -380,140 +380,6 @@
       overflow: hidden;
     }
     body[data-sidebar-state="mini"] #cic-sidebar-footer { display: none; }
-
-    /* ── Shared site footer ── */
-    #ukaq-site-footer {
-      width: 100%;
-      box-sizing: border-box;
-      background: #fff7ed;
-      color: #666;
-      font-family: var(--cic-font);
-    }
-    .ukaq-site-footer-meta {
-      margin: 0;
-      padding: 18px 24px;
-      text-align: center;
-      font-size: 1rem;
-      font-weight: 400;
-      line-height: 1.35;
-    }
-    .ukaq-site-footer-sources {
-      display: grid;
-      grid-template-columns: repeat(4, minmax(0, 1fr));
-      border-top: 1px solid rgba(16, 24, 34, 0.8);
-    }
-    .ukaq-site-footer-source {
-      min-width: 0;
-      padding: 22px 28px 24px;
-      display: flex;
-      flex-direction: column;
-      align-items: flex-start;
-      justify-content: flex-start;
-      gap: 14px;
-    }
-    .ukaq-site-footer-source + .ukaq-site-footer-source {
-      border-left: 1px solid rgba(16, 24, 34, 0.75);
-    }
-    .ukaq-site-footer-mark {
-      min-height: 58px;
-      display: flex;
-      align-items: center;
-      justify-content: flex-start;
-      max-width: 100%;
-    }
-    .ukaq-site-footer-logo {
-      display: block;
-      width: auto;
-      max-width: 100%;
-      max-height: 58px;
-    }
-    .ukaq-site-footer-logo--breathe {
-      max-height: 48px;
-    }
-    .ukaq-site-footer-logo--openaq {
-      max-height: 58px;
-    }
-    .ukaq-site-footer-logo--scomm {
-      max-height: 54px;
-    }
-    .ukaq-site-footer-gov-pill {
-      display: inline-flex;
-      align-items: center;
-      justify-content: center;
-      padding: 5px 10px 6px;
-      border: 3px solid #666;
-      border-radius: 8px;
-      color: #666;
-      background: transparent;
-      font-size: 1rem;
-      font-weight: 500;
-      line-height: 1;
-      text-decoration: none;
-    }
-    .ukaq-site-footer-copy {
-      margin: 0;
-      font-size: 0.9rem;
-      font-weight: 400;
-      line-height: 1.4;
-      color: #666;
-    }
-    .ukaq-site-footer-copy + .ukaq-site-footer-copy {
-      margin-top: -8px;
-    }
-    #ukaq-site-footer a {
-      color: inherit;
-      text-decoration-color: rgba(102, 102, 102, 0.5);
-      text-underline-offset: 0.14em;
-    }
-    #ukaq-site-footer a:hover {
-      color: var(--cic-accent-deep);
-      text-decoration-color: currentColor;
-    }
-    #ukaq-site-footer a:focus-visible {
-      outline: 2px solid rgba(60, 120, 172, 0.55);
-      outline-offset: 3px;
-      border-radius: 3px;
-    }
-
-    body.ukaq-site-footer-after-viewport {
-      height: auto !important;
-      min-height: 100vh;
-    }
-    body.ukaq-site-footer-after-viewport #map {
-      bottom: auto !important;
-      height: calc(100vh - var(--ukaq-chrome-h, 0px));
-    }
-    body.ukaq-site-footer-after-viewport #ukaq-site-footer {
-      margin-top: 100vh;
-    }
-
-    @media (max-width: 1000px) {
-      .ukaq-site-footer-sources {
-        grid-template-columns: repeat(2, minmax(0, 1fr));
-      }
-      .ukaq-site-footer-source:nth-child(3) {
-        border-left: 0;
-      }
-      .ukaq-site-footer-source:nth-child(n + 3) {
-        border-top: 1px solid rgba(16, 24, 34, 0.75);
-      }
-    }
-
-    @media (max-width: 620px) {
-      .ukaq-site-footer-meta {
-        padding: 16px 18px;
-      }
-      .ukaq-site-footer-sources {
-        grid-template-columns: 1fr;
-      }
-      .ukaq-site-footer-source {
-        padding: 20px 18px 22px;
-      }
-      .ukaq-site-footer-source + .ukaq-site-footer-source {
-        border-left: 0;
-        border-top: 1px solid rgba(16, 24, 34, 0.75);
-      }
-    }
   `;
 
   // ─── HTML builders ────────────────────────────────────────────────────────────
@@ -586,7 +452,7 @@
       <div class="ukaq-site-footer-sources" aria-label="Air quality data sources and licences">
         <section class="ukaq-site-footer-source" aria-label="GOV.UK and UK-AIR attribution">
           <div class="ukaq-site-footer-mark">
-            <a class="ukaq-site-footer-gov-pill" href="https://uk-air.defra.gov.uk/">GOV.UK</a>
+            <a class="ukaq-site-footer-gov-pill" href="https://uk-air.defra.gov.uk/">GOV.UK AURN</a>
           </div>
           <p class="ukaq-site-footer-copy">&copy; Crown 2026 copyright Defra via <a href="https://uk-air.defra.gov.uk/">uk-air.defra.gov.uk</a>, licenced under the <a href="${oglUrl}">Open Government Licence (OGL)</a>.</p>
         </section>
@@ -650,7 +516,16 @@
       document.head.appendChild(link);
     }
 
-    // Injected styles
+    // Permanent shared footer styles
+    if (!document.getElementById('ukaq-site-footer-styles')) {
+      const link = document.createElement('link');
+      link.id = 'ukaq-site-footer-styles';
+      link.rel = 'stylesheet';
+      link.href = `${location.origin}/site-footer.css`;
+      document.head.appendChild(link);
+    }
+
+    // Injected sidebar styles
     const style = document.createElement('style');
     style.id = 'cic-sidebar-styles';
     style.textContent = CSS;
@@ -698,7 +573,7 @@
 
     mountSiteFooter();
 
-    // Initial state — suppress the body transition so the padding-left jump
+    // Initial state: suppress the body transition so the padding-left jump
     // doesn't cause a mid-flight layout shift before the hex map first renders.
     document.body.style.transition = 'none';
     const bp = getBreakpoint();
@@ -708,7 +583,7 @@
     } else {
       setState(MINI);
     }
-    document.body.offsetHeight; // force reflow, then restore CSS transition
+    document.body.offsetHeight;
     document.body.style.transition = '';
     updateHamburgerIcon(btn);
 

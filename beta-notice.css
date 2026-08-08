@@ -114,3 +114,98 @@
 main > header + .ukaq-beta-notice-mount {
   margin-bottom: 1rem;
 }
+
+/* Shared site footer visual refinements. The footer markup is mounted by sidebar.js. */
+body #ukaq-site-footer {
+  border-top: 1px solid rgba(102, 102, 102, 0.42);
+}
+
+#ukaq-site-footer .ukaq-site-footer-meta {
+  padding: 14px 24px;
+  font-size: 0.88rem;
+  line-height: 1.3;
+}
+
+#ukaq-site-footer .ukaq-site-footer-sources {
+  border-top-color: rgba(102, 102, 102, 0.42);
+}
+
+#ukaq-site-footer .ukaq-site-footer-source {
+  position: relative;
+  padding: 18px 24px 20px;
+  gap: 10px;
+}
+
+#ukaq-site-footer .ukaq-site-footer-source + .ukaq-site-footer-source {
+  border-left: 0;
+}
+
+#ukaq-site-footer .ukaq-site-footer-source + .ukaq-site-footer-source::before {
+  content: "";
+  position: absolute;
+  top: 18px;
+  bottom: 18px;
+  left: 0;
+  width: 1px;
+  background: rgba(102, 102, 102, 0.42);
+}
+
+#ukaq-site-footer .ukaq-site-footer-mark {
+  min-height: 48px;
+}
+
+#ukaq-site-footer .ukaq-site-footer-logo--breathe {
+  max-height: 38px;
+}
+
+#ukaq-site-footer .ukaq-site-footer-logo--openaq {
+  max-height: 48px;
+}
+
+#ukaq-site-footer .ukaq-site-footer-logo--scomm {
+  max-height: 40px;
+}
+
+#ukaq-site-footer .ukaq-site-footer-gov-pill {
+  padding: 4px 9px 5px;
+  border-width: 2px;
+  border-radius: 7px;
+  font-size: 0.84rem;
+}
+
+#ukaq-site-footer .ukaq-site-footer-copy {
+  font-size: 0.78rem;
+  line-height: 1.38;
+}
+
+#ukaq-site-footer .ukaq-site-footer-copy + .ukaq-site-footer-copy {
+  margin-top: -5px;
+}
+
+@media (max-width: 1000px) {
+  #ukaq-site-footer .ukaq-site-footer-source:nth-child(3)::before {
+    display: none;
+  }
+
+  #ukaq-site-footer .ukaq-site-footer-source:nth-child(n + 3) {
+    border-top-color: rgba(102, 102, 102, 0.42);
+  }
+}
+
+@media (max-width: 620px) {
+  #ukaq-site-footer .ukaq-site-footer-meta {
+    padding: 13px 18px;
+  }
+
+  #ukaq-site-footer .ukaq-site-footer-source {
+    padding: 17px 18px 19px;
+  }
+
+  #ukaq-site-footer .ukaq-site-footer-source + .ukaq-site-footer-source::before {
+    display: none;
+  }
+
+  #ukaq-site-footer .ukaq-site-footer-source + .ukaq-site-footer-source {
+    border-top-color: rgba(102, 102, 102, 0.42);
+  }
+}

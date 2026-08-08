@@ -1,0 +1,372 @@
+/* Phase 1 mobile operability. Desktop and tablet presentation starts at 768px. */
+@media (max-width: 767px) {
+  /* Homepage controls */
+  .home-page .readings-header {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .home-page .readings-header-controls,
+  .home-page .readings-controls,
+  .home-page .home-network-picker {
+    width: 100%;
+  }
+
+  .home-page .readings-header-controls {
+    justify-items: stretch;
+  }
+
+  .home-page .readings-actions {
+    flex-wrap: wrap;
+    justify-content: space-between;
+  }
+
+  .home-page .btn-refresh,
+  .home-page .home-network-picker-button,
+  .home-page .who-toggle button {
+    min-height: 44px;
+  }
+
+  .home-page .home-network-picker-button {
+    width: 100%;
+  }
+
+  .home-page .home-network-picker-panel {
+    right: auto;
+    left: 0;
+    width: min(350px, calc(100vw - 32px));
+    min-width: 0;
+    max-height: min(70dvh, 520px);
+  }
+
+  .home-page .home-network-picker-action {
+    display: inline-flex;
+    width: 44px;
+    height: 44px;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .home-page .home-network-picker-row {
+    min-height: 44px;
+    box-sizing: border-box;
+  }
+
+  .home-page .home-network-picker-row input {
+    width: 20px;
+    height: 20px;
+    flex: 0 0 20px;
+  }
+
+  .home-page .who-toggle {
+    display: grid;
+  }
+
+  .home-page .who-summary-grid {
+    display: block;
+  }
+
+  .home-page .who-dashboard-card.is-enhanced .who-summary-card,
+  .home-page .who-dashboard-card.is-enhanced .who-rolling-card {
+    display: none;
+  }
+
+  .home-page .who-dashboard-card.is-enhanced .who-summary-card.is-active,
+  .home-page .who-dashboard-card.is-enhanced .who-rolling-card.is-active {
+    display: grid;
+  }
+
+  /* Hex Map narrow-screen reflow */
+  .hex-map-page main {
+    min-width: 0;
+    padding: 24px 12px 48px;
+  }
+
+  .hex-map-page main > header {
+    min-width: 0;
+    padding-right: 64px;
+  }
+
+  .hex-map-page .page-title {
+    max-width: 100%;
+    height: auto;
+    max-height: 42px;
+  }
+
+  .hex-map-page .map-layout,
+  .hex-map-page .map-wrap,
+  .hex-map-page .map-dashboard-card {
+    grid-template-columns: minmax(0, 1fr);
+    min-width: 0;
+  }
+
+  .hex-map-page .map-dashboard-card {
+    width: 100%;
+    padding: 12px;
+  }
+
+  .hex-map-page .map-controls-row {
+    min-height: 0;
+    height: auto;
+  }
+
+  .hex-map-page .toolbar {
+    align-items: stretch;
+    gap: 8px;
+    padding: 8px;
+  }
+
+  .hex-map-page .toolbar-divider {
+    display: none;
+  }
+
+  .hex-map-page .segmented--view,
+  .hex-map-page .toolbar-region-section,
+  .hex-map-page .toolbar-region-section .popover-wrap,
+  .hex-map-page .pill-group,
+  .hex-map-page .pollutant-selector,
+  .hex-map-page .window-stepper,
+  .hex-map-page .chart-range-toolbar,
+  .hex-map-page .toolbar-right {
+    width: 100%;
+  }
+
+  .hex-map-page .segmented--view button {
+    flex: 1 1 0;
+    min-width: 0;
+  }
+
+  .hex-map-page .toolbar-region-section {
+    flex-wrap: wrap;
+  }
+
+  .hex-map-page .popover-trigger {
+    width: 100%;
+    min-width: 0;
+    max-width: none;
+  }
+
+  .hex-map-page .pollutant-selector {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 6px;
+  }
+
+  .hex-map-page .window-stepper,
+  .hex-map-page .toolbar-right {
+    justify-content: space-between;
+  }
+
+  .hex-map-page .chart-range-toolbar select {
+    flex: 1 1 auto;
+    min-width: 0;
+  }
+
+  .hex-map-page .map-floating-search {
+    top: 12px;
+    right: 12px;
+    left: 12px;
+    width: auto;
+    max-width: none;
+  }
+
+  .hex-map-page .map-topbar {
+    top: 68px;
+    right: 12px;
+    left: 12px;
+    justify-content: stretch;
+  }
+
+  .hex-map-page .map-topbar > .networks-pill-anchor,
+  .hex-map-page .networks-pill {
+    width: 100%;
+  }
+
+  .hex-map-page .map-search-results,
+  .hex-map-page .popover-menu {
+    width: 100%;
+    min-width: 0;
+    max-width: calc(100vw - 48px);
+    max-height: min(60dvh, 400px);
+    overflow-y: auto;
+  }
+
+  .hex-map-page .map-settings-panel {
+    right: 8px;
+    left: 8px;
+    width: auto;
+    max-height: min(70dvh, 520px);
+    overflow-y: auto;
+  }
+
+  .hex-map-page .networks-panel-floating.is-floating,
+  .hex-map-page .networks-panel-floating.is-docked {
+    min-width: 0;
+    max-width: calc(100vw - 24px);
+    max-height: min(70dvh, 520px);
+  }
+
+  .hex-map-page .networks-panel-floating.is-floating {
+    width: min(360px, calc(100vw - 24px));
+  }
+
+  .hex-map-page .legend-pill {
+    width: calc(100% - 16px);
+    grid-template-columns: minmax(0, 1fr);
+    justify-items: center;
+    row-gap: 5px;
+    border-radius: 14px;
+    white-space: normal;
+  }
+
+  .hex-map-page .legend-pill > span:first-child,
+  .hex-map-page .legend-pill > #legend-label,
+  .hex-map-page .legend-pill > #cr-legend-label {
+    justify-content: center;
+    text-align: center;
+  }
+
+  .hex-map-page .legend-pill .legend-scale {
+    width: 100%;
+    justify-content: center;
+  }
+
+  .hex-map-page .legend-pill .legend-bar-wrap {
+    width: min(200px, 48vw);
+  }
+
+  .hex-map-page .map-dashboard-card .map-canvas-wrap {
+    --sensor-panel-height: 280px;
+    --sensor-panel-header-height: 68px;
+  }
+
+  /* Hex Map touch targets; glyph dimensions remain on their existing rules. */
+  .hex-map-page .map-settings,
+  .hex-map-page .map-settings-close,
+  .hex-map-page .sensor-panel-close,
+  .hex-map-page .sensor-title-icon-button,
+  .hex-map-page .sensor-chart-launch,
+  .hex-map-page .networks-panel-pin,
+  .hex-map-page .network-dropdown-action,
+  .hex-map-page .window-stepper-arrow,
+  .hex-map-page .map-search-clear {
+    width: 44px;
+    height: 44px;
+    min-width: 44px;
+    min-height: 44px;
+  }
+
+  .hex-map-page .networks-panel-pin-icon {
+    width: 24px;
+    height: 24px;
+  }
+
+  .hex-map-page .chart-back-pill,
+  .hex-map-page .segmented button,
+  .hex-map-page .popover-trigger,
+  .hex-map-page .popover-item,
+  .hex-map-page .pill,
+  .hex-map-page .chart-range-toolbar select,
+  .hex-map-page .btn-refresh,
+  .hex-map-page .networks-pill,
+  .hex-map-page .network-option,
+  .hex-map-page .colour-scale-option,
+  .hex-map-page .sort-header,
+  .hex-map-page .hex-chart-selected-sensor-chip[role="button"],
+  .hex-map-page .map-zoom-controls button {
+    min-height: 44px;
+  }
+
+  .hex-map-page .colour-scale-group,
+  .hex-map-page .metric-group {
+    --toggle-slot: 44px;
+  }
+
+  .hex-map-page .network-option input[type="checkbox"] {
+    width: 20px;
+    height: 20px;
+    flex: 0 0 20px;
+  }
+
+  .hex-map-page .map-zoom-controls {
+    width: 44px;
+  }
+
+  .hex-map-page .sensor-table th.sensor-chart-select-col,
+  .hex-map-page .sensor-table td.sensor-chart-select-col,
+  .hex-map-page .sensor-table th.sensor-chart-symbol-col,
+  .hex-map-page .sensor-table td.sensor-chart-symbol-col {
+    width: 52px;
+  }
+
+  .hex-map-page .sensor-chart-launch {
+    opacity: 1;
+    pointer-events: auto;
+  }
+
+  .hex-map-page .hex-chart-selector {
+    position: relative;
+    width: 44px;
+    height: 44px;
+    border: 0;
+  }
+
+  .hex-map-page .hex-chart-selector::before {
+    content: "";
+    position: absolute;
+    width: 22px;
+    height: 22px;
+    box-sizing: border-box;
+    border: 2px solid #3C78AC;
+    border-radius: 50%;
+  }
+
+  .hex-map-page .hex-chart-selector::after {
+    position: relative;
+  }
+
+  .hex-map-page .hex-chart-selector:disabled::before {
+    border-color: var(--ink-4);
+  }
+
+  /* Sensor Map controls */
+  #uk-aq-header {
+    min-width: 0;
+    padding-right: 64px;
+  }
+
+  #uk-aq-header .page-title {
+    max-width: 100%;
+    height: auto;
+    max-height: 42px;
+  }
+
+  .sensor-map-controls {
+    right: 8px;
+    left: calc(var(--ukaq-sidebar-offset) + 8px);
+    max-width: none;
+  }
+
+  .sensor-map-controls .bar-top,
+  .sensor-map-controls .bar-bottom {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    align-items: stretch;
+    gap: 6px;
+  }
+
+  .sensor-map-controls .spacer {
+    display: none;
+  }
+
+  .sensor-map-controls select,
+  .sensor-map-controls button {
+    width: 100%;
+    min-height: 44px;
+  }
+
+  #map .leaflet-control-zoom a {
+    width: 44px;
+    height: 44px;
+    line-height: 44px;
+  }
+}

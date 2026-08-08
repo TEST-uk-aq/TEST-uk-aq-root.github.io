@@ -446,7 +446,7 @@
         ${NAV.map(buildSection).join('')}
       </nav>
       <div id="cic-sidebar-footer">
-        test-uk-aq.ukaq.co.uk·${SITE_VERSION}
+        ${location.hostname} · ${SITE_VERSION}
       </div>`;
   }
 

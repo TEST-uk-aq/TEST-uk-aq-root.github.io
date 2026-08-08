@@ -219,3 +219,8 @@ footer {
     max-width: 100%;
   }
 }
+
+/* Prevent the sticky-footer flex layout from shrink-wrapping the homepage masthead. */
+.home-page .home-header {
+  width: 100%;
+}

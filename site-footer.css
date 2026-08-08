@@ -46,7 +46,7 @@ body #ukaq-site-footer {
 #ukaq-site-footer .ukaq-site-footer-meta {
   margin: 0;
   padding: 8px 20px;
-  font-size: 0.78rem;
+  font-size: 15px;
   font-weight: 400;
   line-height: 1.2;
   text-align: center;
@@ -130,7 +130,7 @@ body #ukaq-site-footer {
   border-radius: 6px;
   color: #666;
   background: transparent;
-  font-size: 0.72rem;
+  font-size: 14px;
   font-weight: 500;
   line-height: 1;
   text-decoration: none;
@@ -141,7 +141,7 @@ body #ukaq-site-footer {
   max-width: 100%;
   margin: 0;
   color: #666;
-  font-size: 0.72rem;
+  font-size: 14px;
   font-weight: 400;
   line-height: 1.28;
   text-align: left;

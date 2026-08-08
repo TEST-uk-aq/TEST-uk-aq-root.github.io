@@ -115,6 +115,15 @@ main > header + .ukaq-beta-notice-mount {
   margin-bottom: 1rem;
 }
 
+/* Keep the shared footer visually close enough to the final card to be discoverable. */
+.hex-map-page main {
+  padding-bottom: 32px !important;
+}
+
+.home-page .home-main {
+  padding-bottom: 48px !important;
+}
+
 /* Shared site footer visual refinements. The footer markup is mounted by sidebar.js. */
 body #ukaq-site-footer {
   position: static !important;
@@ -191,7 +200,7 @@ body #ukaq-site-footer {
 }
 
 #ukaq-site-footer .ukaq-site-footer-logo--scomm {
-  max-height: 30px;
+  max-height: 34px;
   max-width: 100%;
 }
 

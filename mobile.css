@@ -1,17 +1,16 @@
 /* Phase 1 mobile operability. Desktop and tablet presentation starts at 768px. */
 @media (max-width: 767px) {
   /* Homepage controls */
-  .home-page .home-title {
-    display: flex;
-    justify-content: flex-end;
-    min-width: 0;
-    padding-left: 60px;
+  .home-page .home-header {
+    padding-top: 76px;
   }
 
-  .home-page .home-title-logo {
-    width: min(100%, 640px);
-    height: auto;
-    max-height: 82px;
+  .home-page .home-title {
+    display: none;
+  }
+
+  .home-page .home-subtitle {
+    margin-top: 0;
   }
 
   .home-page .readings-header {
@@ -107,7 +106,8 @@
 
   .hex-map-page main > header {
     min-width: 0;
-    padding-right: 64px;
+    padding-right: 124px;
+    padding-left: 48px;
   }
 
   .hex-map-page .page-title {
@@ -355,7 +355,8 @@
   /* Sensor Map controls */
   #uk-aq-header {
     min-width: 0;
-    padding-right: 64px;
+    padding-right: 124px;
+    padding-left: 48px;
   }
 
   #uk-aq-header .page-title {
@@ -392,5 +393,36 @@
     width: 44px;
     height: 44px;
     line-height: 44px;
+  }
+
+  /* Resources and Contact mobile title safe areas. */
+  body[data-page-slug="resources"] .title-row,
+  body[data-page-slug="contact"] .contact-title-row {
+    min-width: 0;
+    margin-right: 108px;
+    margin-left: 32px;
+  }
+
+  body[data-page-slug="resources"] .resources-page-title,
+  body[data-page-slug="contact"] .contact-page-title {
+    min-width: 0;
+    width: auto;
+    height: auto;
+    max-height: 42px;
+    flex: 0 1 auto;
+  }
+
+  @media (max-width: 620px) {
+    body[data-page-slug="resources"] .title-row,
+    body[data-page-slug="contact"] .contact-title-row {
+      margin-right: 118px;
+      margin-left: 42px;
+    }
+  }
+
+  @media (max-width: 480px) {
+    body[data-page-slug="contact"] .contact-page-title {
+      max-height: 36px;
+    }
   }
 }

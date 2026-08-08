@@ -250,6 +250,20 @@
       width: 104px; height: 104px;
       object-fit: contain; display: block;
     }
+    #ukaq-home-logo picture { display: block; }
+    @media (max-width: 767px) {
+      #ukaq-home-logo {
+        top: 16px;
+        right: 16px;
+      }
+      #ukaq-home-logo img {
+        width: 112px;
+        height: auto;
+      }
+    }
+    @media (min-width: 768px) {
+      body.home-page #ukaq-home-logo { display: none; }
+    }
 
     /* ── Nav ── */
     .cic-nav {
@@ -541,15 +555,16 @@
     btn.setAttribute('aria-label', 'Toggle navigation');
     btn.innerHTML = `<img src="${location.origin}${SIDEBAR_ICON_OFF}" alt="Menu">`;
 
-    // Top-right home logo (hidden on homepage)
-    const homeLogo = isHomePage() ? null : (() => {
-      const el = document.createElement('a');
-      el.id = 'ukaq-home-logo';
-      el.href = '/';
-      el.setAttribute('aria-label', 'UK AQ home');
-      el.innerHTML = `<img src="${location.origin}/sidebar-images/UK-AQ-Logo-v3-2Lines.svg" alt="UKAQ">`;
-      return el;
-    })();
+    // Shared top-right UK AQ home logo
+    const homeLogo = document.createElement('a');
+    homeLogo.id = 'ukaq-home-logo';
+    homeLogo.href = '/';
+    homeLogo.setAttribute('aria-label', 'UK AQ home');
+    homeLogo.innerHTML = `
+      <picture>
+        <source media="(max-width: 767px)" srcset="${location.origin}/images/UK-AQ-Logo-v3-1line.svg">
+        <img src="${location.origin}/sidebar-images/UK-AQ-Logo-v3-2Lines.svg" alt="UK AQ">
+      </picture>`;
 
     // Mount into placeholder or body
     const mountEl = document.getElementById('cic-sidebar-mount');
@@ -557,9 +572,9 @@
       mountEl.appendChild(aside);
       mountEl.appendChild(overlay);
       mountEl.appendChild(btn);
-      if (homeLogo) mountEl.appendChild(homeLogo);
+      mountEl.appendChild(homeLogo);
     } else {
-      if (homeLogo) document.body.prepend(homeLogo);
+      document.body.prepend(homeLogo);
       document.body.prepend(btn);
       document.body.prepend(overlay);
       document.body.prepend(aside);

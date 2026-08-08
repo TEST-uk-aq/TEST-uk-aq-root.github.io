@@ -170,10 +170,17 @@ body #ukaq-site-footer {
   border-radius: 3px;
 }
 
-/* The full-screen sensor map occupies a viewport before the normal-flow footer. */
+/*
+ * The full-screen Sensor Map occupies exactly one viewport before the footer.
+ * flow-root keeps the footer's 100vh spacer inside the body instead of letting
+ * its top margin collapse out of the body and create excess document height.
+ */
 body.ukaq-site-footer-after-viewport {
+  display: flow-root !important;
   height: auto !important;
-  min-height: 100vh;
+  min-height: 0 !important;
+  overflow-x: hidden;
+  overscroll-behavior-y: none;
 }
 
 body.ukaq-site-footer-after-viewport #map {

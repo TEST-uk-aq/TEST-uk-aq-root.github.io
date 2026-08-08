@@ -11,13 +11,28 @@
   padding-bottom: 48px !important;
 }
 
+/*
+ * On short pages, use the body's spare viewport height to push the footer to
+ * the bottom of the screen. Long pages remain normal scrolling documents.
+ * The full-screen Sensor Map has its own footer treatment below.
+ */
+body:has(> #ukaq-site-footer):not(.ukaq-site-footer-after-viewport) {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+body:has(> #ukaq-site-footer):not(.ukaq-site-footer-after-viewport) > #ukaq-site-footer {
+  margin-top: auto;
+  flex: 0 0 auto;
+}
+
 body #ukaq-site-footer {
   position: static !important;
   inset: auto !important;
   bottom: auto !important;
   width: 100% !important;
   max-width: 100%;
-  margin: 0;
   padding: 0;
   box-sizing: border-box;
   background: #fff7ed;

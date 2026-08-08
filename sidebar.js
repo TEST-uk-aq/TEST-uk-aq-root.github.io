@@ -109,8 +109,6 @@
 
   function setState(state) {
     document.body.setAttribute('data-sidebar-state', state);
-    const overlay = document.getElementById('cic-sidebar-overlay');
-    if (overlay) overlay.classList.toggle('visible', state === DRAWER);
   }
 
   function scheduleAutoCollapse() {
@@ -201,10 +199,14 @@
       background: rgba(16,24,34,0.35);
       z-index: 10009;
       opacity: 0;
+      pointer-events: none;
       transition: opacity var(--cic-ease);
     }
-    #cic-sidebar-overlay.visible        { display: block; }
-    body.cic-drawer-open #cic-sidebar-overlay { opacity: 1; }
+    body[data-sidebar-state="drawer"].cic-drawer-open #cic-sidebar-overlay {
+      display: block;
+      opacity: 1;
+      pointer-events: auto;
+    }
 
     /* ── Hamburger button ── */
     #cic-hamburger {
@@ -219,6 +221,9 @@
       border-radius: 25%;
       overflow: hidden;
       transition: transform 0.2s ease, box-shadow 0.2s ease;
+    }
+    @media (max-width: 767px) {
+      #cic-hamburger { position: absolute; }
     }
     #cic-hamburger:hover {
       transform: translateY(-1px);

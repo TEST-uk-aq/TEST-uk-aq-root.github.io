@@ -1,6 +1,19 @@
 /* Phase 1 mobile operability. Desktop and tablet presentation starts at 768px. */
 @media (max-width: 767px) {
   /* Homepage controls */
+  .home-page .home-title {
+    display: flex;
+    justify-content: flex-end;
+    min-width: 0;
+    padding-left: 60px;
+  }
+
+  .home-page .home-title-logo {
+    width: min(100%, 640px);
+    height: auto;
+    max-height: 82px;
+  }
+
   .home-page .readings-header {
     grid-template-columns: minmax(0, 1fr);
   }
@@ -55,6 +68,17 @@
     width: 20px;
     height: 20px;
     flex: 0 0 20px;
+  }
+
+  .home-page .dashboard-table-wrap {
+    width: 100%;
+    max-width: 100%;
+    min-width: 0;
+    overflow-x: auto;
+    overflow-y: hidden;
+    -webkit-overflow-scrolling: touch;
+    overscroll-behavior-x: contain;
+    touch-action: pan-x pan-y;
   }
 
   .home-page .who-toggle {

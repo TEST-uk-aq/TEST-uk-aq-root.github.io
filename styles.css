@@ -274,20 +274,26 @@ footer {
   text-shadow: none;
 }
 
-@keyframes who-bar-reveal {
-  from {
-    clip-path: inset(0 100% 0 0 round 999px);
-  }
-  to {
-    clip-path: inset(0 calc(100% - var(--pct)) 0 0 round 999px);
-  }
+/* WHO bar uses one fixed 0–100% colour scale. The fill is a reveal wrapper;
+   its full-track-width pseudo-element keeps each colour at a fixed position. */
+.home-page .who-bar {
+  position: relative;
 }
 
-/* WHO bar uses one fixed 0–100% colour scale. The fill spans the full track and
-   is clipped at --pct, so a given percentage always maps to the same colour. */
 .home-page .who-bar-fill {
-  width: 100%;
-  max-width: none;
+  position: relative;
+  width: var(--pct);
+  max-width: 100%;
+  overflow: hidden;
+  background: none;
+  transition: none;
+}
+
+.home-page .who-bar-fill::before {
+  content: "";
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: var(--who-track-width, 100%);
   background: linear-gradient(
     90deg,
     #f2c500 0%,
@@ -296,21 +302,21 @@ footer {
     #d7262e 90%,
     #d7262e 100%
   );
-  clip-path: inset(0 calc(100% - var(--pct)) 0 0 round 999px);
 }
 
 .home-page .who-dashboard-card.who-bars-pending .who-bar-fill {
-  clip-path: inset(0 100% 0 0 round 999px);
+  width: 0;
 }
 
 .home-page .who-dashboard-card.who-bars-revealing .who-bar-fill {
-  animation: who-bar-reveal 0.75s ease 0.35s both;
+  width: var(--pct);
+  transition: width 0.75s ease 0.35s;
 }
 
 @media (prefers-reduced-motion: reduce) {
   .home-page .who-dashboard-card.who-bars-pending .who-bar-fill,
   .home-page .who-dashboard-card.who-bars-revealing .who-bar-fill {
-    animation: none;
-    clip-path: inset(0 calc(100% - var(--pct)) 0 0 round 999px);
+    width: var(--pct);
+    transition: none;
   }
 }

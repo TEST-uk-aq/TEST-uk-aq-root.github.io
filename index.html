@@ -2590,6 +2590,9 @@
             headers: { Accept: "application/json" },
             cache: "no-store",
           });
+          const originCacheState = String(
+            response.headers.get("X-UK-AQ-WHO-Origin-Cache") || ""
+          ).trim();
           if (!response.ok) {
             throw new Error(`WHO summary request failed (${response.status})`);
           }
@@ -2599,7 +2602,13 @@
           }
           if (
             cachedPayload &&
-            cachedPayload.data_as_of_day_utc > payload.data_as_of_day_utc
+            (
+              cachedPayload.data_as_of_day_utc > payload.data_as_of_day_utc ||
+              (
+                originCacheState === "STALE_R2_ERROR" &&
+                cachedPayload.data_as_of_day_utc >= payload.data_as_of_day_utc
+              )
+            )
           ) {
             setWhoStatus("");
             return;

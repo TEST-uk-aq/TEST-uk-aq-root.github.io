@@ -297,7 +297,7 @@ footer {
     #d7262e 100%
   );
   clip-path: inset(0 calc(100% - var(--pct)) 0 0 round 999px);
-  animation: who-bar-reveal 0.25s ease both;
+  animation: who-bar-reveal 0.75s ease both;
 }
 
 @media (prefers-reduced-motion: reduce) {

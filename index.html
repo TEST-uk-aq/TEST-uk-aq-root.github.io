@@ -1775,7 +1775,7 @@
 
   <main class="home-main">
     <div class="ukaq-beta-notice-mount" data-ukaq-beta-notice-mount></div>
-    <section class="who-dashboard-card" aria-labelledby="who-guideline-title">
+    <section class="who-dashboard-card who-bars-pending" aria-labelledby="who-guideline-title">
       <div class="who-card-header">
         <div class="who-title-group">
           <h2 class="who-title" id="who-guideline-title">WHO guideline summary</h2>
@@ -2577,6 +2577,34 @@
         }
       }
 
+      function startWhoBarReveal() {
+        const firstBarFill = card.querySelector("[data-who-bar-fill]");
+        const finishReveal = () => {
+          card.classList.remove("who-bars-pending", "who-bars-revealing");
+        };
+        if (!firstBarFill) {
+          finishReveal();
+          return;
+        }
+        if (window.matchMedia?.("(prefers-reduced-motion: reduce)").matches) {
+          finishReveal();
+          return;
+        }
+
+        firstBarFill.addEventListener("animationend", (event) => {
+          if (event.animationName === "who-bar-reveal") {
+            finishReveal();
+          }
+        }, { once: true });
+
+        window.requestAnimationFrame(() => {
+          window.requestAnimationFrame(() => {
+            card.classList.remove("who-bars-pending");
+            card.classList.add("who-bars-revealing");
+          });
+        });
+      }
+
       async function loadWhoSummary() {
         const cached = readCachedWhoSummary();
         const cachedPayload = cached?.payload || null;
@@ -2626,6 +2654,7 @@
       }
 
       loadWhoSummary();
+      startWhoBarReveal();
     })();
   </script>
   <script>

@@ -297,11 +297,20 @@ footer {
     #d7262e 100%
   );
   clip-path: inset(0 calc(100% - var(--pct)) 0 0 round 999px);
-  animation: who-bar-reveal 0.75s ease 0.35s both;
+}
+
+.home-page .who-dashboard-card.who-bars-pending .who-bar-fill {
+  clip-path: inset(0 100% 0 0 round 999px);
+}
+
+.home-page .who-dashboard-card.who-bars-revealing .who-bar-fill {
+  animation: who-bar-reveal 1.20s linear 0.20s both;
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .home-page .who-bar-fill {
+  .home-page .who-dashboard-card.who-bars-pending .who-bar-fill,
+  .home-page .who-dashboard-card.who-bars-revealing .who-bar-fill {
     animation: none;
+    clip-path: inset(0 calc(100% - var(--pct)) 0 0 round 999px);
   }
 }

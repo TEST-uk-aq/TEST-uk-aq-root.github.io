@@ -304,7 +304,7 @@ footer {
 }
 
 .home-page .who-dashboard-card.who-bars-revealing .who-bar-fill {
-  animation: who-bar-reveal 0.75s linear 0.35s both;
+  animation: who-bar-reveal 0.75s ease 0.35s both;
 }
 
 @media (prefers-reduced-motion: reduce) {

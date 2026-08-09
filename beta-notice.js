@@ -97,38 +97,28 @@
   });
 })();
 
-(function initMobileWhoGuidelineFooter() {
+(function initWhoGuidelineReference() {
   "use strict";
 
   const footer = document.querySelector(".home-page .who-card-footer");
-  if (!footer || footer.querySelector(".who-guideline-mobile")) return;
+  if (!footer || footer.querySelector(".who-guideline-reference-v2")) return;
 
-  const originalChildren = Array.from(footer.children);
-  if (!originalChildren.length) return;
-
-  const desktop = document.createElement("div");
-  desktop.className = "who-guideline-desktop";
-  desktop.style.display = "grid";
-  desktop.style.gap = "0.34rem";
-  originalChildren.forEach((child) => desktop.appendChild(child));
-
-  const mobile = document.createElement("div");
-  mobile.className = "who-guideline-mobile";
-  mobile.hidden = true;
-  mobile.innerHTML = `
-    <div class="who-guideline-mobile-header">
-      <strong>World Health Organization guideline values <span class="who-guideline-unit">(&micro;g/m<sup>3</sup>)</span></strong>
+  const reference = document.createElement("div");
+  reference.className = "who-guideline-reference-v2";
+  reference.innerHTML = `
+    <div class="who-guideline-heading-v2">
+      <strong>World Health Organization guideline values <span class="who-guideline-unit-v2">(&micro;g/m<sup>3</sup>)</span></strong>
       <button
         type="button"
-        class="who-guideline-info-toggle"
+        class="who-guideline-info-toggle-v2"
         aria-expanded="false"
-        aria-controls="who-guideline-mobile-note"
+        aria-controls="who-guideline-note-v2"
         aria-label="Show note about WHO guideline values"
       >
         <img src="/images/Info-Icon-alpha.svg" alt="" aria-hidden="true">
       </button>
     </div>
-    <table class="who-guideline-table">
+    <table class="who-guideline-table-v2">
       <caption class="sr-only">World Health Organization air quality guideline values in micrograms per cubic metre</caption>
       <thead>
         <tr>
@@ -155,36 +145,76 @@
         </tr>
       </tbody>
     </table>
-    <div class="who-guideline-mobile-note" id="who-guideline-mobile-note" role="note" hidden>
+    <div class="who-guideline-note-v2" id="who-guideline-note-v2" role="note">
       <strong>Note:</strong> Daily averages use GMT days from midnight to midnight. &ldquo;Above guideline&rdquo; means above WHO health-based guidelines, not UK legal limits.
     </div>
   `;
 
-  footer.replaceChildren(desktop, mobile);
+  footer.replaceChildren(reference);
 
-  const toggle = mobile.querySelector(".who-guideline-info-toggle");
-  const note = mobile.querySelector(".who-guideline-mobile-note");
+  const heading = reference.querySelector(".who-guideline-heading-v2");
+  const toggle = reference.querySelector(".who-guideline-info-toggle-v2");
+  const note = reference.querySelector(".who-guideline-note-v2");
   const mobileMedia = window.matchMedia("(max-width: 767px)");
+  let noteOpen = false;
+
+  function syncNoteTop() {
+    if (!heading) return;
+    reference.style.setProperty("--who-guideline-note-top", `${heading.offsetHeight + 6}px`);
+  }
 
   function setNoteOpen(open) {
-    note.hidden = !open;
-    toggle.setAttribute("aria-expanded", String(open));
+    noteOpen = Boolean(open && mobileMedia.matches);
+    reference.classList.toggle("who-guideline-note-open-v2", noteOpen);
+    toggle.setAttribute("aria-expanded", String(noteOpen));
     toggle.setAttribute(
       "aria-label",
-      open ? "Hide note about WHO guideline values" : "Show note about WHO guideline values",
+      noteOpen ? "Hide note about WHO guideline values" : "Show note about WHO guideline values",
     );
+    note.hidden = mobileMedia.matches ? !noteOpen : false;
+    if (noteOpen) syncNoteTop();
+  }
+
+  function closeNote() {
+    if (noteOpen) setNoteOpen(false);
   }
 
   function syncViewport() {
-    const isMobile = mobileMedia.matches;
-    desktop.hidden = isMobile;
-    mobile.hidden = !isMobile;
-    if (!isMobile) setNoteOpen(false);
+    noteOpen = false;
+    reference.classList.remove("who-guideline-note-open-v2");
+    toggle.setAttribute("aria-expanded", "false");
+    toggle.setAttribute("aria-label", "Show note about WHO guideline values");
+    note.hidden = mobileMedia.matches;
+    syncNoteTop();
   }
 
   toggle.addEventListener("click", () => {
-    setNoteOpen(toggle.getAttribute("aria-expanded") !== "true");
+    setNoteOpen(!noteOpen);
   });
+
+  document.addEventListener("pointerdown", (event) => {
+    if (!noteOpen) return;
+    if (toggle.contains(event.target) || note.contains(event.target)) return;
+    closeNote();
+  });
+
+  document.addEventListener("focusin", (event) => {
+    if (!noteOpen) return;
+    if (toggle.contains(event.target) || note.contains(event.target)) return;
+    closeNote();
+  });
+
+  document.addEventListener("keydown", (event) => {
+    if (event.key === "Escape") closeNote();
+  });
+
+  document.addEventListener("scroll", closeNote, { passive: true, capture: true });
+  window.addEventListener("resize", () => {
+    closeNote();
+    syncNoteTop();
+  }, { passive: true });
+  window.addEventListener("orientationchange", closeNote, { passive: true });
+  document.addEventListener("visibilitychange", closeNote);
 
   syncViewport();
   if (typeof mobileMedia.addEventListener === "function") {

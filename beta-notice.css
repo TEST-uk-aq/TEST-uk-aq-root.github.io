@@ -114,3 +114,8 @@
 main > header + .ukaq-beta-notice-mount {
   margin-bottom: 1rem;
 }
+
+/* Keep the existing Hex Map coverage animation but round the visible fill end. */
+.hex-map-page .top-summary-coverage-fill {
+  border-radius: inherit;
+}

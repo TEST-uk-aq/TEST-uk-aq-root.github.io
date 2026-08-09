@@ -119,3 +119,31 @@ main > header + .ukaq-beta-notice-mount {
 .hex-map-page .map-summary-coverage-fill {
   border-radius: inherit;
 }
+
+/* On wide screens, use the WHO reference card width for useful content rather
+   than stretching three table columns across the full card. */
+@media (min-width: 981px) {
+  .home-page .who-guideline-reference-v2 {
+    grid-template-columns: minmax(0, 1.1fr) minmax(420px, 0.9fr);
+    grid-template-areas:
+      "heading table"
+      "note table";
+    column-gap: clamp(1.25rem, 3vw, 2.5rem);
+    row-gap: 0.55rem;
+    align-items: start;
+  }
+
+  .home-page .who-guideline-heading-v2 {
+    grid-area: heading;
+  }
+
+  .home-page .who-guideline-table-v2 {
+    grid-area: table;
+    align-self: start;
+  }
+
+  .home-page .who-guideline-note-v2 {
+    grid-area: note;
+    align-self: start;
+  }
+}

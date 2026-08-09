@@ -225,8 +225,22 @@ footer {
   width: 100%;
 }
 
-/* WHO summary percentage emphasis. The existing renderer serialises the visible
-   bar percentage to one decimal place in --pct for both fallback and live data. */
+/* WHO summary percentage emphasis. Yellow is the low-range default; orange and
+   red override it at the existing thresholds. */
+.home-page .who-pollutant-percent {
+  color: #f2c500;
+  text-shadow:
+    -0.5px -0.5px 0 #e5e7eb,
+     0.5px -0.5px 0 #e5e7eb,
+    -0.5px  0.5px 0 #e5e7eb,
+     0.5px  0.5px 0 #e5e7eb;
+}
+
+.home-page .who-pollutant-row:has(.who-bar-fill[style*="--pct: 0.0%"]) .who-pollutant-percent {
+  color: #2e7d32;
+  text-shadow: none;
+}
+
 .home-page .who-pollutant-row:has(
   .who-bar-fill:is(
     [style*="--pct: 75."],
@@ -241,6 +255,7 @@ footer {
 ) .who-pollutant-percent {
   color: #d7262e;
   font-size: clamp(1.36rem, 1.8vw, 1.66rem);
+  text-shadow: none;
 }
 
 .home-page .who-pollutant-row:has(
@@ -256,6 +271,7 @@ footer {
 ) .who-pollutant-percent {
   color: #ed6c02;
   font-size: clamp(1.28rem, 1.68vw, 1.56rem);
+  text-shadow: none;
 }
 
 /* WHO bar uses one fixed 0–100% colour scale. The fill spans the full track and
@@ -265,8 +281,8 @@ footer {
   max-width: none;
   background: linear-gradient(
     90deg,
-    var(--who-accent) 0%,
-    var(--who-accent-deep) 30%,
+    #f2c500 0%,
+    #f2c500 25%,
     #ed6c02 60%,
     #ed6c02 70%,
     #d7262e 90%,

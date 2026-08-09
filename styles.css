@@ -320,3 +320,160 @@ footer {
     transition: none;
   }
 }
+
+/* Shared WHO guideline reference. The existing footer remains the containing card;
+   the table deliberately has no second outer frame. */
+.home-page .who-guideline-reference-v2 {
+  position: relative;
+  display: grid;
+  gap: 0.5rem;
+  width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+}
+
+.home-page .who-guideline-heading-v2 {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.65rem;
+  min-width: 0;
+}
+
+.home-page .who-guideline-heading-v2 strong {
+  line-height: 1.3;
+}
+
+.home-page .who-guideline-unit-v2 {
+  color: #5e6f7f;
+  font-size: 0.84em;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.home-page .who-guideline-info-toggle-v2 {
+  display: none;
+}
+
+.home-page .who-guideline-table-v2 {
+  width: 100%;
+  border-spacing: 0;
+  border-collapse: separate;
+  background: transparent;
+  color: #38495a;
+  font-size: 0.88rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.home-page .who-guideline-table-v2 th,
+.home-page .who-guideline-table-v2 td {
+  padding: 0.44rem 0.55rem;
+  border-bottom: 1px solid rgba(60, 120, 172, 0.14);
+  text-align: center;
+  vertical-align: middle;
+}
+
+.home-page .who-guideline-table-v2 th:first-child {
+  text-align: left;
+}
+
+.home-page .who-guideline-table-v2 thead th {
+  background: rgba(60, 120, 172, 0.07);
+  color: #34495d;
+  font-weight: 800;
+}
+
+.home-page .who-guideline-table-v2 tbody th {
+  font-weight: 800;
+}
+
+.home-page .who-guideline-table-v2 tbody tr:last-child th,
+.home-page .who-guideline-table-v2 tbody tr:last-child td {
+  border-bottom: 0;
+}
+
+.home-page .who-guideline-note-v2 {
+  width: 100%;
+  box-sizing: border-box;
+  color: #38495a;
+  font-size: 0.88rem;
+  font-weight: 650;
+  line-height: 1.4;
+}
+
+@media (max-width: 767px) {
+  .home-page .who-guideline-reference-v2 {
+    gap: 0.45rem;
+  }
+
+  .home-page .who-guideline-heading-v2 {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 44px;
+    gap: 0.55rem;
+    align-items: center;
+  }
+
+  .home-page .who-guideline-info-toggle-v2 {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 44px;
+    height: 44px;
+    min-width: 44px;
+    min-height: 44px;
+    padding: 6px;
+    border: 0;
+    border-radius: 50%;
+    background: transparent;
+    cursor: pointer;
+    touch-action: manipulation;
+  }
+
+  .home-page .who-guideline-info-toggle-v2:focus-visible {
+    outline: 3px solid rgba(60, 120, 172, 0.42);
+    outline-offset: 2px;
+  }
+
+  .home-page .who-guideline-info-toggle-v2 img {
+    display: block;
+    width: 28px;
+    height: 28px;
+    object-fit: contain;
+  }
+
+  .home-page .who-guideline-table-v2 {
+    font-size: 0.86rem;
+  }
+
+  .home-page .who-guideline-note-v2 {
+    position: absolute;
+    top: var(--who-guideline-note-top, 50px);
+    right: 0;
+    z-index: 60;
+    width: 100%;
+    padding: 0.68rem 0.76rem;
+    border: 1px solid rgba(60, 120, 172, 0.26);
+    border-radius: 9px;
+    background: #fff;
+    box-shadow: 0 8px 22px rgba(40, 90, 132, 0.18);
+    font-size: 0.84rem;
+    line-height: 1.4;
+  }
+
+  .home-page .who-guideline-note-v2::before {
+    content: "";
+    position: absolute;
+    top: -6px;
+    right: 16px;
+    width: 10px;
+    height: 10px;
+    border-top: 1px solid rgba(60, 120, 172, 0.26);
+    border-left: 1px solid rgba(60, 120, 172, 0.26);
+    background: #fff;
+    transform: rotate(45deg);
+  }
+
+  .home-page .who-guideline-note-v2[hidden] {
+    display: none;
+  }
+}

@@ -120,6 +120,49 @@ main > header + .ukaq-beta-notice-mount {
   border-radius: inherit;
 }
 
+/* Make the WHO guideline heading read as a proper title on desktop and mobile. */
+.home-page .who-guideline-heading-v2 strong {
+  font-size: clamp(1.05rem, 1.3vw, 1.18rem);
+  font-weight: 800;
+}
+
+.home-page .who-guideline-unit-v2 {
+  color: inherit;
+  font-size: 1em;
+  font-weight: 800;
+}
+
+/* Match the Hex Map chart selector's centred 1 glyph while preserving the
+   existing rounded-square network action shape. */
+.home-page .home-network-picker-action-icon--clear-all::before,
+.hex-map-page .network-dropdown-action-icon--clear-all::before {
+  content: "1";
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 1;
+}
+
+.home-page .home-network-picker-action-icon--clear-all::before {
+  color: #3C78AC;
+}
+
+.hex-map-page .network-dropdown-action-icon--clear-all::before {
+  color: var(--accent);
+}
+
+.home-page .home-network-picker-action:disabled .home-network-picker-action-icon--clear-all::before {
+  color: #9aa2a9;
+}
+
+.hex-map-page .network-dropdown-action:disabled .network-dropdown-action-icon--clear-all::before {
+  color: var(--ink-4);
+}
+
 /* On wide screens, use the WHO reference card width for useful content rather
    than stretching three table columns across the full card. */
 @media (min-width: 981px) {

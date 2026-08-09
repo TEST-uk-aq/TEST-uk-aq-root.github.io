@@ -42,10 +42,17 @@ jobs:
           UK_AQ_WEBSITE_DEBUG_LOG_ENABLED: ${{ vars.UK_AQ_WEBSITE_DEBUG_LOG_ENABLED || 'false' }}
           UK_AQ_AQI_MUTABLE_HOURS: ${{ vars.UK_AQ_AQI_MUTABLE_HOURS || '120' }}
 
+      - name: Build content-hashed Pages artifact
+        run: |
+          test ! -e .pages-site
+          mkdir .pages-site
+          rsync -a --exclude='.git/' --exclude='.pages-site/' ./ .pages-site/
+          node scripts/uk_aq_content_hash_assets.mjs .pages-site
+
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v4
         with:
-          path: .
+          path: .pages-site
 
   deploy:
     needs: build

@@ -96,3 +96,98 @@
     }
   });
 })();
+
+(function initMobileWhoGuidelineFooter() {
+  "use strict";
+
+  const footer = document.querySelector(".home-page .who-card-footer");
+  if (!footer || footer.querySelector(".who-guideline-mobile")) return;
+
+  const originalChildren = Array.from(footer.children);
+  if (!originalChildren.length) return;
+
+  const desktop = document.createElement("div");
+  desktop.className = "who-guideline-desktop";
+  originalChildren.forEach((child) => desktop.appendChild(child));
+
+  const mobile = document.createElement("div");
+  mobile.className = "who-guideline-mobile";
+  mobile.hidden = true;
+  mobile.innerHTML = `
+    <div class="who-guideline-mobile-header">
+      <strong>World Health Organization guideline values <span class="who-guideline-unit">(&micro;g/m<sup>3</sup>)</span></strong>
+      <button
+        type="button"
+        class="who-guideline-info-toggle"
+        aria-expanded="false"
+        aria-controls="who-guideline-mobile-note"
+        aria-label="Show note about WHO guideline values"
+      >
+        <img src="/images/Info-Icon-alpha.svg" alt="" aria-hidden="true">
+      </button>
+    </div>
+    <table class="who-guideline-table">
+      <caption class="sr-only">World Health Organization air quality guideline values in micrograms per cubic metre</caption>
+      <thead>
+        <tr>
+          <th scope="col">Pollutant</th>
+          <th scope="col">Daily</th>
+          <th scope="col">Yearly</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <th scope="row">PM2.5</th>
+          <td>15</td>
+          <td>5</td>
+        </tr>
+        <tr>
+          <th scope="row">PM10</th>
+          <td>45</td>
+          <td>15</td>
+        </tr>
+        <tr>
+          <th scope="row">NO<sub>2</sub></th>
+          <td>25</td>
+          <td>10</td>
+        </tr>
+      </tbody>
+    </table>
+    <div class="who-guideline-mobile-note" id="who-guideline-mobile-note" role="note" hidden>
+      <strong>Note:</strong> Daily averages use GMT days from midnight to midnight. &ldquo;Above guideline&rdquo; means above WHO health-based guidelines, not UK legal limits.
+    </div>
+  `;
+
+  footer.replaceChildren(desktop, mobile);
+
+  const toggle = mobile.querySelector(".who-guideline-info-toggle");
+  const note = mobile.querySelector(".who-guideline-mobile-note");
+  const mobileMedia = window.matchMedia("(max-width: 767px)");
+
+  function setNoteOpen(open) {
+    note.hidden = !open;
+    toggle.setAttribute("aria-expanded", String(open));
+    toggle.setAttribute(
+      "aria-label",
+      open ? "Hide note about WHO guideline values" : "Show note about WHO guideline values",
+    );
+  }
+
+  function syncViewport() {
+    const isMobile = mobileMedia.matches;
+    desktop.hidden = isMobile;
+    mobile.hidden = !isMobile;
+    if (!isMobile) setNoteOpen(false);
+  }
+
+  toggle.addEventListener("click", () => {
+    setNoteOpen(toggle.getAttribute("aria-expanded") !== "true");
+  });
+
+  syncViewport();
+  if (typeof mobileMedia.addEventListener === "function") {
+    mobileMedia.addEventListener("change", syncViewport);
+  } else {
+    mobileMedia.addListener?.(syncViewport);
+  }
+})();

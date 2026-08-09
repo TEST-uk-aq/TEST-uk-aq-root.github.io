@@ -151,6 +151,10 @@
   `;
 
   footer.replaceChildren(reference);
+  footer.style.background = "#fff";
+  reference.querySelectorAll(".who-guideline-table-v2 thead th").forEach((cell) => {
+    cell.style.background = "#edf6fd";
+  });
 
   const heading = reference.querySelector(".who-guideline-heading-v2");
   const toggle = reference.querySelector(".who-guideline-info-toggle-v2");

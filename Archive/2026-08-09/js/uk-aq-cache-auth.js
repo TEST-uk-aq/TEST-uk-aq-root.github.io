@@ -1,4 +1,4 @@
-// Shared authentication for protected /api/aq requests.
+// Shared authentication for protected /api/aq requests and the public WHO daily-summary cache.
 // Users may land directly on any page, so callers must not depend on another
 // page (such as Hex Map) having already created the cache session.
 (() => {
@@ -20,6 +20,11 @@
     || `${cacheOrigin}/api/aq/session/start`;
   const hintKey = `uk_aq_cache_session_hint_v1:${cacheOrigin || "default"}:shared`;
   const skewMs = 10000;
+  const whoLegacySummaryPath = "/history/v2/who_2021/latest_who_2021.json";
+  const whoApiSummaryPath = "/api/aq/who-summary";
+  const whoPayloadCacheKey = "uk_aq_who_2021_homepage_summary_v1";
+  const whoRetryStateKey = `uk_aq_who_2021_homepage_retry_v1:${window.location.origin}`;
+  const whoDefaultRetrySeconds = 1800;
   let sessionUntil = 0;
   let sessionInflight = null;
   let scriptInflight = null;
@@ -221,6 +226,142 @@
     return response;
   }
 
+  function isoDay(date) {
+    return date.toISOString().slice(0, 10);
+  }
+
+  function expectedWhoDay() {
+    const date = new Date();
+    date.setUTCDate(date.getUTCDate() - 1);
+    return isoDay(date);
+  }
+
+  function readStoredJson(key) {
+    try {
+      const value = JSON.parse(localStorage.getItem(key) || "null");
+      return value && typeof value === "object" ? value : null;
+    } catch (_error) {
+      return null;
+    }
+  }
+
+  function writeWhoRetryState(nextRetryAtMs) {
+    try {
+      if (nextRetryAtMs > Date.now()) {
+        localStorage.setItem(whoRetryStateKey, JSON.stringify({ next_retry_at_ms: Math.floor(nextRetryAtMs) }));
+      } else {
+        localStorage.removeItem(whoRetryStateKey);
+      }
+    } catch (_error) {
+      // The edge TTL still limits retries when local storage is unavailable.
+    }
+  }
+
+  function cachedWhoPayload() {
+    const cached = readStoredJson(whoPayloadCacheKey);
+    const payload = cached?.payload;
+    return payload && typeof payload === "object" ? payload : null;
+  }
+
+  function whoRequestDetails(input, init = {}) {
+    let requestUrl;
+    let method = String(init?.method || "").toUpperCase();
+    if (input instanceof Request) {
+      requestUrl = new URL(input.url, window.location.href);
+      if (!method) method = String(input.method || "GET").toUpperCase();
+    } else {
+      requestUrl = new URL(String(input), window.location.href);
+    }
+    if (!method) method = "GET";
+    return { requestUrl, method };
+  }
+
+  function isWhoSummaryRequest(input, init) {
+    try {
+      const { requestUrl, method } = whoRequestDetails(input, init);
+      if (method !== "GET") return false;
+      if (requestUrl.origin !== window.location.origin) return false;
+      return requestUrl.pathname === whoLegacySummaryPath || requestUrl.pathname === whoApiSummaryPath;
+    } catch (_error) {
+      return false;
+    }
+  }
+
+  function cachedWhoResponse(payload, requestedAsOf, cacheState) {
+    const dataAsOf = String(payload?.data_as_of_day_utc || "");
+    return new Response(JSON.stringify(payload), {
+      status: 200,
+      headers: {
+        "Content-Type": "application/json; charset=utf-8",
+        "Cache-Control": "private, max-age=0",
+        "X-UK-AQ-WHO-Requested-As-Of": requestedAsOf,
+        "X-UK-AQ-WHO-Data-As-Of": dataAsOf,
+        "X-UK-AQ-WHO-Freshness": dataAsOf >= requestedAsOf ? "current" : "behind",
+        "X-UK-AQ-WHO-Browser-Cache": cacheState,
+      },
+    });
+  }
+
+  async function fetchWhoSummary(input, init = {}) {
+    const { requestUrl } = whoRequestDetails(input, init);
+    const requestedAsOf = String(requestUrl.searchParams.get("as_of") || expectedWhoDay()).trim();
+    const cachedPayload = cachedWhoPayload();
+    const cachedDataAsOf = String(cachedPayload?.data_as_of_day_utc || "");
+
+    if (cachedPayload && cachedDataAsOf >= requestedAsOf) {
+      writeWhoRetryState(0);
+      return cachedWhoResponse(cachedPayload, requestedAsOf, "current");
+    }
+
+    const retryState = readStoredJson(whoRetryStateKey);
+    const nextRetryAtMs = Number(retryState?.next_retry_at_ms || 0);
+    if (cachedPayload && Number.isFinite(nextRetryAtMs) && Date.now() < nextRetryAtMs) {
+      return cachedWhoResponse(cachedPayload, requestedAsOf, "behind_retry_deferred");
+    }
+
+    const apiUrl = new URL(whoApiSummaryPath, window.location.origin);
+    apiUrl.searchParams.set("as_of", requestedAsOf);
+
+    try {
+      const response = await nativeFetch(apiUrl.toString(), {
+        ...init,
+        method: "GET",
+        credentials: init?.credentials || "same-origin",
+      });
+      if (!response.ok) {
+        writeWhoRetryState(Date.now() + whoDefaultRetrySeconds * 1000);
+        return response;
+      }
+
+      const payload = await response.clone().json().catch(() => null);
+      const dataAsOf = String(payload?.data_as_of_day_utc || "");
+      if (cachedPayload && cachedDataAsOf && dataAsOf && cachedDataAsOf > dataAsOf) {
+        writeWhoRetryState(Date.now() + whoDefaultRetrySeconds * 1000);
+        return cachedWhoResponse(cachedPayload, requestedAsOf, "newer_local_copy");
+      }
+      if (dataAsOf >= requestedAsOf) {
+        writeWhoRetryState(0);
+      } else {
+        const retryHeader = Number(response.headers.get("X-UK-AQ-WHO-Retry-After-Seconds"));
+        const retrySeconds = Number.isFinite(retryHeader) && retryHeader > 0
+          ? retryHeader
+          : whoDefaultRetrySeconds;
+        writeWhoRetryState(Date.now() + retrySeconds * 1000);
+      }
+      return response;
+    } catch (error) {
+      writeWhoRetryState(Date.now() + whoDefaultRetrySeconds * 1000);
+      throw error;
+    }
+  }
+
+  window.fetch = function ukAqFetch(input, init) {
+    if (isWhoSummaryRequest(input, init)) {
+      return fetchWhoSummary(input, init);
+    }
+    return nativeFetch(input, init);
+  };
+
   window.addEventListener("storage", (event) => {
     if (event.key === hintKey) sessionUntil = Math.max(sessionUntil, readHint());
   });
@@ -237,6 +378,7 @@
     getTurnstileToken,
     getCacheAuthToken,
     fetchCacheApi,
+    fetchWhoSummary,
   };
   window.ukAqFetchCacheApi = fetchCacheApi;
 })();

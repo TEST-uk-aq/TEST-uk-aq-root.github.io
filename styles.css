@@ -224,3 +224,63 @@ footer {
 .home-page .home-header {
   width: 100%;
 }
+
+/* WHO summary percentage emphasis. The existing renderer serialises the visible
+   bar percentage to one decimal place in --pct for both fallback and live data. */
+.home-page .who-pollutant-row:has(
+  .who-bar-fill:is(
+    [style*="--pct: 75."],
+    [style*="--pct: 76."],
+    [style*="--pct: 77."],
+    [style*="--pct: 78."],
+    [style*="--pct: 79."],
+    [style*="--pct: 8"]:not([style*="--pct: 8."]),
+    [style*="--pct: 9"]:not([style*="--pct: 9."]),
+    [style*="--pct: 100."]
+  )
+) .who-pollutant-percent {
+  color: #d7262e;
+}
+
+.home-page .who-pollutant-row:has(
+  .who-bar-fill:is(
+    [style*="--pct: 75."],
+    [style*="--pct: 76."],
+    [style*="--pct: 77."],
+    [style*="--pct: 78."],
+    [style*="--pct: 79."],
+    [style*="--pct: 8"]:not([style*="--pct: 8."]),
+    [style*="--pct: 9"]:not([style*="--pct: 9."]),
+    [style*="--pct: 100."]
+  )
+) .who-bar-fill {
+  background: #d7262e;
+}
+
+.home-page .who-pollutant-row:has(
+  .who-bar-fill:is(
+    [style*="--pct: 5"]:not([style*="--pct: 5."]),
+    [style*="--pct: 6"]:not([style*="--pct: 6."]),
+    [style*="--pct: 70."],
+    [style*="--pct: 71."],
+    [style*="--pct: 72."],
+    [style*="--pct: 73."],
+    [style*="--pct: 74."]
+  )
+) .who-pollutant-percent {
+  color: #ed6c02;
+}
+
+.home-page .who-pollutant-row:has(
+  .who-bar-fill:is(
+    [style*="--pct: 5"]:not([style*="--pct: 5."]),
+    [style*="--pct: 6"]:not([style*="--pct: 6."]),
+    [style*="--pct: 70."],
+    [style*="--pct: 71."],
+    [style*="--pct: 72."],
+    [style*="--pct: 73."],
+    [style*="--pct: 74."]
+  )
+) .who-bar-fill {
+  background: #ed6c02;
+}

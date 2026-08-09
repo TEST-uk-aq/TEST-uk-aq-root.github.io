@@ -227,3 +227,121 @@
     mobileMedia.addListener?.(syncViewport);
   }
 })();
+
+(function initHomepageNetworkDefaults() {
+  "use strict";
+
+  if (!document.body.classList.contains("home-page")) return;
+  const list = document.getElementById("network-picker-list");
+  const keepOneButton = document.getElementById("network-picker-clear-all");
+  if (!list) return;
+
+  const preferredCodes = new Set(["gov_uk_aurn", "breathelondon"]);
+  let defaultsApplied = false;
+  let observer = null;
+
+  if (keepOneButton) {
+    keepOneButton.setAttribute("aria-label", "Keep one network selected");
+    keepOneButton.title = "Keep one network selected";
+  }
+
+  function applyPreferredDefaults() {
+    if (defaultsApplied) return;
+    const inputs = Array.from(list.querySelectorAll('input[type="checkbox"]'));
+    if (!inputs.length) return;
+
+    const preferredInputs = inputs.filter((input) => preferredCodes.has(input.value));
+    if (!preferredInputs.length) {
+      defaultsApplied = true;
+      observer?.disconnect();
+      return;
+    }
+
+    const missingPreferred = preferredInputs.find((input) => !input.checked);
+    if (missingPreferred) {
+      missingPreferred.checked = true;
+      missingPreferred.dispatchEvent(new Event("change", { bubbles: true }));
+      return;
+    }
+
+    const extraSelected = inputs.find(
+      (input) => input.checked && !preferredCodes.has(input.value),
+    );
+    if (extraSelected) {
+      extraSelected.checked = false;
+      extraSelected.dispatchEvent(new Event("change", { bubbles: true }));
+      return;
+    }
+
+    defaultsApplied = true;
+    observer?.disconnect();
+  }
+
+  observer = new MutationObserver(() => {
+    queueMicrotask(applyPreferredDefaults);
+  });
+  observer.observe(list, { childList: true, subtree: true });
+  applyPreferredDefaults();
+})();
+
+(function initHexMapKeepOneNetwork() {
+  "use strict";
+
+  if (!document.body.classList.contains("hex-map-page")) return;
+  const list = document.getElementById("network-list");
+  const keepOneButton = document.getElementById("network-deselect-all");
+  if (!list || !keepOneButton) return;
+
+  keepOneButton.setAttribute("aria-label", "Keep one network selected");
+  keepOneButton.title = "Keep one network selected";
+
+  function networkInputs() {
+    return Array.from(list.querySelectorAll('input[type="checkbox"]'));
+  }
+
+  function syncKeepOneState() {
+    const inputs = networkInputs();
+    const selectedCount = inputs.filter((input) => input.checked).length;
+    keepOneButton.disabled = !inputs.length || selectedCount <= 1;
+  }
+
+  document.addEventListener("change", (event) => {
+    const input = event.target instanceof HTMLInputElement
+      ? event.target.closest('#network-list input[type="checkbox"]')
+      : null;
+    if (!input) return;
+    const inputs = networkInputs();
+    if (!inputs.some((candidate) => candidate.checked)) {
+      input.checked = true;
+    }
+  }, true);
+
+  document.addEventListener("click", (event) => {
+    const target = event.target instanceof Element
+      ? event.target.closest("#network-deselect-all")
+      : null;
+    if (target !== keepOneButton) return;
+
+    event.preventDefault();
+    event.stopImmediatePropagation();
+
+    const inputs = networkInputs();
+    const selected = inputs.filter((input) => input.checked);
+    if (selected.length <= 1) {
+      syncKeepOneState();
+      return;
+    }
+
+    const changed = selected.slice(1);
+    changed.forEach((input) => {
+      input.checked = false;
+    });
+    changed[0].dispatchEvent(new Event("change", { bubbles: true }));
+    syncKeepOneState();
+  }, true);
+
+  window.addEventListener("networkselectionchange", syncKeepOneState);
+  const observer = new MutationObserver(syncKeepOneState);
+  observer.observe(list, { childList: true, subtree: true });
+  syncKeepOneState();
+})();

@@ -108,6 +108,8 @@
 
   const desktop = document.createElement("div");
   desktop.className = "who-guideline-desktop";
+  desktop.style.display = "grid";
+  desktop.style.gap = "0.34rem";
   originalChildren.forEach((child) => desktop.appendChild(child));
 
   const mobile = document.createElement("div");

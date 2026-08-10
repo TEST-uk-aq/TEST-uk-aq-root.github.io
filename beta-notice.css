@@ -743,3 +743,16 @@ main > header + .ukaq-beta-notice-mount {
     font-size: clamp(0.74rem, 1.25vw, 0.88rem);
   }
 }
+
+/* Compensate for the wider right-hand legend endpoint labels at responsive widths. */
+@media (min-width: 768px) and (max-width: 1079px) {
+  .home-page .scale-legend {
+    transform: translateX(5px);
+  }
+}
+
+@media (max-width: 767px) {
+  .home-page .scale-legend {
+    transform: translateX(4px);
+  }
+}

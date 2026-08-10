@@ -47,6 +47,7 @@ jobs:
           test ! -e .pages-site
           mkdir .pages-site
           rsync -a --exclude='.git/' --exclude='.pages-site/' ./ .pages-site/
+          node scripts/uk_aq_inject_initial_loader.mjs .pages-site
           node scripts/uk_aq_content_hash_assets.mjs .pages-site
 
       - name: Upload artifact

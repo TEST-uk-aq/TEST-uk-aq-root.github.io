@@ -54,9 +54,56 @@
     href: '/',
     className: 'cic-home-nav-item',
   };
-  const SITE_VERSION = 'v0.2.2026.07';
+  const SITE_VERSION_CACHE_KEY = 'uk_aq_site_version_v1';
+  let SITE_VERSION = readCachedSiteVersion();
   const SIDEBAR_ICON_OFF = '/sidebar-images/uk-aq-sidebar-off.svg';
   const SIDEBAR_ICON_ON = '/sidebar-images/uk-aq-sidebar-on.svg';
+  const siteVersionReady = loadSiteVersion();
+
+  function readCachedSiteVersion() {
+    try {
+      return String(sessionStorage.getItem(SITE_VERSION_CACHE_KEY) || '').trim();
+    } catch (_) {
+      return '';
+    }
+  }
+
+  function writeCachedSiteVersion(version) {
+    try {
+      sessionStorage.setItem(SITE_VERSION_CACHE_KEY, version);
+    } catch (_) {
+      // Session storage is an optimisation only.
+    }
+  }
+
+  function applySiteVersion(version) {
+    const value = String(version || '').trim();
+    if (!value) return;
+    SITE_VERSION = value;
+    writeCachedSiteVersion(value);
+
+    const sidebarFooter = document.getElementById('cic-sidebar-footer');
+    if (sidebarFooter) sidebarFooter.textContent = `${location.hostname} · ${SITE_VERSION}`;
+
+    const siteFooterMeta = document.querySelector('#ukaq-site-footer .ukaq-site-footer-meta');
+    if (siteFooterMeta) siteFooterMeta.textContent = `© 2026 UK AQ · ${SITE_VERSION}`;
+  }
+
+  async function loadSiteVersion() {
+    try {
+      const response = await fetch(`${location.origin}/VERSION`, { cache: 'no-cache' });
+      if (!response.ok) {
+        throw new Error(`VERSION request failed (${response.status})`);
+      }
+      const version = String(await response.text()).trim();
+      if (!version) throw new Error('VERSION file is empty');
+      applySiteVersion(version);
+      return version;
+    } catch (error) {
+      console.warn('UK AQ VERSION failed to load', error);
+      return SITE_VERSION;
+    }
+  }
 
   // ─── Preload default sidebar button image; lazy-warm the alternate icon ─────
   const sidebarIconOffHref = location.origin + SIDEBAR_ICON_OFF;
@@ -442,6 +489,10 @@
       </div>`;
   }
 
+  function versionSuffix() {
+    return SITE_VERSION ? ` · ${SITE_VERSION}` : '';
+  }
+
   function buildSidebar() {
     return `
       <nav class="cic-nav" aria-label="Site navigation">
@@ -449,14 +500,14 @@
         ${NAV.map(buildSection).join('')}
       </nav>
       <div id="cic-sidebar-footer">
-        ${location.hostname} · ${SITE_VERSION}
+        ${location.hostname}${versionSuffix()}
       </div>`;
   }
 
   function buildSiteFooter() {
     const oglUrl = 'https://www.nationalarchives.gov.uk/doc/open-government-licence/version/3/';
     return `
-      <p class="ukaq-site-footer-meta">&copy; 2026 UK AQ · ${SITE_VERSION}</p>
+      <p class="ukaq-site-footer-meta">&copy; 2026 UK AQ${versionSuffix()}</p>
       <div class="ukaq-site-footer-sources" aria-label="Air quality data sources and licences">
         <section class="ukaq-site-footer-source" aria-label="GOV.UK and UK-AIR attribution">
           <div class="ukaq-site-footer-mark">
@@ -513,8 +564,33 @@
     document.body.appendChild(footer);
   }
 
+  function ensureSiteFooterStyles() {
+    const existing = document.getElementById('ukaq-site-footer-styles');
+    if (existing) {
+      if (existing.sheet) return Promise.resolve();
+      return new Promise((resolve) => {
+        const done = () => resolve();
+        existing.addEventListener('load', done, { once: true });
+        existing.addEventListener('error', done, { once: true });
+        window.setTimeout(done, 1500);
+      });
+    }
+
+    return new Promise((resolve) => {
+      const link = document.createElement('link');
+      link.id = 'ukaq-site-footer-styles';
+      link.rel = 'stylesheet';
+      link.href = `${location.origin}/site-footer.css`;
+      const done = () => resolve();
+      link.addEventListener('load', done, { once: true });
+      link.addEventListener('error', done, { once: true });
+      document.head.appendChild(link);
+      window.setTimeout(done, 1500);
+    });
+  }
+
   // ─── Mount ────────────────────────────────────────────────────────────────────
-  function mount() {
+  async function mount() {
     // Inter font
     if (!document.getElementById('cic-inter-font')) {
       const link = document.createElement('link');
@@ -524,20 +600,20 @@
       document.head.appendChild(link);
     }
 
-    // Permanent shared footer styles
-    if (!document.getElementById('ukaq-site-footer-styles')) {
-      const link = document.createElement('link');
-      link.id = 'ukaq-site-footer-styles';
-      link.rel = 'stylesheet';
-      link.href = `${location.origin}/site-footer.css`;
-      document.head.appendChild(link);
-    }
+    const footerStylesReady = ensureSiteFooterStyles();
 
     // Injected sidebar styles
     const style = document.createElement('style');
     style.id = 'cic-sidebar-styles';
     style.textContent = CSS;
     document.head.appendChild(style);
+
+    // On a first load/reload, wait for the current VERSION before revealing the page.
+    // On normal in-tab navigation, the session-cached version can render immediately.
+    if (window.__UKAQ_INITIAL_LOAD_ACTIVE__ || !SITE_VERSION) {
+      await siteVersionReady;
+    }
+    await footerStylesReady;
 
     // Sidebar panel
     const aside = document.createElement('aside');
@@ -597,6 +673,7 @@
     updateHamburgerIcon(btn);
 
     bindEvents(btn, overlay);
+    window.dispatchEvent(new CustomEvent('ukaq:sidebar-ready'));
   }
 
   // ─── Events ───────────────────────────────────────────────────────────────────
@@ -669,8 +746,8 @@
   }
 
   if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', mount);
+    document.addEventListener('DOMContentLoaded', () => { void mount(); }, { once: true });
   } else {
-    mount();
+    void mount();
   }
 })();

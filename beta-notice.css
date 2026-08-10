@@ -600,3 +600,76 @@ main > header + .ukaq-beta-notice-mount {
     background: #f5eadf;
   }
 }
+
+/* TEST tuning after mobile review: reduce diameter without shrinking the key
+   pollutant/value typography, and use an anchored metadata slot so the value
+   sits nearer the visual centre instead of leaving a large empty lower area. */
+@media (max-width: 1079px) {
+  .home-page .pollutant-circle.pollutant-meta-cycle {
+    position: relative;
+    grid-template-rows: auto minmax(0, 1fr) auto;
+  }
+
+  .home-page .pollutant-meta-cycle .pollutant-name {
+    grid-row: 1;
+  }
+
+  .home-page .pollutant-meta-cycle .pollutant-value-slot {
+    grid-row: 2;
+    top: 0;
+    height: auto;
+    margin-top: 0;
+    align-self: center;
+  }
+
+  .home-page .pollutant-meta-cycle .pollutant-unit {
+    grid-row: 3;
+    top: 0;
+    margin-top: 0;
+    align-self: start;
+  }
+
+  .home-page .pollutant-meta-cycle .pollutant-observed,
+  .home-page .pollutant-meta-cycle .pollutant-station,
+  .home-page .pollutant-meta-cycle .pollutant-network {
+    position: absolute;
+    left: 6%;
+    right: 6%;
+    bottom: 0.62rem;
+    width: auto;
+    max-height: 2.25em;
+    align-self: auto;
+    justify-self: auto;
+  }
+}
+
+@media (min-width: 768px) and (max-width: 1079px) {
+  .home-page .pollutant-circle {
+    width: min(100%, clamp(195px, calc(68px + 16.4vw), 245px));
+    padding: 0.82rem 0.9rem 2.55rem;
+  }
+}
+
+@media (max-width: 767px) {
+  .home-page .pollutant-circle {
+    width: min(100%, 185px);
+    padding: 0.58rem 0.42rem 2.2rem;
+  }
+
+  .home-page .pollutant-name,
+  .home-page .pollutant-value,
+  .home-page .pollutant-unit {
+    /* Deliberately retain the existing mobile type sizes. */
+  }
+
+  .home-page .pollutant-meta-cycle .pollutant-observed,
+  .home-page .pollutant-meta-cycle .pollutant-station,
+  .home-page .pollutant-meta-cycle .pollutant-network {
+    bottom: 0.5rem;
+    max-height: 2.2em;
+  }
+
+  .home-page .scale-legend {
+    max-width: 185px;
+  }
+}

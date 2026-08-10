@@ -816,3 +816,196 @@ main > header + .ukaq-beta-notice-mount {
     line-height: 1.15;
   }
 }
+
+/* Restore the normal brown dashboard tables below 768px. Keep the genuine
+   table structure and allow horizontal scrolling for this first mobile pass. */
+@media (max-width: 767px) {
+  body.home-page .dashboard-table-card .dashboard-table-wrap {
+    overflow-x: auto;
+    overflow-y: hidden;
+    border: 1px solid #e3d7ca;
+    border-radius: 13px;
+    background: #fffdfa;
+    -webkit-overflow-scrolling: touch;
+    overscroll-behavior-x: contain;
+    touch-action: pan-x pan-y;
+  }
+
+  body.home-page .dashboard-table {
+    display: table;
+    width: 100%;
+    border-spacing: 0;
+    border-collapse: separate;
+    font-size: 0.86rem;
+  }
+
+  body.home-page .dashboard-table--areas {
+    min-width: 760px;
+  }
+
+  body.home-page .dashboard-table--networks {
+    min-width: 680px;
+  }
+
+  body.home-page .dashboard-table thead {
+    position: static;
+    display: table-header-group;
+    width: auto;
+    height: auto;
+    padding: 0;
+    margin: 0;
+    overflow: visible;
+    clip: auto;
+    white-space: normal;
+    border: 0;
+  }
+
+  body.home-page .dashboard-table tbody {
+    display: table-row-group;
+    width: auto;
+  }
+
+  body.home-page .dashboard-table thead tr,
+  body.home-page .dashboard-table tbody tr,
+  body.home-page .dashboard-table--areas tbody tr,
+  body.home-page .dashboard-table--networks tbody tr {
+    display: table-row;
+    overflow: visible;
+    border: 0;
+    border-radius: 0;
+    background: #fff;
+  }
+
+  body.home-page .dashboard-table th,
+  body.home-page .dashboard-table td,
+  body.home-page .dashboard-table tbody th[scope="row"],
+  body.home-page .dashboard-table--areas tbody td,
+  body.home-page .dashboard-table--networks tbody td {
+    display: table-cell;
+    box-sizing: border-box;
+    padding: 0.75rem 0.8rem;
+    border-bottom: 1px solid #ded2c4;
+    background: inherit;
+    color: #172535;
+    font-size: inherit;
+    vertical-align: middle;
+  }
+
+  body.home-page .dashboard-table thead th {
+    background: #eee5da;
+    color: #263747;
+    font-weight: 800;
+    white-space: nowrap;
+  }
+
+  body.home-page .dashboard-table tbody th[scope="row"] {
+    font-weight: 750;
+    text-align: left;
+  }
+
+  body.home-page .dashboard-table tbody tr:last-child th,
+  body.home-page .dashboard-table tbody tr:last-child td {
+    border-bottom: 0;
+  }
+
+  body.home-page .dashboard-table--areas tbody td::before,
+  body.home-page .dashboard-table--networks tbody td::before {
+    display: none !important;
+    content: none !important;
+  }
+
+  body.home-page .dashboard-table--areas .area-reading {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) max-content;
+    align-items: center;
+    column-gap: 0.6rem;
+    max-width: 100%;
+    min-width: 0;
+  }
+
+  body.home-page .dashboard-table--areas .area-reading-name {
+    grid-column: auto;
+    min-width: 0;
+    overflow-wrap: anywhere;
+    word-break: normal;
+    font-size: inherit;
+  }
+
+  body.home-page .dashboard-table--areas .area-reading-metric {
+    grid-column: auto;
+    display: inline-flex;
+    align-items: center;
+    justify-self: end;
+    gap: 0.35rem;
+    white-space: nowrap;
+  }
+
+  body.home-page .dashboard-table--areas .area-marker {
+    width: 1.17rem;
+    height: 1.35rem;
+    flex: 0 0 1.17rem;
+  }
+
+  body.home-page .dashboard-table--areas .area-reading-value {
+    font-size: inherit;
+  }
+
+  body.home-page .dashboard-table--areas th:first-child,
+  body.home-page .dashboard-table--areas td:first-child {
+    border-right: 1px solid rgba(30, 42, 51, 0.12);
+  }
+
+  body.home-page .dashboard-table--areas th + th,
+  body.home-page .dashboard-table--areas td + td {
+    border-left: 1px solid rgba(30, 42, 51, 0.06);
+  }
+
+  body.home-page .dashboard-table--areas th:nth-child(2),
+  body.home-page .dashboard-table--areas td:nth-child(2) {
+    border-left: 0;
+  }
+
+  body.home-page .dashboard-table--networks tbody tr[data-network="total"] {
+    background: #eee5da;
+  }
+
+  body.home-page .dashboard-table--networks tbody tr[data-network="total"] th[scope="row"] {
+    background: inherit;
+  }
+
+  body.home-page .dashboard-table--networks th:not(:first-child),
+  body.home-page .dashboard-table--networks td:not(:first-child) {
+    text-align: center;
+  }
+
+  body.home-page .dashboard-table--networks th:nth-child(2),
+  body.home-page .dashboard-table--networks td:nth-child(2) {
+    grid-column: auto;
+    padding: 0.75rem 0.8rem;
+    border-top: 0;
+    color: #172535;
+    font-size: inherit;
+    text-align: left;
+  }
+
+  body.home-page .dashboard-table--networks td:nth-child(n + 3) {
+    padding: 0.75rem 0.8rem;
+    border-top: 0;
+    font-size: inherit;
+    font-weight: 700;
+  }
+
+  body.home-page .dashboard-table--networks th:first-child,
+  body.home-page .dashboard-table--networks td:first-child {
+    border-right: 1px solid rgba(30, 42, 51, 0.12);
+  }
+
+  body.home-page .dashboard-table--networks th:nth-child(n + 3),
+  body.home-page .dashboard-table--networks td:nth-child(n + 3) {
+    border-left: 1px solid rgba(30, 42, 51, 0.08);
+  }
+
+  body.home-page .dashboard-table--networks tbody tr:last-child th:first-child {
+    border-right: 0;
+  }
+}

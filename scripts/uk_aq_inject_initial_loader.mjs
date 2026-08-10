@@ -8,7 +8,7 @@ import path from "node:path";
 const nodeProcess = globalThis.process;
 const STAGING_DIRECTORY_NAME = ".pages-site";
 const ARCHIVE_DIRECTORY_NAME = "Archive";
-const LOADER_IMAGE_PATH = "images/UKAQ-loading-O.svg";
+const LOADER_IMAGE_PATH = "images/UKAQ-Loading-O.png";
 const INJECT_MARKER = "data-ukaq-initial-loader";
 const HASH_LENGTH = 12;
 

@@ -392,3 +392,58 @@ body.ukaq-site-footer-after-viewport #ukaq-site-footer {
     background-image: url('/images/UKAQ-LA-Symbol.svg');
   }
 }
+
+/* Final symbol-mode polish for very narrow phones. Keep the table's own rounded
+ * clipping, tighten the text slightly, and place a separate two-line key in the
+ * card flow beneath the table. */
+@container (max-width: 440px) {
+  body.home-page .dashboard-table-card:has(.dashboard-table--areas) .dashboard-table-wrap {
+    position: static;
+    overflow: hidden !important;
+    margin-bottom: 0;
+    border-radius: 13px;
+  }
+
+  body.home-page .dashboard-table-card:has(.dashboard-table--areas) .dashboard-table-wrap::before,
+  body.home-page .dashboard-table-card:has(.dashboard-table--areas) .dashboard-table-wrap::after {
+    content: none !important;
+    display: none !important;
+  }
+
+  body.home-page .dashboard-table--areas .area-reading-name {
+    font-size: clamp(0.70rem, 3.3vw, 0.78rem) !important;
+    line-height: 1.1 !important;
+  }
+
+  body.home-page .dashboard-table--areas .area-reading-metric {
+    gap: 0.18rem !important;
+    font-size: 0.70rem !important;
+  }
+
+  body.home-page .dashboard-table--areas .area-reading-value sup {
+    font-size: 0.62em;
+  }
+
+  body.home-page .dashboard-table-card:has(.dashboard-table--areas)::after {
+    content: '= Parliamentary Constituencies\A= Local Authorities';
+    display: block;
+    box-sizing: border-box;
+    width: max-content;
+    max-width: 100%;
+    margin: 0.55rem auto 0;
+    padding: 0.42rem 0.78rem 0.42rem 2.2rem;
+    border: 1px solid #e3d7ca;
+    border-radius: 14px;
+    background-color: #fff;
+    background-image: url('/images/UKAQ-PC-Symbol.svg'), url('/images/UKAQ-LA-Symbol.svg');
+    background-repeat: no-repeat, no-repeat;
+    background-size: 20px auto, 20px auto;
+    background-position: 0.62rem 0.43rem, 0.62rem calc(100% - 0.43rem);
+    color: #263747;
+    font-size: 0.68rem;
+    font-weight: 700;
+    line-height: 1.45;
+    white-space: pre-line;
+    text-align: left;
+  }
+}

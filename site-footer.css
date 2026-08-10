@@ -239,32 +239,42 @@ body.ukaq-site-footer-after-viewport #ukaq-site-footer {
   }
 }
 
-/* TEST homepage mobile table tuning. Keep Last updated content-sized while it
- * fits; once the actual table wrapper becomes narrow, drop that column so NO2
- * remains visible without needing horizontal scrolling. */
+/* TEST homepage narrow table tuning. Use the actual text's intrinsic widths:
+ * Area type is pushed to its min-content width so its labels wrap at spaces,
+ * while pollutant columns are left on automatic intrinsic sizing. */
 @media (max-width: 767px) {
-  body.home-page .dashboard-table-card:has(.dashboard-table--networks) .dashboard-table-wrap {
-    container: ukaq-network-summary / inline-size;
-  }
-
-  body.home-page .dashboard-table--networks {
+  body.home-page .dashboard-table--areas {
     width: 100% !important;
     min-width: 0 !important;
-    table-layout: auto;
+    table-layout: auto !important;
   }
 
-  body.home-page .dashboard-table--networks th:nth-child(2),
-  body.home-page .dashboard-table--networks td:nth-child(2) {
-    width: 1%;
-    padding-left: 0.55rem;
-    padding-right: 0.55rem;
-    white-space: nowrap;
+  body.home-page .dashboard-table--areas col {
+    width: auto !important;
   }
-}
 
-@container ukaq-network-summary (max-width: 500px) {
-  body.home-page .dashboard-table--networks th:nth-child(2),
-  body.home-page .dashboard-table--networks td:nth-child(2) {
-    display: none;
+  body.home-page .dashboard-table--areas .dashboard-table-area-type-col,
+  body.home-page .dashboard-table--areas thead th:first-child,
+  body.home-page .dashboard-table--areas tbody th[scope="row"] {
+    width: 1px !important;
+    white-space: normal !important;
+    overflow-wrap: normal !important;
+    word-break: normal !important;
+  }
+
+  body.home-page .dashboard-table--areas thead th:nth-child(n + 2),
+  body.home-page .dashboard-table--areas tbody td:nth-child(n + 2) {
+    width: auto !important;
+  }
+
+  body.home-page .dashboard-table--areas .area-reading-name {
+    overflow-wrap: normal !important;
+    word-break: normal !important;
+  }
+
+  body.home-page .dashboard-table--areas .area-reading-metric {
+    width: max-content !important;
+    max-width: none !important;
+    white-space: nowrap !important;
   }
 }

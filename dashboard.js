@@ -233,6 +233,24 @@
       || networkLabels.get(networkCode(row)) || "Unknown network";
   }
 
+  function renderNetworkSummaryLabel(container, label) {
+    const original = String(label || "").trim();
+    const parts = original.split(".").map((part) => part.trim()).filter(Boolean);
+    if (parts.length <= 1) {
+      container.textContent = original;
+      container.removeAttribute("aria-label");
+      return;
+    }
+
+    const nodes = [];
+    parts.forEach((part, index) => {
+      if (index > 0) nodes.push(document.createElement("br"));
+      nodes.push(document.createTextNode(part));
+    });
+    container.replaceChildren(...nodes);
+    container.setAttribute("aria-label", original);
+  }
+
   function formatValue(value) {
     if (!Number.isFinite(value)) return "No data";
     return Number.isInteger(value) ? String(value) : value.toFixed(1);
@@ -496,7 +514,7 @@
       rowEl.dataset.network = code;
       const heading = document.createElement("th");
       heading.scope = "row";
-      heading.textContent = label;
+      renderNetworkSummaryLabel(heading, label);
       rowEl.append(heading, document.createElement("td"));
       POLLUTANTS.forEach(() => rowEl.append(document.createElement("td")));
       let newest = null;

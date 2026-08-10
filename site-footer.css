@@ -238,3 +238,33 @@ body.ukaq-site-footer-after-viewport #ukaq-site-footer {
     border-top: 1px solid #e1e3e6;
   }
 }
+
+/* TEST homepage mobile table tuning. Keep Last updated content-sized while it
+ * fits; once the actual table wrapper becomes narrow, drop that column so NO2
+ * remains visible without needing horizontal scrolling. */
+@media (max-width: 767px) {
+  body.home-page .dashboard-table-card:has(.dashboard-table--networks) .dashboard-table-wrap {
+    container: ukaq-network-summary / inline-size;
+  }
+
+  body.home-page .dashboard-table--networks {
+    width: 100% !important;
+    min-width: 0 !important;
+    table-layout: auto;
+  }
+
+  body.home-page .dashboard-table--networks th:nth-child(2),
+  body.home-page .dashboard-table--networks td:nth-child(2) {
+    width: 1%;
+    padding-left: 0.55rem;
+    padding-right: 0.55rem;
+    white-space: nowrap;
+  }
+}
+
+@container ukaq-network-summary (max-width: 500px) {
+  body.home-page .dashboard-table--networks th:nth-child(2),
+  body.home-page .dashboard-table--networks td:nth-child(2) {
+    display: none;
+  }
+}

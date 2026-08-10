@@ -650,14 +650,18 @@ main > header + .ukaq-beta-notice-mount {
 @media (min-width: 768px) and (max-width: 1079px) {
   .home-page .pollutant-circle {
     width: min(100%, clamp(185px, calc(62px + 15.2vw), 230px));
-    padding: 0.8rem 0.82rem 0.32rem;
+    padding: 0.62rem 0.82rem 0.5rem;
+  }
+
+  .home-page .pollutant-meta-cycle .pollutant-value-slot {
+    margin-top: 0.74rem;
   }
 }
 
 @media (max-width: 767px) {
   .home-page .pollutant-circle {
     width: min(100%, 160px);
-    padding: 0.58rem 0.3rem 0.38rem;
+    padding: 0.78rem 0.3rem 0.18rem;
   }
 
   /* Keep the compact-circle typography tied to the 160px circle rather than

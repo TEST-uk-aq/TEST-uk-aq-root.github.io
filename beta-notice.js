@@ -734,6 +734,7 @@
       white-space: nowrap;
     }
 
+    body.home-page .dashboard-table--networks.is-network-name-wrap tbody th[scope="row"],
     body.home-page .dashboard-table--networks tbody th.network-summary-label-split {
       white-space: normal !important;
     }
@@ -814,12 +815,16 @@
     frame = null;
     observer?.disconnect();
     try {
-      table.classList.remove("is-network-updated-hidden");
+      table.classList.remove("is-network-updated-hidden", "is-network-name-wrap");
       setNetworkNameSplit(false);
       table.getBoundingClientRect();
       if (!tableOverflows()) return;
 
       table.classList.add("is-network-updated-hidden");
+      table.getBoundingClientRect();
+      if (!tableOverflows()) return;
+
+      table.classList.add("is-network-name-wrap");
       table.getBoundingClientRect();
       if (!tableOverflows()) return;
 

@@ -239,32 +239,33 @@ body.ukaq-site-footer-after-viewport #ukaq-site-footer {
   }
 }
 
-/* TEST homepage narrow table tuning. Use the actual text's intrinsic widths:
- * Area type is pushed to its min-content width so its labels wrap at spaces,
- * while pollutant columns are left on automatic intrinsic sizing. */
+/* TEST homepage area-table tuning. Below 768px retain a real table, use a
+ * fixed layout so PM2.5 / PM10 / NO2 always share the remaining width equally,
+ * and let the Area type column yield first. */
 @media (max-width: 767px) {
+  body.home-page .dashboard-table-card:has(.dashboard-table--areas) {
+    container-type: inline-size;
+  }
+
   body.home-page .dashboard-table--areas {
     width: 100% !important;
     min-width: 0 !important;
-    table-layout: auto !important;
+    table-layout: fixed !important;
   }
 
-  body.home-page .dashboard-table--areas col {
+  body.home-page .dashboard-table--areas .dashboard-table-area-type-col {
+    width: 24% !important;
+  }
+
+  body.home-page .dashboard-table--areas col:not(.dashboard-table-area-type-col) {
     width: auto !important;
   }
 
-  body.home-page .dashboard-table--areas .dashboard-table-area-type-col,
   body.home-page .dashboard-table--areas thead th:first-child,
   body.home-page .dashboard-table--areas tbody th[scope="row"] {
-    width: 1px !important;
     white-space: normal !important;
     overflow-wrap: normal !important;
     word-break: normal !important;
-  }
-
-  body.home-page .dashboard-table--areas thead th:nth-child(n + 2),
-  body.home-page .dashboard-table--areas tbody td:nth-child(n + 2) {
-    width: auto !important;
   }
 
   body.home-page .dashboard-table--areas .area-reading-name {
@@ -274,7 +275,123 @@ body.ukaq-site-footer-after-viewport #ukaq-site-footer {
 
   body.home-page .dashboard-table--areas .area-reading-metric {
     width: max-content !important;
-    max-width: none !important;
+    max-width: 100% !important;
     white-space: nowrap !important;
+  }
+}
+
+/* When the area card itself becomes too narrow for useful text row labels,
+ * replace only those two row labels with the supplied PC / LA symbols. The
+ * original text remains in the DOM for accessibility. */
+@container (max-width: 440px) {
+  body.home-page .dashboard-table--areas .dashboard-table-area-type-col {
+    width: 42px !important;
+  }
+
+  body.home-page .dashboard-table--areas thead th:first-child {
+    padding-left: 0.25rem !important;
+    padding-right: 0.25rem !important;
+    font-size: 0 !important;
+  }
+
+  body.home-page .dashboard-table--areas tbody th[scope="row"] {
+    min-width: 42px !important;
+    padding: 0.45rem 0.28rem !important;
+    font-size: 0 !important;
+    line-height: 0 !important;
+    background-repeat: no-repeat;
+    background-position: center;
+    background-size: 32px auto;
+  }
+
+  body.home-page .dashboard-table--areas tbody tr[data-area-type="pcon"] > th[scope="row"] {
+    background-image: url('/images/UKAQ-PC-Symbol.svg');
+  }
+
+  body.home-page .dashboard-table--areas tbody tr[data-area-type="la"] > th[scope="row"] {
+    background-image: url('/images/UKAQ-LA-Symbol.svg');
+  }
+
+  body.home-page .dashboard-table--areas th:nth-child(n + 2),
+  body.home-page .dashboard-table--areas td:nth-child(n + 2) {
+    padding-left: 0.3rem !important;
+    padding-right: 0.3rem !important;
+  }
+
+  body.home-page .dashboard-table--areas .area-reading {
+    row-gap: 0.22rem !important;
+  }
+
+  body.home-page .dashboard-table--areas .area-reading-name {
+    font-size: 0.78rem !important;
+    line-height: 1.12 !important;
+  }
+
+  body.home-page .dashboard-table--areas .area-reading-metric {
+    gap: 0.22rem !important;
+    font-size: 0.74rem !important;
+  }
+
+  body.home-page .dashboard-table--areas .area-marker {
+    width: 0.8rem !important;
+    height: 0.92rem !important;
+    min-width: 0.8rem !important;
+    min-height: 0.92rem !important;
+    flex-basis: 0.8rem !important;
+  }
+
+  /* Reuse the existing accessible caption as the visual one-line key. The
+   * caption text itself remains available to assistive technology; the two
+   * generated items form one joined white pill visually. */
+  body.home-page .dashboard-table--areas caption.sr-only {
+    position: static !important;
+    width: auto !important;
+    height: auto !important;
+    margin: 0.48rem auto 0 !important;
+    padding: 0 !important;
+    overflow: visible !important;
+    clip: auto !important;
+    clip-path: none !important;
+    white-space: nowrap !important;
+    caption-side: bottom;
+    text-align: center;
+    font-size: 0 !important;
+  }
+
+  body.home-page .dashboard-table--areas caption.sr-only::before,
+  body.home-page .dashboard-table--areas caption.sr-only::after {
+    display: inline-block;
+    box-sizing: border-box;
+    padding-top: 0.32rem;
+    padding-bottom: 0.32rem;
+    background-color: #fff;
+    background-repeat: no-repeat;
+    background-position: 0.42rem center;
+    background-size: 17px auto;
+    color: #263747;
+    font-size: 0.57rem;
+    font-weight: 700;
+    line-height: 1;
+    vertical-align: middle;
+  }
+
+  body.home-page .dashboard-table--areas caption.sr-only::before {
+    content: '= Parliamentary Constituencies';
+    padding-left: 1.72rem;
+    padding-right: 0.5rem;
+    border: 1px solid #e3d7ca;
+    border-right: 0;
+    border-radius: 999px 0 0 999px;
+    background-image: url('/images/UKAQ-PC-Symbol.svg');
+  }
+
+  body.home-page .dashboard-table--areas caption.sr-only::after {
+    content: '= Local Authorities';
+    padding-left: 1.72rem;
+    padding-right: 0.62rem;
+    border: 1px solid #e3d7ca;
+    border-left: 0;
+    border-radius: 0 999px 999px 0;
+    background-image: url('/images/UKAQ-LA-Symbol.svg');
   }
 }

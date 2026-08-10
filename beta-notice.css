@@ -652,6 +652,16 @@ main > header + .ukaq-beta-notice-mount {
     width: min(100%, clamp(185px, calc(62px + 15.2vw), 230px));
     padding: 0.62rem 0.82rem 0.5rem;
   }
+
+  /* Keep the metadata label readable while giving the longer content a little
+     more room in the compact three-across layout. */
+  .home-page .pollutant-meta-cycle .pollutant-observed time {
+    font-size: 0.84em;
+  }
+
+  .home-page .pollutant-meta-cycle .pollutant-station {
+    font-size: clamp(0.66rem, 1.02vw, 0.78rem);
+  }
 }
 
 @media (max-width: 767px) {

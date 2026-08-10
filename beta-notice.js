@@ -354,22 +354,48 @@
   if (!circles.length) return;
 
   const compactMedia = window.matchMedia("(max-width: 1079px)");
+  const mobileMedia = window.matchMedia("(max-width: 767px)");
   const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)");
   const HOLD_MS = 3200;
   const CLEANUP_MS = 320;
   const timers = new Map();
   const cleanupTimers = new Map();
 
+  function metadataNodes(circle) {
+    return Array.from(
+      circle.querySelectorAll(".pollutant-observed, .pollutant-station, .pollutant-network"),
+    );
+  }
+
   function metadataLines(circle) {
-    return [
-      circle.querySelector(".pollutant-station"),
-      circle.querySelector(".pollutant-observed"),
-      circle.querySelector(".pollutant-network"),
-    ].filter((line) => line && !line.hidden && line.textContent.trim());
+    return metadataNodes(circle)
+      .filter((line) => !line.hidden && line.textContent.trim());
+  }
+
+  function syncMetadataLineBoxes(circle) {
+    const lineHeight = mobileMedia.matches ? "2.1em" : "2.25em";
+    metadataNodes(circle).forEach((line) => {
+      if (line.hidden) return;
+      line.style.display = "flex";
+      line.style.alignItems = "center";
+      line.style.justifyContent = "center";
+      line.style.minHeight = lineHeight;
+      line.style.height = lineHeight;
+    });
+  }
+
+  function clearMetadataLineBoxes(circle) {
+    metadataNodes(circle).forEach((line) => {
+      line.style.removeProperty("display");
+      line.style.removeProperty("align-items");
+      line.style.removeProperty("justify-content");
+      line.style.removeProperty("min-height");
+      line.style.removeProperty("height");
+    });
   }
 
   function clearLineClasses(circle) {
-    circle.querySelectorAll(".pollutant-observed, .pollutant-station, .pollutant-network")
+    metadataNodes(circle)
       .forEach((line) => line.classList.remove("is-meta-current", "is-meta-leaving"));
   }
 
@@ -387,17 +413,20 @@
   function setDesktopState(circle) {
     clearCircleTimers(circle);
     clearLineClasses(circle);
+    clearMetadataLineBoxes(circle);
     circle.classList.remove("pollutant-meta-cycle", "pollutant-meta-static");
   }
 
   function setStaticState(circle) {
     clearCircleTimers(circle);
     clearLineClasses(circle);
+    clearMetadataLineBoxes(circle);
     circle.classList.remove("pollutant-meta-cycle");
     circle.classList.add("pollutant-meta-static");
   }
 
   function showFirstLine(circle) {
+    syncMetadataLineBoxes(circle);
     clearLineClasses(circle);
     const lines = metadataLines(circle);
     if (!lines.length) return;
@@ -406,6 +435,7 @@
 
   function advanceCircle(circle) {
     if (!compactMedia.matches || document.hidden) return;
+    syncMetadataLineBoxes(circle);
     const lines = metadataLines(circle);
     if (!lines.length) {
       clearLineClasses(circle);
@@ -451,6 +481,7 @@
 
     circle.classList.remove("pollutant-meta-static");
     circle.classList.add("pollutant-meta-cycle");
+    syncMetadataLineBoxes(circle);
     showFirstLine(circle);
     timers.set(circle, window.setInterval(() => advanceCircle(circle), HOLD_MS));
   }
@@ -468,9 +499,11 @@
   document.addEventListener("visibilitychange", syncAll);
   if (typeof compactMedia.addEventListener === "function") {
     compactMedia.addEventListener("change", syncAll);
+    mobileMedia.addEventListener("change", syncAll);
     reducedMotion.addEventListener("change", syncAll);
   } else {
     compactMedia.addListener?.(syncAll);
+    mobileMedia.addListener?.(syncAll);
     reducedMotion.addListener?.(syncAll);
   }
 

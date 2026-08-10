@@ -708,3 +708,74 @@
   document.fonts?.ready?.then(scheduleLayout);
   scheduleLayout();
 })();
+
+(function initHomepageNetworkTableLayout() {
+  "use strict";
+
+  if (!document.body.classList.contains("home-page")) return;
+  const table = document.querySelector(".dashboard-table--networks");
+  const wrapper = table?.closest(".dashboard-table-wrap");
+  if (!table || !wrapper) return;
+
+  const style = document.createElement("style");
+  style.id = "ukaq-home-network-table-layout";
+  style.textContent = `
+    body.home-page .dashboard-table--networks {
+      width: 100% !important;
+      min-width: 0 !important;
+      table-layout: auto;
+    }
+
+    body.home-page .dashboard-table--networks th:nth-child(2),
+    body.home-page .dashboard-table--networks td:nth-child(2) {
+      width: 1%;
+      white-space: nowrap;
+    }
+
+    body.home-page .dashboard-table--networks td:nth-child(2) time {
+      white-space: nowrap;
+    }
+
+    body.home-page .dashboard-table--networks.is-network-updated-hidden th:nth-child(2),
+    body.home-page .dashboard-table--networks.is-network-updated-hidden td:nth-child(2) {
+      display: none !important;
+    }
+  `;
+  document.head.append(style);
+
+  let frame = null;
+
+  function fiveColumnTableOverflows() {
+    const requiredWidth = Math.max(table.offsetWidth, table.scrollWidth);
+    return requiredWidth > wrapper.clientWidth + 1;
+  }
+
+  function syncLayout() {
+    frame = null;
+    table.classList.remove("is-network-updated-hidden");
+    table.getBoundingClientRect();
+    table.classList.toggle("is-network-updated-hidden", fiveColumnTableOverflows());
+  }
+
+  function scheduleLayout() {
+    if (frame !== null) window.cancelAnimationFrame(frame);
+    frame = window.requestAnimationFrame(syncLayout);
+  }
+
+  const observer = new MutationObserver(scheduleLayout);
+  observer.observe(table.tBodies[0] || table, {
+    childList: true,
+    subtree: true,
+    characterData: true,
+  });
+
+  if (typeof ResizeObserver === "function") {
+    const resizeObserver = new ResizeObserver(scheduleLayout);
+    resizeObserver.observe(wrapper);
+  } else {
+    window.addEventListener("resize", scheduleLayout, { passive: true });
+  }
+
+  document.fonts?.ready?.then(scheduleLayout);
+  scheduleLayout();
+})();

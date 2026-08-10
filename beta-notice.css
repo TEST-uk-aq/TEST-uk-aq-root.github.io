@@ -740,5 +740,6 @@ main > header + .ukaq-beta-notice-mount {
     width: 80%;
     max-height: 2.3em;
     margin-top: 0.52rem;
+    font-size: clamp(0.74rem, 1.25vw, 0.88rem);
   }
 }

@@ -460,8 +460,9 @@ body.ukaq-site-footer-after-viewport #ukaq-site-footer {
 }
 
 /* Mobile metadata polish: give unusually long station names enough room to stay
- * within two lines, and use a fade-only carousel transition on phones so the
- * next metadata line cannot peek through as a clipped dotted strip. */
+ * within two lines. Restore the gentle vertical carousel movement, but clip each
+ * translated line back to its original metadata slot so no incoming/outgoing
+ * text can peek through as a sliver outside that slot. */
 @media (max-width: 767px) {
   body.home-page .pollutant-meta-cycle .pollutant-station {
     width: 94% !important;
@@ -474,12 +475,19 @@ body.ukaq-site-footer-after-viewport #ukaq-site-footer {
   body.home-page .pollutant-meta-cycle .pollutant-observed,
   body.home-page .pollutant-meta-cycle .pollutant-station,
   body.home-page .pollutant-meta-cycle .pollutant-network {
-    transform: none !important;
-    transition: opacity 0.28s ease !important;
+    transform: translateY(6px) !important;
+    clip-path: inset(0 0 6px 0);
+    transition: opacity 0.28s ease, transform 0.28s ease, clip-path 0.28s ease !important;
+    will-change: opacity, transform, clip-path;
   }
 
-  body.home-page .pollutant-meta-cycle .is-meta-current,
+  body.home-page .pollutant-meta-cycle .is-meta-current {
+    transform: translateY(0) !important;
+    clip-path: inset(0) !important;
+  }
+
   body.home-page .pollutant-meta-cycle .is-meta-leaving {
-    transform: none !important;
+    transform: translateY(-6px) !important;
+    clip-path: inset(6px 0 0 0) !important;
   }
 }

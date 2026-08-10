@@ -458,3 +458,28 @@ body.ukaq-site-footer-after-viewport #ukaq-site-footer {
     letter-spacing: -0.01em;
   }
 }
+
+/* Mobile metadata polish: give unusually long station names enough room to stay
+ * within two lines, and use a fade-only carousel transition on phones so the
+ * next metadata line cannot peek through as a clipped dotted strip. */
+@media (max-width: 767px) {
+  body.home-page .pollutant-meta-cycle .pollutant-station {
+    width: 94% !important;
+    max-height: 2.12em !important;
+    overflow: hidden !important;
+    font-size: 0.62rem !important;
+    line-height: 1.06 !important;
+  }
+
+  body.home-page .pollutant-meta-cycle .pollutant-observed,
+  body.home-page .pollutant-meta-cycle .pollutant-station,
+  body.home-page .pollutant-meta-cycle .pollutant-network {
+    transform: none !important;
+    transition: opacity 0.28s ease !important;
+  }
+
+  body.home-page .pollutant-meta-cycle .is-meta-current,
+  body.home-page .pollutant-meta-cycle .is-meta-leaving {
+    transform: none !important;
+  }
+}

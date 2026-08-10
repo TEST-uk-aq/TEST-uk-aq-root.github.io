@@ -372,37 +372,43 @@
       .filter((line) => !line.hidden && line.textContent.trim());
   }
 
-  function keepObservedDateTimeTogether(line) {
-    if (!line.classList.contains("pollutant-observed")) return;
-    line.textContent = line.textContent.replace(
-      /(\d{2}\/\d{2}\/\d{4})\s+(\d{2}:\d{2})(?:\s+([A-Z]{2,5}))?/,
-      (_match, date, time, zone) => `${date}\u00a0${time}${zone ? `\u00a0${zone}` : ""}`,
-    );
-  }
-
   function syncMetadataLineBoxes(circle) {
     const lineHeight = mobileMedia.matches ? "2.1em" : "2.25em";
     metadataNodes(circle).forEach((line) => {
       if (line.hidden) return;
-      keepObservedDateTimeTogether(line);
       line.style.display = "flex";
       line.style.alignItems = "center";
       line.style.justifyContent = "center";
       line.style.minHeight = lineHeight;
       line.style.height = lineHeight;
+
+      if (line.classList.contains("pollutant-observed")) {
+        line.style.flexDirection = "column";
+        const time = line.querySelector("time");
+        if (time) {
+          time.style.display = "block";
+          time.style.whiteSpace = "nowrap";
+        }
+      }
     });
   }
 
   function clearMetadataLineBoxes(circle) {
     metadataNodes(circle).forEach((line) => {
-      if (line.classList.contains("pollutant-observed")) {
-        line.textContent = line.textContent.replace(/\u00a0/g, " ");
-      }
       line.style.removeProperty("display");
       line.style.removeProperty("align-items");
       line.style.removeProperty("justify-content");
       line.style.removeProperty("min-height");
       line.style.removeProperty("height");
+      line.style.removeProperty("flex-direction");
+
+      if (line.classList.contains("pollutant-observed")) {
+        const time = line.querySelector("time");
+        if (time) {
+          time.style.removeProperty("display");
+          time.style.removeProperty("white-space");
+        }
+      }
     });
   }
 

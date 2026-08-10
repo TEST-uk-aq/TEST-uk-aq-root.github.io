@@ -191,14 +191,21 @@
   }
 
   function renderObservedDateTime(container, row) {
+    if (!container) return "";
+
+    let time = container.querySelector("time");
+    if (!time) {
+      time = document.createElement("time");
+      container.replaceChildren(document.createTextNode("Observed "), time);
+    }
+
     const formatted = formatObservedDateTime(observedTimestampValue(row));
     if (!formatted) {
       container.hidden = true;
-      container.querySelector("time").removeAttribute("datetime");
-      container.querySelector("time").textContent = "";
+      time.removeAttribute("datetime");
+      time.textContent = "";
       return "";
     }
-    const time = container.querySelector("time");
     const zone = document.createElement("span");
     zone.className = "pollutant-observed-zone";
     zone.textContent = formatted.zone;

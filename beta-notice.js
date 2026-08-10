@@ -560,8 +560,8 @@
       }
 
       .home-page .dashboard-table--areas .area-reading {
-        display: flex;
-        flex-wrap: nowrap;
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) max-content;
         align-items: center;
         column-gap: 0.6rem;
         row-gap: 0.32rem;
@@ -570,33 +570,58 @@
       }
 
       .home-page .dashboard-table--areas .area-reading-name {
-        flex: 1 1 auto;
         min-width: 0;
-        white-space: nowrap;
+        white-space: normal;
         overflow-wrap: normal;
         word-break: normal;
+        line-height: 1.15;
       }
 
       .home-page .dashboard-table--areas .area-reading-metric {
-        flex: 0 0 auto;
-        margin-left: auto;
-        justify-self: auto;
+        display: inline-flex;
+        flex-flow: row nowrap;
+        align-items: center;
+        gap: 0.35rem;
+        width: max-content;
+        max-width: 100%;
+        white-space: nowrap;
+        justify-self: end;
+        align-self: center;
+        margin-left: 0;
+      }
+
+      .home-page .dashboard-table--areas .area-marker {
+        width: 1.17rem;
+        height: 1.35rem;
+        min-width: 1.17rem;
+        min-height: 1.35rem;
+        flex: 0 0 1.17rem;
       }
 
       .home-page .dashboard-table--areas.is-area-readings-stacked .area-reading {
-        flex-direction: column;
-        align-items: flex-start;
+        grid-template-columns: minmax(0, 1fr);
+        grid-template-rows: auto auto;
+        align-items: start;
       }
 
       .home-page .dashboard-table--areas.is-area-readings-stacked .area-reading-name {
+        grid-row: 1;
         width: 100%;
+        min-width: 0;
         white-space: normal;
         overflow-wrap: break-word;
       }
 
       .home-page .dashboard-table--areas.is-area-readings-stacked .area-reading-metric {
+        grid-row: 2;
+        display: inline-flex;
+        flex-flow: row nowrap;
+        align-items: center;
+        width: max-content;
+        white-space: nowrap;
+        justify-self: start;
+        align-self: start;
         margin-left: 0;
-        align-self: flex-start;
       }
     }
   `;
@@ -607,6 +632,19 @@
     const range = document.createRange();
     range.selectNodeContents(element);
     return range.getBoundingClientRect().width;
+  }
+
+  function renderedLineCount(element) {
+    if (!element?.textContent?.trim()) return 0;
+    const range = document.createRange();
+    range.selectNodeContents(element);
+    const lineTops = [];
+    Array.from(range.getClientRects()).forEach((rect) => {
+      if (!lineTops.some((top) => Math.abs(top - rect.top) < 1)) {
+        lineTops.push(rect.top);
+      }
+    });
+    return lineTops.length;
   }
 
   function measureAreaTypeWidth() {
@@ -624,15 +662,8 @@
   }
 
   function needsSharedStack() {
-    return Array.from(table.querySelectorAll(".area-reading")).some((reading) => {
-      const name = reading.querySelector(".area-reading-name");
-      const metric = reading.querySelector(".area-reading-metric");
-      if (!name || !metric) return false;
-      const computed = window.getComputedStyle(reading);
-      const gap = Number.parseFloat(computed.columnGap) || 0;
-      const required = textWidth(name) + metric.getBoundingClientRect().width + gap;
-      return required > reading.clientWidth + 0.5;
-    });
+    return Array.from(table.querySelectorAll(".area-reading-name"))
+      .some((name) => renderedLineCount(name) >= 3);
   }
 
   function syncLayout() {

@@ -601,74 +601,83 @@ main > header + .ukaq-beta-notice-mount {
   }
 }
 
-/* TEST tuning after mobile review: reduce diameter without shrinking the key
-   pollutant/value typography, and use an anchored metadata slot so the value
-   sits nearer the visual centre instead of leaving a large empty lower area. */
+/* TEST tuning after responsive review: use a compact four-row stack inside
+   each circle so name, value, unit and rotating metadata stay grouped. */
 @media (max-width: 1079px) {
   .home-page .pollutant-circle.pollutant-meta-cycle {
     position: relative;
-    grid-template-rows: auto minmax(0, 1fr) auto;
+    grid-template-rows: auto auto auto auto;
+    align-content: start;
   }
 
   .home-page .pollutant-meta-cycle .pollutant-name {
     grid-row: 1;
+    margin-top: 0.22rem;
   }
 
   .home-page .pollutant-meta-cycle .pollutant-value-slot {
     grid-row: 2;
     top: 0;
     height: auto;
-    margin-top: 0;
-    align-self: center;
+    margin-top: 0.5rem;
+    align-self: auto;
   }
 
   .home-page .pollutant-meta-cycle .pollutant-unit {
     grid-row: 3;
     top: 0;
-    margin-top: 0;
-    align-self: start;
+    margin-top: 0.08rem;
+    align-self: auto;
   }
 
   .home-page .pollutant-meta-cycle .pollutant-observed,
   .home-page .pollutant-meta-cycle .pollutant-station,
   .home-page .pollutant-meta-cycle .pollutant-network {
-    position: absolute;
-    left: 6%;
-    right: 6%;
-    bottom: 0.62rem;
-    width: auto;
+    position: relative;
+    left: auto;
+    right: auto;
+    bottom: auto;
+    grid-row: 4;
+    grid-column: 1;
+    width: 88%;
     max-height: 2.25em;
-    align-self: auto;
-    justify-self: auto;
+    margin-top: 0.22rem;
+    align-self: start;
+    justify-self: center;
   }
 }
 
 @media (min-width: 768px) and (max-width: 1079px) {
   .home-page .pollutant-circle {
     width: min(100%, clamp(185px, calc(62px + 15.2vw), 230px));
-    padding: 0.76rem 0.82rem 2.35rem;
+    padding: 0.62rem 0.82rem 0.5rem;
   }
 }
 
 @media (max-width: 767px) {
   .home-page .pollutant-circle {
     width: min(100%, 160px);
-    padding: 0.48rem 0.34rem 1.92rem;
+    padding: 0.58rem 0.3rem 0.38rem;
   }
 
-  .home-page .pollutant-name,
-  .home-page .pollutant-value,
-  .home-page .pollutant-unit {
-    /* Deliberately retain the existing mobile type sizes. */
+  .home-page .pollutant-meta-cycle .pollutant-name {
+    margin-top: 0.12rem;
+  }
+
+  .home-page .pollutant-meta-cycle .pollutant-value-slot {
+    margin-top: 0.34rem;
+  }
+
+  .home-page .pollutant-meta-cycle .pollutant-unit {
+    margin-top: 0.04rem;
   }
 
   .home-page .pollutant-meta-cycle .pollutant-observed,
   .home-page .pollutant-meta-cycle .pollutant-station,
   .home-page .pollutant-meta-cycle .pollutant-network {
-    left: 8%;
-    right: 8%;
-    bottom: 0.38rem;
+    width: 86%;
     max-height: 2.1em;
+    margin-top: 0.18rem;
   }
 
   .home-page .scale-legend {

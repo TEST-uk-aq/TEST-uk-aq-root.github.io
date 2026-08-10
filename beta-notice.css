@@ -796,3 +796,23 @@ main > header + .ukaq-beta-notice-mount {
     justify-self: auto;
   }
 }
+
+/* On narrow tablet/desktop tables, let Area type wrap so the three pollutant
+   columns keep equal, usable widths instead of forcing NO2 off the right edge. */
+@media (min-width: 768px) {
+  body.home-page .dashboard-table--areas {
+    min-width: 0 !important;
+  }
+
+  body.home-page .dashboard-table--areas .dashboard-table-area-type-col {
+    width: min(var(--area-type-col-width, 220px), 24%) !important;
+  }
+
+  body.home-page .dashboard-table--areas thead th:first-child,
+  body.home-page .dashboard-table--areas tbody th[scope="row"] {
+    white-space: normal !important;
+    overflow-wrap: normal;
+    word-break: normal;
+    line-height: 1.15;
+  }
+}

@@ -714,3 +714,31 @@ main > header + .ukaq-beta-notice-mount {
     max-width: 160px;
   }
 }
+
+/* Medium-width final positioning pass after TEST visual review. */
+@media (min-width: 768px) and (max-width: 1079px) {
+  .home-page .pollutant-circle {
+    padding: 0.76rem 0.82rem 0.36rem;
+  }
+
+  .home-page .pollutant-meta-cycle .pollutant-name {
+    margin-top: 0.3rem;
+    font-size: clamp(1.2rem, 2vw, 1.48rem);
+  }
+
+  .home-page .pollutant-meta-cycle .pollutant-value-slot {
+    margin-top: 0.86rem;
+  }
+
+  .home-page .pollutant-meta-cycle .pollutant-unit {
+    margin-top: 0.1rem;
+  }
+
+  .home-page .pollutant-meta-cycle .pollutant-observed,
+  .home-page .pollutant-meta-cycle .pollutant-station,
+  .home-page .pollutant-meta-cycle .pollutant-network {
+    width: 80%;
+    max-height: 2.3em;
+    margin-top: 0.44rem;
+  }
+}

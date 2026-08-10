@@ -661,9 +661,13 @@
     return Math.ceil(widest + 8);
   }
 
+  function nameOverflowsSideBySide(name) {
+    return name.clientWidth > 0 && name.scrollWidth > name.clientWidth + 1;
+  }
+
   function needsSharedStack() {
     return Array.from(table.querySelectorAll(".area-reading-name"))
-      .some((name) => renderedLineCount(name) >= 3);
+      .some((name) => renderedLineCount(name) >= 3 || nameOverflowsSideBySide(name));
   }
 
   function syncLayout() {
@@ -726,6 +730,14 @@
       table-layout: auto;
     }
 
+    body.home-page .dashboard-table--networks tbody th[scope="row"] {
+      white-space: nowrap;
+    }
+
+    body.home-page .dashboard-table--networks tbody th.network-summary-label-split {
+      white-space: normal !important;
+    }
+
     body.home-page .dashboard-table--networks th:nth-child(2),
     body.home-page .dashboard-table--networks td:nth-child(2) {
       width: 1%;
@@ -744,17 +756,78 @@
   document.head.append(style);
 
   let frame = null;
+  let observer = null;
 
-  function fiveColumnTableOverflows() {
+  function observeBody() {
+    observer?.observe(table.tBodies[0] || table, {
+      childList: true,
+      subtree: true,
+      characterData: true,
+    });
+  }
+
+  function originalNetworkLabel(heading) {
+    let original = heading.dataset.networkSummaryLabel;
+    if (!original) {
+      original = heading.getAttribute("aria-label") || heading.textContent.trim();
+      heading.dataset.networkSummaryLabel = original;
+    }
+    return original;
+  }
+
+  function maySplitNetworkLabel(label) {
+    return label.includes(".") && !/(^|\s)GOV\.UK(?:\s|$)/i.test(label);
+  }
+
+  function setNetworkNameSplit(enabled) {
+    table.querySelectorAll('tbody tr:not([data-network="total"]) th[scope="row"]')
+      .forEach((heading) => {
+        const original = originalNetworkLabel(heading);
+        const shouldSplit = enabled && maySplitNetworkLabel(original);
+        const state = shouldSplit ? "true" : "false";
+        if (heading.dataset.networkSummarySplit === state) return;
+
+        if (shouldSplit) {
+          const parts = original.split(".").map((part) => part.trim()).filter(Boolean);
+          const nodes = [];
+          parts.forEach((part, index) => {
+            if (index > 0) nodes.push(document.createElement("br"));
+            nodes.push(document.createTextNode(part));
+          });
+          heading.replaceChildren(...nodes);
+        } else {
+          heading.textContent = original;
+        }
+
+        heading.classList.toggle("network-summary-label-split", shouldSplit);
+        if (original.includes(".")) heading.setAttribute("aria-label", original);
+        heading.dataset.networkSummarySplit = state;
+      });
+  }
+
+  function tableOverflows() {
     const requiredWidth = Math.max(table.offsetWidth, table.scrollWidth);
     return requiredWidth > wrapper.clientWidth + 1;
   }
 
   function syncLayout() {
     frame = null;
-    table.classList.remove("is-network-updated-hidden");
-    table.getBoundingClientRect();
-    table.classList.toggle("is-network-updated-hidden", fiveColumnTableOverflows());
+    observer?.disconnect();
+    try {
+      table.classList.remove("is-network-updated-hidden");
+      setNetworkNameSplit(false);
+      table.getBoundingClientRect();
+      if (!tableOverflows()) return;
+
+      table.classList.add("is-network-updated-hidden");
+      table.getBoundingClientRect();
+      if (!tableOverflows()) return;
+
+      setNetworkNameSplit(true);
+      table.getBoundingClientRect();
+    } finally {
+      observeBody();
+    }
   }
 
   function scheduleLayout() {
@@ -762,12 +835,8 @@
     frame = window.requestAnimationFrame(syncLayout);
   }
 
-  const observer = new MutationObserver(scheduleLayout);
-  observer.observe(table.tBodies[0] || table, {
-    childList: true,
-    subtree: true,
-    characterData: true,
-  });
+  observer = new MutationObserver(scheduleLayout);
+  observeBody();
 
   if (typeof ResizeObserver === "function") {
     const resizeObserver = new ResizeObserver(scheduleLayout);

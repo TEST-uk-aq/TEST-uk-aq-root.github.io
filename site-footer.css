@@ -279,9 +279,9 @@ body.ukaq-site-footer-after-viewport #ukaq-site-footer {
   }
 }
 
-/* When the actual area card becomes too narrow for useful text row labels,
- * replace them with the supplied PC / LA symbols. */
-@container (max-width: 440px) {
+/* Switch to the supplied PC / LA symbols before the equal pollutant columns
+ * become tight enough for their one-line metric rows to collide. */
+@container (max-width: 520px) {
   body.home-page .dashboard-table--areas .dashboard-table-area-type-col {
     width: 42px !important;
   }
@@ -350,8 +350,6 @@ body.ukaq-site-footer-after-viewport #ukaq-site-footer {
     flex-basis: 0.8rem !important;
   }
 
-  /* Draw the one-line key below the table border, still inside the same card.
-   * Using two joined generated items keeps each symbol attached to its own text. */
   body.home-page .dashboard-table-card:has(.dashboard-table--areas) .dashboard-table-wrap {
     position: relative;
     overflow: visible !important;
@@ -393,10 +391,9 @@ body.ukaq-site-footer-after-viewport #ukaq-site-footer {
   }
 }
 
-/* Final symbol-mode polish for very narrow phones. Keep the table's own rounded
- * clipping, tighten the text slightly, and place a separate two-line key in the
- * card flow beneath the table. */
-@container (max-width: 440px) {
+/* Final symbol-mode polish. Keep the table's own rounded clipping, tighten the
+ * text slightly, and place a separate two-line key in the card flow beneath. */
+@container (max-width: 520px) {
   body.home-page .dashboard-table-card:has(.dashboard-table--areas) .dashboard-table-wrap {
     position: static;
     overflow: hidden !important;
@@ -431,19 +428,33 @@ body.ukaq-site-footer-after-viewport #ukaq-site-footer {
     width: max-content;
     max-width: 100%;
     margin: 0.55rem auto 0;
-    padding: 0.42rem 0.78rem 0.42rem 2.2rem;
+    padding: 0.48rem 0.78rem 0.48rem 2.2rem;
     border: 1px solid #e3d7ca;
     border-radius: 14px;
     background-color: #fff;
     background-image: url('/images/UKAQ-PC-Symbol.svg'), url('/images/UKAQ-LA-Symbol.svg');
     background-repeat: no-repeat, no-repeat;
     background-size: 20px auto, 20px auto;
-    background-position: 0.62rem 0.43rem, 0.62rem calc(100% - 0.43rem);
+    background-position: 0.62rem 0.46rem, 0.62rem calc(100% - 0.46rem);
     color: #263747;
     font-size: 0.68rem;
     font-weight: 700;
-    line-height: 1.45;
+    line-height: 1.8;
     white-space: pre-line;
     text-align: left;
+  }
+}
+
+/* At the very narrow end, keep the Observed timestamp inside the fixed 160px
+ * circle without changing the otherwise-good iPhone layout at wider widths. */
+@media (max-width: 374px) {
+  body.home-page .pollutant-meta-cycle .pollutant-observed {
+    width: 92% !important;
+  }
+
+  body.home-page .pollutant-meta-cycle .pollutant-observed time {
+    max-width: 100%;
+    font-size: 0.88em;
+    letter-spacing: -0.01em;
   }
 }

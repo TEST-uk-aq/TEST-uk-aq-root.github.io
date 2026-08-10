@@ -239,9 +239,8 @@ body.ukaq-site-footer-after-viewport #ukaq-site-footer {
   }
 }
 
-/* TEST homepage area-table tuning. Below 768px retain a real table, use a
- * fixed layout so PM2.5 / PM10 / NO2 always share the remaining width equally,
- * and let the Area type column yield first. */
+/* TEST homepage area-table tuning. Keep a real table below 768px and make the
+ * three pollutant columns share the remaining width equally. */
 @media (max-width: 767px) {
   body.home-page .dashboard-table-card:has(.dashboard-table--areas) {
     container-type: inline-size;
@@ -258,7 +257,7 @@ body.ukaq-site-footer-after-viewport #ukaq-site-footer {
   }
 
   body.home-page .dashboard-table--areas col:not(.dashboard-table-area-type-col) {
-    width: auto !important;
+    width: calc(76% / 3) !important;
   }
 
   body.home-page .dashboard-table--areas thead th:first-child,
@@ -280,28 +279,32 @@ body.ukaq-site-footer-after-viewport #ukaq-site-footer {
   }
 }
 
-/* When the area card itself becomes too narrow for useful text row labels,
- * replace only those two row labels with the supplied PC / LA symbols. The
- * original text remains in the DOM for accessibility. */
+/* When the actual area card becomes too narrow for useful text row labels,
+ * replace them with the supplied PC / LA symbols. The table caption remains
+ * screen-reader only and therefore cannot affect the table width. */
 @container (max-width: 440px) {
   body.home-page .dashboard-table--areas .dashboard-table-area-type-col {
     width: 42px !important;
   }
 
+  body.home-page .dashboard-table--areas col:not(.dashboard-table-area-type-col) {
+    width: calc((100% - 42px) / 3) !important;
+  }
+
   body.home-page .dashboard-table--areas thead th:first-child {
-    padding-left: 0.25rem !important;
-    padding-right: 0.25rem !important;
+    padding-left: 0.2rem !important;
+    padding-right: 0.2rem !important;
     font-size: 0 !important;
   }
 
   body.home-page .dashboard-table--areas tbody th[scope="row"] {
     min-width: 42px !important;
-    padding: 0.45rem 0.28rem !important;
+    padding: 0.45rem 0.2rem !important;
     font-size: 0 !important;
     line-height: 0 !important;
     background-repeat: no-repeat;
     background-position: center;
-    background-size: 32px auto;
+    background-size: 30px auto;
   }
 
   body.home-page .dashboard-table--areas tbody tr[data-area-type="pcon"] > th[scope="row"] {
@@ -314,12 +317,8 @@ body.ukaq-site-footer-after-viewport #ukaq-site-footer {
 
   body.home-page .dashboard-table--areas th:nth-child(n + 2),
   body.home-page .dashboard-table--areas td:nth-child(n + 2) {
-    padding-left: 0.3rem !important;
-    padding-right: 0.3rem !important;
-  }
-
-  body.home-page .dashboard-table--areas .area-reading {
-    row-gap: 0.22rem !important;
+    padding-left: 0.28rem !important;
+    padding-right: 0.28rem !important;
   }
 
   body.home-page .dashboard-table--areas .area-reading-name {
@@ -340,58 +339,36 @@ body.ukaq-site-footer-after-viewport #ukaq-site-footer {
     flex-basis: 0.8rem !important;
   }
 
-  /* Reuse the existing accessible caption as the visual one-line key. The
-   * caption text itself remains available to assistive technology; the two
-   * generated items form one joined white pill visually. */
-  body.home-page .dashboard-table--areas caption.sr-only {
-    position: static !important;
-    width: auto !important;
-    height: auto !important;
-    margin: 0.48rem auto 0 !important;
-    padding: 0 !important;
+  /* The key is visually outside the table border, but remains inside the same
+   * Highest area card. It cannot participate in table column sizing. */
+  body.home-page .dashboard-table-card:has(.dashboard-table--areas) .dashboard-table-wrap {
+    position: relative;
     overflow: visible !important;
-    clip: auto !important;
-    clip-path: none !important;
-    white-space: nowrap !important;
-    caption-side: bottom;
-    text-align: center;
-    font-size: 0 !important;
+    margin-bottom: 2.25rem;
   }
 
-  body.home-page .dashboard-table--areas caption.sr-only::before,
-  body.home-page .dashboard-table--areas caption.sr-only::after {
-    display: inline-block;
+  body.home-page .dashboard-table-card:has(.dashboard-table--areas) .dashboard-table-wrap::after {
+    content: '= Parliamentary Constituencies        = Local Authorities';
+    position: absolute;
+    top: calc(100% + 0.45rem);
+    left: 50%;
+    transform: translateX(-50%);
     box-sizing: border-box;
-    padding-top: 0.32rem;
-    padding-bottom: 0.32rem;
+    width: max-content;
+    max-width: calc(100% - 0.5rem);
+    padding: 0.34rem 0.65rem 0.34rem 1.9rem;
+    border: 1px solid #e3d7ca;
+    border-radius: 999px;
     background-color: #fff;
-    background-repeat: no-repeat;
-    background-position: 0.42rem center;
-    background-size: 17px auto;
+    background-image: url('/images/UKAQ-PC-Symbol.svg'), url('/images/UKAQ-LA-Symbol.svg');
+    background-repeat: no-repeat, no-repeat;
+    background-size: 17px auto, 17px auto;
+    background-position: 0.5rem center, 60% center;
     color: #263747;
     font-size: 0.57rem;
     font-weight: 700;
     line-height: 1;
-    vertical-align: middle;
-  }
-
-  body.home-page .dashboard-table--areas caption.sr-only::before {
-    content: '= Parliamentary Constituencies';
-    padding-left: 1.72rem;
-    padding-right: 0.5rem;
-    border: 1px solid #e3d7ca;
-    border-right: 0;
-    border-radius: 999px 0 0 999px;
-    background-image: url('/images/UKAQ-PC-Symbol.svg');
-  }
-
-  body.home-page .dashboard-table--areas caption.sr-only::after {
-    content: '= Local Authorities';
-    padding-left: 1.72rem;
-    padding-right: 0.62rem;
-    border: 1px solid #e3d7ca;
-    border-left: 0;
-    border-radius: 0 999px 999px 0;
-    background-image: url('/images/UKAQ-LA-Symbol.svg');
+    white-space: pre;
+    text-align: left;
   }
 }

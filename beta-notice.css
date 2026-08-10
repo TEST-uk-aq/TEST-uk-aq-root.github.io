@@ -650,17 +650,7 @@ main > header + .ukaq-beta-notice-mount {
 @media (min-width: 768px) and (max-width: 1079px) {
   .home-page .pollutant-circle {
     width: min(100%, clamp(185px, calc(62px + 15.2vw), 230px));
-    padding: 0.62rem 0.82rem 0.5rem;
-  }
-
-  /* Keep the metadata label readable while giving the longer content a little
-     more room in the compact three-across layout. */
-  .home-page .pollutant-meta-cycle .pollutant-observed time {
-    font-size: 0.84em;
-  }
-
-  .home-page .pollutant-meta-cycle .pollutant-station {
-    font-size: clamp(0.66rem, 1.02vw, 0.78rem);
+    padding: 0.8rem 0.82rem 0.32rem;
   }
 }
 
@@ -668,6 +658,26 @@ main > header + .ukaq-beta-notice-mount {
   .home-page .pollutant-circle {
     width: min(100%, 160px);
     padding: 0.58rem 0.3rem 0.38rem;
+  }
+
+  /* Keep the compact-circle typography tied to the 160px circle rather than
+     viewport width, so a narrow desktop browser matches a real phone. */
+  .home-page .pollutant-name {
+    font-size: 1.07rem;
+  }
+
+  .home-page .pollutant-value {
+    font-size: 2.5rem;
+  }
+
+  .home-page .pollutant-unit {
+    font-size: 0.71rem;
+  }
+
+  .home-page .pollutant-meta-cycle .pollutant-observed,
+  .home-page .pollutant-meta-cycle .pollutant-station,
+  .home-page .pollutant-meta-cycle .pollutant-network {
+    font-size: 0.68rem;
   }
 
   .home-page .pollutant-meta-cycle .pollutant-name {

@@ -124,7 +124,7 @@ function buildHeadBlock({ expectsSidebar, loaderUrl }) {
       animation: ukaqInitialLoaderSpin 1s linear infinite;
       transform-origin: 50% 50%;
     }
-    html.ukaq-initial-loading .who-bar-fill {
+    html.ukaq-who-bars-waiting .who-bar-fill {
       width: 0 !important;
       transition: none !important;
     }
@@ -149,6 +149,7 @@ function buildHeadBlock({ expectsSidebar, loaderUrl }) {
       window.__UKAQ_INITIAL_LOAD_ACTIVE__ = active;
 
       if (active) document.documentElement.classList.add("ukaq-initial-loading");
+      document.documentElement.classList.add("ukaq-who-bars-waiting");
 
       let windowLoaded = document.readyState === "complete";
       let sidebarReady = !EXPECTS_SIDEBAR;
@@ -161,18 +162,15 @@ function buildHeadBlock({ expectsSidebar, loaderUrl }) {
         window.dispatchEvent(new CustomEvent("ukaq:initial-visual-revealed"));
       };
 
-      const prepareWhoBars = () => {
-        if (!active) return [];
-        return Array.from(document.querySelectorAll("[data-who-bar-fill]"))
-          .map((fill) => {
-            const target = String(fill.style.getPropertyValue("--pct") || "").trim();
-            if (!target) return null;
-            fill.style.transition = "none";
-            fill.style.width = "0%";
-            return { fill, target };
-          })
-          .filter(Boolean);
-      };
+      const prepareWhoBars = () => Array.from(document.querySelectorAll("[data-who-bar-fill]"))
+        .map((fill) => {
+          const target = String(fill.style.getPropertyValue("--pct") || "").trim();
+          if (!target) return null;
+          fill.style.transition = "none";
+          fill.style.width = "0%";
+          return { fill, target };
+        })
+        .filter(Boolean);
 
       const animateWhoBars = (bars) => {
         if (!bars.length) return;
@@ -198,29 +196,33 @@ function buildHeadBlock({ expectsSidebar, loaderUrl }) {
         }));
       };
 
+      const revealVisualPage = (loader, bars) => {
+        document.documentElement.classList.remove("ukaq-initial-loading", "ukaq-who-bars-waiting");
+        loader?.remove();
+        dispatchRevealed();
+        animateWhoBars(bars);
+      };
+
       const reveal = () => {
         if (revealed) return;
         revealed = true;
         if (fallbackTimer) window.clearTimeout(fallbackTimer);
         try { sessionStorage.setItem(SESSION_KEY, "1"); } catch (_) {}
 
-        if (!active) {
-          requestAnimationFrame(() => requestAnimationFrame(dispatchRevealed));
-          return;
-        }
-
         const loader = document.getElementById("ukaq-initial-loader");
         const bars = prepareWhoBars();
         const reduced = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
+
+        if (!active) {
+          requestAnimationFrame(() => requestAnimationFrame(() => revealVisualPage(loader, bars)));
+          return;
+        }
 
         let finished = false;
         const finish = () => {
           if (finished) return;
           finished = true;
-          document.documentElement.classList.remove("ukaq-initial-loading");
-          loader?.remove();
-          dispatchRevealed();
-          animateWhoBars(bars);
+          revealVisualPage(loader, bars);
         };
 
         requestAnimationFrame(() => requestAnimationFrame(() => {

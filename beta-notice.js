@@ -527,3 +527,153 @@
 
   syncAll();
 })();
+
+(function initHomepageAreaTableLayout() {
+  "use strict";
+
+  if (!document.body.classList.contains("home-page")) return;
+  const table = document.querySelector(".dashboard-table--areas");
+  if (!table) return;
+
+  const desktopMedia = window.matchMedia("(min-width: 768px)");
+  let frame = null;
+
+  const style = document.createElement("style");
+  style.id = "ukaq-home-area-table-layout";
+  style.textContent = `
+    @media (min-width: 768px) {
+      .home-page .dashboard-table--areas {
+        table-layout: fixed;
+      }
+
+      .home-page .dashboard-table--areas .dashboard-table-area-type-col {
+        width: var(--area-type-col-width, 220px) !important;
+      }
+
+      .home-page .dashboard-table--areas col:not(.dashboard-table-area-type-col) {
+        width: auto !important;
+      }
+
+      .home-page .dashboard-table--areas thead th:first-child,
+      .home-page .dashboard-table--areas tbody th[scope="row"] {
+        white-space: nowrap;
+      }
+
+      .home-page .dashboard-table--areas .area-reading {
+        display: flex;
+        flex-wrap: nowrap;
+        align-items: center;
+        column-gap: 0.6rem;
+        row-gap: 0.32rem;
+        max-width: 100%;
+        min-width: 0;
+      }
+
+      .home-page .dashboard-table--areas .area-reading-name {
+        flex: 1 1 auto;
+        min-width: 0;
+        white-space: nowrap;
+        overflow-wrap: normal;
+        word-break: normal;
+      }
+
+      .home-page .dashboard-table--areas .area-reading-metric {
+        flex: 0 0 auto;
+        margin-left: auto;
+        justify-self: auto;
+      }
+
+      .home-page .dashboard-table--areas.is-area-readings-stacked .area-reading {
+        flex-direction: column;
+        align-items: flex-start;
+      }
+
+      .home-page .dashboard-table--areas.is-area-readings-stacked .area-reading-name {
+        width: 100%;
+        white-space: normal;
+        overflow-wrap: break-word;
+      }
+
+      .home-page .dashboard-table--areas.is-area-readings-stacked .area-reading-metric {
+        margin-left: 0;
+        align-self: flex-start;
+      }
+    }
+  `;
+  document.head.append(style);
+
+  function textWidth(element) {
+    if (!element?.textContent?.trim()) return 0;
+    const range = document.createRange();
+    range.selectNodeContents(element);
+    return range.getBoundingClientRect().width;
+  }
+
+  function measureAreaTypeWidth() {
+    const cells = Array.from(table.querySelectorAll(
+      "thead th:first-child, tbody th[scope='row']",
+    ));
+    let widest = 0;
+    cells.forEach((cell) => {
+      const computed = window.getComputedStyle(cell);
+      const padding = Number.parseFloat(computed.paddingLeft)
+        + Number.parseFloat(computed.paddingRight);
+      widest = Math.max(widest, textWidth(cell) + padding);
+    });
+    return Math.ceil(widest + 8);
+  }
+
+  function needsSharedStack() {
+    return Array.from(table.querySelectorAll(".area-reading")).some((reading) => {
+      const name = reading.querySelector(".area-reading-name");
+      const metric = reading.querySelector(".area-reading-metric");
+      if (!name || !metric) return false;
+      const computed = window.getComputedStyle(reading);
+      const gap = Number.parseFloat(computed.columnGap) || 0;
+      const required = textWidth(name) + metric.getBoundingClientRect().width + gap;
+      return required > reading.clientWidth + 0.5;
+    });
+  }
+
+  function syncLayout() {
+    frame = null;
+    if (!desktopMedia.matches) {
+      table.classList.remove("is-area-readings-stacked");
+      table.style.removeProperty("--area-type-col-width");
+      return;
+    }
+
+    table.classList.remove("is-area-readings-stacked");
+    table.style.setProperty("--area-type-col-width", `${measureAreaTypeWidth()}px`);
+    table.getBoundingClientRect();
+    table.classList.toggle("is-area-readings-stacked", needsSharedStack());
+  }
+
+  function scheduleLayout() {
+    if (frame !== null) window.cancelAnimationFrame(frame);
+    frame = window.requestAnimationFrame(syncLayout);
+  }
+
+  const observer = new MutationObserver(scheduleLayout);
+  observer.observe(table.tBodies[0] || table, {
+    childList: true,
+    subtree: true,
+    characterData: true,
+  });
+
+  if (typeof ResizeObserver === "function") {
+    const resizeObserver = new ResizeObserver(scheduleLayout);
+    resizeObserver.observe(table.parentElement || table);
+  } else {
+    window.addEventListener("resize", scheduleLayout, { passive: true });
+  }
+
+  if (typeof desktopMedia.addEventListener === "function") {
+    desktopMedia.addEventListener("change", scheduleLayout);
+  } else {
+    desktopMedia.addListener?.(scheduleLayout);
+  }
+
+  document.fonts?.ready?.then(scheduleLayout);
+  scheduleLayout();
+})();

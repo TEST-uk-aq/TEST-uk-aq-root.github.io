@@ -756,3 +756,43 @@ main > header + .ukaq-beta-notice-mount {
     transform: translateX(4px);
   }
 }
+
+/* From tablet width upwards, keep the area-type column intrinsically compact,
+   divide the remaining table width equally, and let long area names move their
+   metric to a second, left-aligned flex line when the combined content will not fit. */
+@media (min-width: 768px) {
+  .home-page .dashboard-table--areas .dashboard-table-area-type-col {
+    width: 1%;
+  }
+
+  .home-page .dashboard-table--areas col:not(.dashboard-table-area-type-col) {
+    width: 33.3333%;
+  }
+
+  .home-page .dashboard-table--areas thead th:first-child,
+  .home-page .dashboard-table--areas tbody th[scope="row"] {
+    white-space: nowrap;
+  }
+
+  .home-page .dashboard-table--areas .area-reading {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    column-gap: 0.6rem;
+    row-gap: 0.32rem;
+    max-width: 100%;
+    min-width: 0;
+  }
+
+  .home-page .dashboard-table--areas .area-reading-name {
+    flex: 1 1 auto;
+    min-width: 0;
+    overflow-wrap: break-word;
+    word-break: normal;
+  }
+
+  .home-page .dashboard-table--areas .area-reading-metric {
+    flex: 0 0 auto;
+    justify-self: auto;
+  }
+}

@@ -758,8 +758,9 @@ main > header + .ukaq-beta-notice-mount {
 }
 
 /* From tablet width upwards, keep the area-type column intrinsically compact,
-   divide the remaining table width equally, and let long area names move their
-   metric to a second, left-aligned flex line when the combined content will not fit. */
+   divide the remaining table width equally, and preserve a fixed marker/value
+   track in each pollutant column. Corresponding hex markers must retain the
+   same x position regardless of area-name or reading-value length. */
 @media (min-width: 768px) {
   .home-page .dashboard-table--areas .dashboard-table-area-type-col {
     width: 1%;
@@ -775,25 +776,34 @@ main > header + .ukaq-beta-notice-mount {
   }
 
   .home-page .dashboard-table--areas .area-reading {
-    display: flex;
-    flex-wrap: wrap;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 1.17rem 6.4rem;
     align-items: center;
-    column-gap: 0.6rem;
-    row-gap: 0.32rem;
+    column-gap: 0.35rem;
     max-width: 100%;
     min-width: 0;
   }
 
   .home-page .dashboard-table--areas .area-reading-name {
-    flex: 1 1 auto;
+    grid-column: 1;
     min-width: 0;
-    overflow-wrap: break-word;
+    overflow-wrap: anywhere;
     word-break: normal;
   }
 
   .home-page .dashboard-table--areas .area-reading-metric {
-    flex: 0 0 auto;
-    justify-self: auto;
+    display: contents;
+  }
+
+  .home-page .dashboard-table--areas .area-marker {
+    grid-column: 2;
+    justify-self: start;
+  }
+
+  .home-page .dashboard-table--areas .area-reading-value {
+    grid-column: 3;
+    justify-self: start;
+    white-space: nowrap;
   }
 }
 

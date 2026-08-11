@@ -1,0 +1,162 @@
+name: One-off split beta CSS
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - .github/workflows/oneoff_split_beta_css.yml
+
+permissions:
+  contents: write
+
+jobs:
+  split-beta-css:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Separate permanent UI CSS from beta notice CSS
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          beta_path = Path('beta-notice.css')
+          site_path = Path('site-ui.css')
+          marker = '/* Keep the existing Hex Map coverage animation but round the visible fill end. */'
+
+          beta = beta_path.read_text(encoding='utf-8')
+          if marker not in beta:
+              raise SystemExit('Permanent CSS split marker not found in beta-notice.css')
+          if site_path.exists():
+              raise SystemExit('site-ui.css already exists; refusing to overwrite unexpectedly')
+
+          beta_only, permanent = beta.split(marker, 1)
+          beta_only = beta_only.rstrip() + '\n'
+          permanent = marker + permanent
+          permanent = permanent.replace('content: "Last updated: ";', 'content: "Last observed: ";')
+
+          stable_alignment = r'''
+
+/* Highest-area table invariant: corresponding pollutant markers and values use
+   fixed tracks so their x positions do not depend on area-name or value width. */
+@media (min-width: 768px) {
+  body.home-page .dashboard-table--areas {
+    width: 100%;
+    min-width: 0 !important;
+    table-layout: fixed;
+  }
+
+  body.home-page .dashboard-table--areas .dashboard-table-area-type-col {
+    width: 24% !important;
+  }
+
+  body.home-page .dashboard-table--areas col:not(.dashboard-table-area-type-col) {
+    width: 25.333333% !important;
+  }
+
+  body.home-page .dashboard-table--areas .area-reading {
+    display: grid;
+    width: 100%;
+    grid-template-columns: minmax(0, 1fr) 1.17rem 6.4rem;
+    align-items: center;
+    column-gap: 0.35rem;
+    min-width: 0;
+  }
+
+  body.home-page .dashboard-table--areas .area-reading-name {
+    grid-column: 1;
+    min-width: 0;
+  }
+
+  body.home-page .dashboard-table--areas .area-reading-metric {
+    display: contents;
+  }
+
+  body.home-page .dashboard-table--areas .area-marker {
+    grid-column: 2;
+    justify-self: start;
+  }
+
+  body.home-page .dashboard-table--areas .area-reading-value {
+    grid-column: 3;
+    justify-self: start;
+    white-space: nowrap;
+    font-variant-numeric: tabular-nums;
+  }
+}
+
+@media (max-width: 767px) {
+  body.home-page .dashboard-table--areas .area-reading {
+    display: grid !important;
+    width: 100% !important;
+    grid-template-columns: minmax(0, 1fr) 0.9rem 5.4rem !important;
+    align-items: center;
+    column-gap: 0.28rem !important;
+    min-width: 0;
+  }
+
+  body.home-page .dashboard-table--areas .area-reading-name {
+    grid-column: 1 !important;
+    min-width: 0;
+  }
+
+  body.home-page .dashboard-table--areas .area-reading-metric {
+    display: contents !important;
+  }
+
+  body.home-page .dashboard-table--areas .area-marker {
+    grid-column: 2 !important;
+    justify-self: start !important;
+  }
+
+  body.home-page .dashboard-table--areas .area-reading-value {
+    grid-column: 3 !important;
+    justify-self: start !important;
+    white-space: nowrap !important;
+    font-variant-numeric: tabular-nums;
+  }
+}
+'''
+
+          site_path.write_text(
+              '/* Permanent shared UK AQ presentation refinements.\n'
+              ' * These rules must remain when the beta notice is retired.\n'
+              ' */\n\n' + permanent.rstrip() + stable_alignment,
+              encoding='utf-8',
+          )
+          beta_path.write_text(beta_only, encoding='utf-8')
+
+          for html_path in (Path('index.html'), Path('hex_map/index.html')):
+              html = html_path.read_text(encoding='utf-8')
+              needle = '<link rel="stylesheet" href="/beta-notice.css">'
+              replacement = needle + '\n  <link rel="stylesheet" href="/site-ui.css">'
+              count = html.count(needle)
+              if count != 1:
+                  raise SystemExit(f'{html_path}: expected one beta-notice.css link, found {count}')
+              html_path.write_text(html.replace(needle, replacement), encoding='utf-8')
+          PY
+
+      - name: Structural validation and commit
+        shell: bash
+        run: |
+          test -f site-ui.css
+          grep -Fq 'These rules must remain when the beta notice is retired.' site-ui.css
+          grep -Fq 'grid-template-columns: minmax(0, 1fr) 1.17rem 6.4rem;' site-ui.css
+          grep -Fq 'content: "Last observed: ";' site-ui.css
+          grep -Fq '<link rel="stylesheet" href="/site-ui.css">' index.html
+          grep -Fq '<link rel="stylesheet" href="/site-ui.css">' hex_map/index.html
+          if grep -Eq '^\.(home-page|hex-map-page)' beta-notice.css; then
+            echo 'beta-notice.css still contains permanent page selectors' >&2
+            exit 1
+          fi
+          git diff --check
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git rm .github/workflows/oneoff_split_beta_css.yml
+          git add beta-notice.css site-ui.css index.html hex_map/index.html
+          git diff --cached --check
+          git commit -m "Separate permanent UI CSS from beta notice"
+          git push

@@ -48,6 +48,15 @@
       return true;
     }
 
+    function restoreActiveScope(scope, list) {
+      const map = scope === "uk" ? root.ukMap : scope === "cr" ? root.crMap : null;
+      if (typeof map?.restoreNetworks === "function") {
+        map.restoreNetworks();
+        return true;
+      }
+      return restoreRememberedScope(scope, list);
+    }
+
     function guardMap(map, scope) {
       if (!map || typeof map !== "object" || guardedMaps.has(map)) return map;
       guardedMaps.add(map);
@@ -97,7 +106,10 @@
             }
 
             if (didReplaceRows && activeAfter === activeBefore) {
-              list.replaceChildren(...activeNodesBefore);
+              // Do not restore the pre-await DOM snapshot here. The active map may
+              // have rendered newer network rows while the inactive preload was in
+              // flight. Rebuild from the active map's current state instead.
+              restoreActiveScope(activeBefore, list);
               applySharedSelection(list);
               rememberScope(activeBefore, list);
             } else if (activeAfter === scope) {

@@ -1,0 +1,140 @@
+name: One-off restore area marker alignment
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - .github/workflows/oneoff_restore_area_marker_alignment.yml
+
+permissions:
+  contents: write
+
+jobs:
+  restore-alignment:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Restore fixed area marker and value tracks
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          path = Path("beta-notice.css")
+          text = path.read_text(encoding="utf-8")
+
+          old = '''/* From tablet width upwards, keep the area-type column intrinsically compact,
+             divide the remaining table width equally, and let long area names move their
+             metric to a second, left-aligned flex line when the combined content will not fit. */
+          @media (min-width: 768px) {
+            .home-page .dashboard-table--areas .dashboard-table-area-type-col {
+              width: 1%;
+            }
+
+            .home-page .dashboard-table--areas col:not(.dashboard-table-area-type-col) {
+              width: 33.3333%;
+            }
+
+            .home-page .dashboard-table--areas thead th:first-child,
+            .home-page .dashboard-table--areas tbody th[scope="row"] {
+              white-space: nowrap;
+            }
+
+            .home-page .dashboard-table--areas .area-reading {
+              display: flex;
+              flex-wrap: wrap;
+              align-items: center;
+              column-gap: 0.6rem;
+              row-gap: 0.32rem;
+              max-width: 100%;
+              min-width: 0;
+            }
+
+            .home-page .dashboard-table--areas .area-reading-name {
+              flex: 1 1 auto;
+              min-width: 0;
+              overflow-wrap: break-word;
+              word-break: normal;
+            }
+
+            .home-page .dashboard-table--areas .area-reading-metric {
+              flex: 0 0 auto;
+              justify-self: auto;
+            }
+          }
+          '''
+
+          new = '''/* From tablet width upwards, keep the area-type column intrinsically compact,
+             divide the remaining table width equally, and preserve a fixed marker/value
+             track in each pollutant column. Corresponding hex markers must retain the
+             same x position regardless of area-name or reading-value length. */
+          @media (min-width: 768px) {
+            .home-page .dashboard-table--areas .dashboard-table-area-type-col {
+              width: 1%;
+            }
+
+            .home-page .dashboard-table--areas col:not(.dashboard-table-area-type-col) {
+              width: 33.3333%;
+            }
+
+            .home-page .dashboard-table--areas thead th:first-child,
+            .home-page .dashboard-table--areas tbody th[scope="row"] {
+              white-space: nowrap;
+            }
+
+            .home-page .dashboard-table--areas .area-reading {
+              display: grid;
+              grid-template-columns: minmax(0, 1fr) 1.17rem 6.4rem;
+              align-items: center;
+              column-gap: 0.35rem;
+              max-width: 100%;
+              min-width: 0;
+            }
+
+            .home-page .dashboard-table--areas .area-reading-name {
+              grid-column: 1;
+              min-width: 0;
+              overflow-wrap: anywhere;
+              word-break: normal;
+            }
+
+            .home-page .dashboard-table--areas .area-reading-metric {
+              display: contents;
+            }
+
+            .home-page .dashboard-table--areas .area-marker {
+              grid-column: 2;
+              justify-self: start;
+            }
+
+            .home-page .dashboard-table--areas .area-reading-value {
+              grid-column: 3;
+              justify-self: start;
+              white-space: nowrap;
+            }
+          }
+          '''
+
+          count = text.count(old)
+          if count != 1:
+              raise SystemExit(f"Expected exactly one desktop area-table flex override, found {count}")
+
+          path.write_text(text.replace(old, new), encoding="utf-8")
+          PY
+
+      - name: Structural validation and commit
+        shell: bash
+        run: |
+          grep -Fq 'grid-template-columns: minmax(0, 1fr) 1.17rem 6.4rem;' beta-notice.css
+          grep -Fq 'same x position regardless of area-name or reading-value length' beta-notice.css
+          git diff --check
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git rm .github/workflows/oneoff_restore_area_marker_alignment.yml
+          git add beta-notice.css
+          git diff --cached --check
+          git commit -m "Restore fixed homepage area marker alignment"
+          git push

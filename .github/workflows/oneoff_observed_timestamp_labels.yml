@@ -1,0 +1,59 @@
+name: One-off observed timestamp labels
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - .github/workflows/oneoff_observed_timestamp_labels.yml
+
+permissions:
+  contents: write
+
+jobs:
+  update-labels:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Update observation timestamp labels
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          changes = (
+              (
+                  Path("index.html"),
+                  '<th scope="col">Last updated</th>',
+                  '<th scope="col">Last observed</th>',
+                  1,
+              ),
+              (
+                  Path("hex_map/index.html"),
+                  '<span class="sort-label">Updated</span>',
+                  '<span class="sort-label">Observed</span>',
+                  2,
+              ),
+          )
+
+          for path, old, new, expected_count in changes:
+              text = path.read_text(encoding="utf-8")
+              actual_count = text.count(old)
+              if actual_count != expected_count:
+                  raise SystemExit(
+                      f"{path}: expected {expected_count} occurrence(s) of {old!r}, found {actual_count}"
+                  )
+              path.write_text(text.replace(old, new), encoding="utf-8")
+          PY
+
+      - name: Commit label changes
+        shell: bash
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add index.html hex_map/index.html
+          git diff --cached --check
+          git commit -m "Use observed labels for reading timestamps"
+          git push

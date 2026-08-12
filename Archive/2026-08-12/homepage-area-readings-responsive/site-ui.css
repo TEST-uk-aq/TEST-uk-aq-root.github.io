@@ -644,6 +644,56 @@
   }
 }
 
+/* From tablet width upwards, keep the area-type column intrinsically compact,
+   divide the remaining table width equally, and preserve a fixed marker/value
+   track in each pollutant column. Corresponding hex markers must retain the
+   same x position regardless of area-name or reading-value length. */
+@media (min-width: 768px) {
+  .home-page .dashboard-table--areas .dashboard-table-area-type-col {
+    width: 1%;
+  }
+
+  .home-page .dashboard-table--areas col:not(.dashboard-table-area-type-col) {
+    width: 33.3333%;
+  }
+
+  .home-page .dashboard-table--areas thead th:first-child,
+  .home-page .dashboard-table--areas tbody th[scope="row"] {
+    white-space: nowrap;
+  }
+
+  .home-page .dashboard-table--areas .area-reading {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 1.17rem 6.4rem;
+    align-items: center;
+    column-gap: 0.35rem;
+    max-width: 100%;
+    min-width: 0;
+  }
+
+  .home-page .dashboard-table--areas .area-reading-name {
+    grid-column: 1;
+    min-width: 0;
+    overflow-wrap: anywhere;
+    word-break: normal;
+  }
+
+  .home-page .dashboard-table--areas .area-reading-metric {
+    display: contents;
+  }
+
+  .home-page .dashboard-table--areas .area-marker {
+    grid-column: 2;
+    justify-self: start;
+  }
+
+  .home-page .dashboard-table--areas .area-reading-value {
+    grid-column: 3;
+    justify-self: start;
+    white-space: nowrap;
+  }
+}
+
 /* On narrow tablet/desktop tables, let Area type wrap so the three pollutant
    columns keep equal, usable widths instead of forcing NO2 off the right edge. */
 @media (min-width: 768px) {
@@ -857,89 +907,82 @@
   }
 }
 
-/* Highest-area table responsive modes are based on the card's usable width,
-   not the site-wide mobile breakpoint. The card content box matches the table
-   wrapper width, so one named container switches all pollutant cells together. */
-body.home-page .dashboard-table-card:has(.dashboard-table--areas) {
-  container-name: area-readings-table;
-  container-type: inline-size;
-}
+/* Highest-area table invariant: corresponding pollutant markers and values use
+   fixed tracks so their x positions do not depend on area-name or value width. */
+@media (min-width: 768px) {
+  body.home-page .dashboard-table--areas {
+    width: 100%;
+    min-width: 0 !important;
+    table-layout: fixed;
+  }
 
-body.home-page .dashboard-table--areas {
-  width: 100%;
-  min-width: 0 !important;
-  table-layout: fixed;
-}
+  body.home-page .dashboard-table--areas .dashboard-table-area-type-col {
+    width: 24% !important;
+  }
 
-body.home-page .dashboard-table--areas .dashboard-table-area-type-col {
-  width: 24% !important;
-}
+  body.home-page .dashboard-table--areas col:not(.dashboard-table-area-type-col) {
+    width: 25.333333% !important;
+  }
 
-body.home-page .dashboard-table--areas col:not(.dashboard-table-area-type-col) {
-  width: 25.333333% !important;
-}
-
-/* Side-by-side mode: preserve fixed marker and value tracks so content length
-   cannot move corresponding markers or value starts between area rows. */
-body.home-page .dashboard-table--areas .area-reading {
-  display: grid;
-  width: 100%;
-  grid-template-columns: minmax(0, 1fr) 1.17rem 6.4rem;
-  align-items: center;
-  column-gap: 0.35rem;
-  min-width: 0;
-}
-
-body.home-page .dashboard-table--areas .area-reading-name {
-  grid-column: 1;
-  min-width: 0;
-}
-
-body.home-page .dashboard-table--areas .area-reading-metric {
-  display: contents;
-}
-
-body.home-page .dashboard-table--areas .area-marker {
-  grid-column: 2;
-  justify-self: start;
-}
-
-body.home-page .dashboard-table--areas .area-reading-value {
-  grid-column: 3;
-  justify-self: start;
-  white-space: nowrap;
-  font-variant-numeric: tabular-nums;
-}
-
-/* Stacked mode: at this width each pollutant column would otherwise leave less
-   than about 6rem for an area name after its fixed marker/value tracks. */
-@container area-readings-table (max-width: 1020px) {
   body.home-page .dashboard-table--areas .area-reading {
-    grid-template-columns: minmax(0, 1fr);
-    row-gap: 0.28rem;
-    column-gap: 0;
+    display: grid;
+    width: 100%;
+    grid-template-columns: minmax(0, 1fr) 1.17rem 6.4rem;
+    align-items: center;
+    column-gap: 0.35rem;
+    min-width: 0;
   }
 
   body.home-page .dashboard-table--areas .area-reading-name {
     grid-column: 1;
-    grid-row: 1;
+    min-width: 0;
   }
 
   body.home-page .dashboard-table--areas .area-reading-metric {
-    grid-column: 1;
-    grid-row: 2;
-    display: inline-flex;
-    width: max-content;
-    max-width: 100%;
-    align-items: center;
-    justify-self: start;
-    gap: 0.35rem;
-    white-space: nowrap;
+    display: contents;
   }
 
-  body.home-page .dashboard-table--areas .area-marker,
+  body.home-page .dashboard-table--areas .area-marker {
+    grid-column: 2;
+    justify-self: start;
+  }
+
   body.home-page .dashboard-table--areas .area-reading-value {
-    grid-column: auto;
-    justify-self: auto;
+    grid-column: 3;
+    justify-self: start;
+    white-space: nowrap;
+    font-variant-numeric: tabular-nums;
+  }
+}
+
+@media (max-width: 767px) {
+  body.home-page .dashboard-table--areas .area-reading {
+    display: grid !important;
+    width: 100% !important;
+    grid-template-columns: minmax(0, 1fr) 0.9rem 5.4rem !important;
+    align-items: center;
+    column-gap: 0.28rem !important;
+    min-width: 0;
+  }
+
+  body.home-page .dashboard-table--areas .area-reading-name {
+    grid-column: 1 !important;
+    min-width: 0;
+  }
+
+  body.home-page .dashboard-table--areas .area-reading-metric {
+    display: contents !important;
+  }
+
+  body.home-page .dashboard-table--areas .area-marker {
+    grid-column: 2 !important;
+    justify-self: start !important;
+  }
+
+  body.home-page .dashboard-table--areas .area-reading-value {
+    grid-column: 3 !important;
+    justify-self: start !important;
+    white-space: nowrap !important;
+    font-variant-numeric: tabular-nums;
   }
 }

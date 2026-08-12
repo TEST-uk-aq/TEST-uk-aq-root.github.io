@@ -240,9 +240,12 @@ body.ukaq-site-footer-after-viewport #ukaq-site-footer {
 }
 
 /* TEST homepage area-table tuning. Keep a real table below 768px and make the
- * three pollutant columns share the remaining width equally. Container and
- * side-by-side/stacked mode ownership lives in site-ui.css. */
+ * three pollutant columns share the remaining width equally. */
 @media (max-width: 767px) {
+  body.home-page .dashboard-table-card:has(.dashboard-table--areas) {
+    container-type: inline-size;
+  }
+
   body.home-page .dashboard-table--areas {
     width: 100% !important;
     min-width: 0 !important;

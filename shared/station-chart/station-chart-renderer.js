@@ -50,6 +50,8 @@
     let progressBar = null;
     let animationFrameId = null;
     let animationGeneration = 0;
+    let activeDomainAnimation = null;
+    let pendingDomainState = null;
 
     function dimensions(value = {}) {
       const svgEl = refs?.svgEl;
@@ -148,6 +150,14 @@
         cancelAnimationFrame(animationFrameId);
       }
       animationFrameId = null;
+      activeDomainAnimation = null;
+      pendingDomainState = null;
+    }
+
+    function retainNewestState(current, candidate) {
+      if (!candidate) return current;
+      if (!current) return candidate;
+      return Number(candidate.revision) >= Number(current.revision) ? candidate : current;
     }
 
     function observationExtent(state) {
@@ -165,12 +175,16 @@
       return min === max ? [min, min + 1] : [min, max];
     }
 
+    function observationDomain(state) {
+      return d3.scaleLinear().domain(observationExtent(state)).nice(5).domain();
+    }
+
     function drawAxes(state, updateDomains) {
       const current = frame;
       if (!current) return;
       if (updateDomains !== false) {
         current.xScale.domain([state.range.startDate, state.range.endDate]);
-        current.yScale.domain(observationExtent(state)).nice(5);
+        current.yScale.domain(observationDomain(state));
       }
       current.xAxis.call(buildXAxis(d3, current.xScale, state.range.endMs - state.range.startMs));
       current.yAxis.call(d3.axisLeft(current.yScale).ticks(5).tickSizeOuter(0));
@@ -191,7 +205,10 @@
 
     function renderAxes(state) {
       lastState = state;
-      cancelDomainAnimation();
+      if (activeDomainAnimation) {
+        pendingDomainState = retainNewestState(pendingDomainState, state);
+        return;
+      }
       const current = ensureFrame(state);
       if (!current) return;
       drawAxes(state, true);
@@ -238,6 +255,10 @@
 
     function renderObservations(state) {
       lastState = state;
+      if (activeDomainAnimation) {
+        pendingDomainState = retainNewestState(pendingDomainState, state);
+        return;
+      }
       const current = ensureFrame(state);
       if (!current) return;
       drawObservations(state, true);
@@ -285,6 +306,16 @@
 
     function renderAqi(state) {
       lastState = state;
+      if (activeDomainAnimation) {
+        if (state.aqi_only === true) {
+          activeDomainAnimation.aqiMode = "state";
+          activeDomainAnimation.aqiState = retainNewestState(activeDomainAnimation.aqiState, state);
+          drawAqi(activeDomainAnimation.aqiState);
+        } else {
+          pendingDomainState = retainNewestState(pendingDomainState, state);
+        }
+        return;
+      }
       const current = ensureFrame(state);
       if (!current) return;
       drawAqi(state);
@@ -304,21 +335,34 @@
       const generation = animationGeneration;
       const startX = current.xScale.domain().map(function (value) { return value.getTime(); });
       const endX = [state.range.startMs, state.range.endMs];
-      if (!startX.every(Number.isFinite) || startX.every(function (value, index) { return value === endX[index]; })) {
+      const startY = current.yScale.domain().slice();
+      const endY = observationDomain(state);
+      const xUnchanged = startX.every(function (value, index) { return value === endX[index]; });
+      const yUnchanged = startY.every(function (value, index) { return value === endY[index]; });
+      if (!startX.every(Number.isFinite) || (xUnchanged && yUnchanged)) {
         current.xScale.domain([state.range.startDate, state.range.endDate]);
+        current.yScale.domain(endY);
         drawAxes(state, false);
         drawObservations(state, true);
         drawAqi(state);
         return;
       }
-      const startY = current.yScale.domain().slice();
       const startedAt = typeof performance !== "undefined" && typeof performance.now === "function"
         ? performance.now()
         : Date.now();
       const durationMs = Math.max(1, Number(options.domainAnimationMs) || 240);
       current.symbols.style("opacity", 0);
+      const animation = {
+        generation,
+        state,
+        aqiMode: "state",
+        aqiState: state,
+        endX,
+        endY,
+      };
+      activeDomainAnimation = animation;
       const step = function (nowValue) {
-        if (generation !== animationGeneration || !frame) return;
+        if (generation !== animationGeneration || activeDomainAnimation !== animation || !frame) return;
         const now = Number.isFinite(nowValue) ? nowValue : Date.now();
         const raw = Math.min(1, Math.max(0, (now - startedAt) / durationMs));
         const eased = raw < 0.5 ? 2 * raw * raw : -1 + (4 - 2 * raw) * raw;
@@ -326,18 +370,36 @@
           new Date(startX[0] + (endX[0] - startX[0]) * eased),
           new Date(startX[1] + (endX[1] - startX[1]) * eased),
         ]);
-        current.yScale.domain(startY);
+        current.yScale.domain([
+          startY[0] + (endY[0] - startY[0]) * eased,
+          startY[1] + (endY[1] - startY[1]) * eased,
+        ]);
         drawAxes(state, false);
         drawObservations(state, false);
-        drawAqi(state);
+        if (animation.aqiMode === "state") drawAqi(animation.aqiState || state);
         if (raw < 1) {
           animationFrameId = requestAnimationFrame(step);
         } else {
           animationFrameId = null;
+          activeDomainAnimation = null;
           current.xScale.domain([state.range.startDate, state.range.endDate]);
-          drawAxes(state, false);
-          drawObservations(state, true);
-          drawAqi(state);
+          current.yScale.domain(endY);
+          const pending = pendingDomainState;
+          pendingDomainState = null;
+          if (pending) {
+            lastState = pending;
+            current.xScale.domain([pending.range.startDate, pending.range.endDate]);
+            current.yScale.domain(observationDomain(pending));
+            drawAxes(pending, false);
+            drawObservations(pending, true);
+            if (animation.aqiMode === "state") {
+              drawAqi(retainNewestState(pending, animation.aqiState));
+            }
+          } else {
+            drawAxes(state, false);
+            drawObservations(state, true);
+            if (animation.aqiMode === "state") drawAqi(animation.aqiState || state);
+          }
         }
       };
       animationFrameId = requestAnimationFrame(step);
@@ -365,11 +427,13 @@
     }
 
     function clearAqi() {
+      if (activeDomainAnimation) activeDomainAnimation.aqiMode = "cleared";
       frame?.aqi?.selectAll("*").remove();
     }
 
     function renderAqiUnavailable() {
       if (!frame) return;
+      if (activeDomainAnimation) activeDomainAnimation.aqiMode = "unavailable";
       frame.aqi.selectAll("*").remove();
       frame.aqi.append("text").attr("class", "aqi-band-label aqi-band-unavailable")
         .attr("x", frame.margin.left).attr("y", 28).text("AQI unavailable for this range");
@@ -419,6 +483,7 @@
 
     function resize(value = {}, state = lastState) {
       if (!refs || !state?.range) return;
+      cancelDomainAnimation();
       const size = dimensions(value);
       if (!frame) {
         createFrame(state, size);

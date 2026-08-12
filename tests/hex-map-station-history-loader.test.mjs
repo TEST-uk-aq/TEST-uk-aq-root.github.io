@@ -3,6 +3,7 @@ import fs from "node:fs";
 import controllerModule from "../shared/station-chart/station-chart-controller.js";
 import sourceModule from "../shared/station-chart/aqi-source-controller.js";
 import cacheModule from "../shared/station-chart/station-chart-cache.js";
+import historyLoaderModule from "../shared/station-chart/station-history-loader.js";
 
 const page = fs.readFileSync(new URL("../hex_map/index.html", import.meta.url), "utf8");
 const adapter = fs.readFileSync(new URL("../hex_map/hex-map-station-chart-adapter.js", import.meta.url), "utf8");
@@ -46,6 +47,9 @@ assert.match(controllerSource, /createOrderedSettlementBuffer/);
 assert.match(controllerSource, /renderer\.updateProgress/);
 assert.match(rendererSource, /ChartCore\.renderProgressBar/);
 assert.match(rendererSource, /function animateDomains/);
+assert.match(rendererSource, /const endY = observationDomain\(state\)/);
+assert.match(rendererSource, /startY\[0\] \+ \(endY\[0\] - startY\[0\]\) \* eased/);
+assert.match(rendererSource, /pendingDomainState = retainNewestState/);
 
 assert.match(networkControls, /installNetworkScopeDropdownGuard/);
 assert.match(networkControls, /guardedEnsureSearchDataLoaded/);
@@ -179,6 +183,34 @@ for (const [label, durationMs] of rangeDurations) {
   assert.equal(tracedPlan.at(-1).range.start_utc, tracedRange.startIso, `${label} work reaches the requested start`);
 }
 
+const settlementBuffer = historyLoaderModule.createOrderedSettlementBuffer(0);
+const settlementLaunches = [];
+const settlementCommits = [];
+let releaseFirstCommit;
+const firstCommitGate = new Promise((resolve) => { releaseFirstCommit = resolve; });
+await controllerModule.runQueueWithConcurrency([
+  { sequence: 0 }, { sequence: 1 }, { sequence: 2 },
+], 2, async (item) => {
+  settlementLaunches.push(item.sequence);
+  controllerModule.scheduleOrderedSettlement(settlementBuffer, item.sequence, item, async (value) => {
+    if (value.sequence === 0) await firstCommitGate;
+    settlementCommits.push(value.sequence);
+  });
+});
+assert.deepEqual(settlementLaunches, [0, 1, 2],
+  "a fetch worker launches later network work while an ordered commit chain is still waiting");
+assert.deepEqual(settlementCommits, [], "ordered visible settlement remains blocked at the unfinished newest commit");
+releaseFirstCommit();
+await settlementBuffer.flush();
+assert.deepEqual(settlementCommits, [0, 1, 2], "decoupled network work still commits newest to oldest");
+
+const rejectedSettlementBuffer = historyLoaderModule.createOrderedSettlementBuffer(0);
+controllerModule.scheduleOrderedSettlement(rejectedSettlementBuffer, 0, {}, async () => {
+  throw new Error("ordered_commit_failed");
+});
+await assert.rejects(rejectedSettlementBuffer.flush(), /ordered_commit_failed/,
+  "ordered commit errors remain observable at the final flush");
+
 const concurrentRequests = [];
 const committedEnds = [];
 const progressUpdates = [];
@@ -259,5 +291,82 @@ assert.equal(cacheModule.getUncoveredRanges(concurrentRecord, "observations", in
 assert.equal(cacheModule.getUncoveredRanges(concurrentRecord, "aqi", independentRange).length, 0,
   "the complete requested AQI range is covered independently");
 concurrentController.destroy();
+
+let failOlderInterval = true;
+const incompleteEvents = [];
+const incompleteMessages = [];
+let incompleteRenderErrorCount = 0;
+let incompleteLastState = null;
+const failedEndUtc = "2026-07-03T00:00:00.000Z";
+const incompleteRequests = [];
+const incompleteClient = {
+  kind: "calculated",
+  async loadCurrent(request, parts) {
+    const result = makeResult(request, parts);
+    return {
+      ...result,
+      observations: {
+        ...result.observations,
+        points: [{ date: new Date("2026-07-08T12:00:00.000Z"), value: 8 }],
+        stable_head_start_utc: "2026-07-05T00:00:00.000Z",
+        stable_head_end_utc: request.end_utc,
+        next_older_observation_chunk_end_utc: "2026-07-05T00:00:00.000Z",
+      },
+      aqi: {
+        ...result.aqi,
+        stable_head_start_utc: "2026-07-05T00:00:00.000Z",
+        stable_head_end_utc: request.end_utc,
+        next_older_aqi_chunk_end_utc: "2026-07-05T00:00:00.000Z",
+      },
+    };
+  },
+  async loadOlder(request, parts) {
+    incompleteRequests.push(request.end_utc);
+    if (failOlderInterval && request.end_utc === failedEndUtc) throw new Error("history_transport_failed");
+    return makeResult(request, parts);
+  },
+  async prefetchAqi(request) { return makeResult(request, { observations: false, aqi: true }); },
+};
+const incompleteRecords = new Map();
+const incompleteController = controllerModule.createStationChartController({
+  renderer: {
+    initialise() {}, renderAxes() {}, renderAqi() {}, setLoading() {}, clearProgress() {}, updateProgress() {}, destroy() {},
+    renderObservations(state) { incompleteLastState = state; },
+    renderError() { incompleteRenderErrorCount += 1; },
+  },
+  calculatedClient: incompleteClient,
+  compatibilityClient: incompleteClient,
+  records: incompleteRecords,
+  backgroundAqiPrefetch: false,
+  olderChunkMs: 24 * 60 * 60 * 1000,
+  onMessage(message) { incompleteMessages.push(message); },
+  diagnostics: {
+    timing() {},
+    event(name, details) { incompleteEvents.push([name, details]); },
+  },
+});
+incompleteController.mount({});
+await incompleteController.setRange(independentRange);
+const incompleteState = await incompleteController.setSelection([
+  { station_id: 801, timeseries_id: 901, connector_id: 1001, pollutant: "pm25" },
+]);
+assert.equal(incompleteState.complete, false, "a failed required observation interval is not labelled complete");
+assert.equal(incompleteState.observation_complete, false);
+assert.equal(incompleteState.observation_coverage.failed_interval_count, 1);
+assert.equal(incompleteRenderErrorCount, 0, "valid retained chart data is not blanked by one older transport failure");
+assert.equal(incompleteLastState.observations.get("801").length, 1, "valid current observations remain rendered");
+assert.equal(incompleteMessages.some(Boolean), false, "no new user-facing partial-failure wording is invented");
+const incompleteDiagnostic = incompleteEvents.find(([name]) => name === "station_chart_load_incomplete")?.[1];
+assert.equal(incompleteDiagnostic?.retryable_transport_failure, true);
+assert.equal(incompleteDiagnostic?.source_partial, false, "transport failure remains distinct from source-data partiality");
+assert.equal(incompleteEvents.some(([name]) => name === "station_chart_load_completed"), false);
+
+failOlderInterval = false;
+const requestsBeforeRetry = incompleteRequests.filter((endUtc) => endUtc === failedEndUtc).length;
+const recoveredState = await incompleteController.refresh();
+assert.equal(recoveredState.complete, true, "a later normal load can complete the previously failed interval");
+assert.equal(incompleteRequests.filter((endUtc) => endUtc === failedEndUtc).length, requestsBeforeRetry + 1,
+  "the failed observation interval remains retryable");
+incompleteController.destroy();
 
 console.log("Hex Map shared station-chart harness passed");

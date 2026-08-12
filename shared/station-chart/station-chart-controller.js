@@ -148,6 +148,15 @@
     }));
   }
 
+  function scheduleOrderedSettlement(buffer, sequence, value, commit) {
+    const settlement = buffer.settle(sequence, value, commit);
+    // Network workers must not await visible/cache settlement. Attach a handler
+    // immediately so a later final flush remains authoritative without an
+    // interim rejected chain becoming unhandled.
+    void settlement.catch(function () {});
+    return settlement;
+  }
+
   function createRenderScheduler(render, isCurrent) {
     let frameId = null;
     let pending = Promise.resolve();
@@ -233,6 +242,45 @@
 
     function selectedSource() {
       return selection.find(function (entry) { return entry.station_id === aqiSourceId; }) || selection[0] || null;
+    }
+
+    function observationCoverageSummary(requestedRange) {
+      const requested = cache.intervalBounds(requestedRange);
+      const incompleteSeries = [];
+      let failedIntervalCount = 0;
+      let partialIntervalCount = 0;
+      let uncoveredIntervalCount = 0;
+      selection.forEach(function (entry) {
+        const record = recordFor(entry);
+        const uncovered = cache.getUncoveredRanges(record, "observations", requestedRange);
+        if (!uncovered.length) return;
+        const intervalStates = Array.isArray(record?.coverage?.observations?.interval_states)
+          ? record.coverage.observations.interval_states
+          : [];
+        const relevantStates = intervalStates.filter(function (interval) {
+          const bounds = cache.intervalBounds(interval);
+          return requested && bounds && bounds.endMs > requested.startMs && bounds.startMs < requested.endMs;
+        });
+        const failed = relevantStates.filter(function (interval) { return interval.state === "failed"; }).length;
+        const partial = relevantStates.filter(function (interval) { return interval.state === "partial"; }).length;
+        failedIntervalCount += failed;
+        partialIntervalCount += partial;
+        uncoveredIntervalCount += uncovered.length;
+        incompleteSeries.push({
+          station_id: entry.station_id,
+          timeseries_id: entry.timeseries_id,
+          uncovered_interval_count: uncovered.length,
+          failed_interval_count: failed,
+          partial_interval_count: partial,
+        });
+      });
+      return Object.freeze({
+        complete: incompleteSeries.length === 0,
+        failed_interval_count: failedIntervalCount,
+        partial_interval_count: partialIntervalCount,
+        uncovered_interval_count: uncoveredIntervalCount,
+        incomplete_series: incompleteSeries.slice(0, 4),
+      });
     }
 
     function requestFor(entry, requestedRange, parts, extra = {}) {
@@ -408,9 +456,9 @@
         }
         if (workItem.observations) callbacks.onObservationSettled?.();
         const kinds = [workItem.observations && "observations", workItem.aqi && "aqi"].filter(Boolean);
-        await Promise.all(kinds.map(function (kind) {
+        kinds.forEach(function (kind) {
           const sequence = kind === "observations" ? workItem.observation_sequence : workItem.aqi_sequence;
-          return orderedByKind[kind].settle(sequence, { ...settled, kind }, async function (value) {
+          scheduleOrderedSettlement(orderedByKind[kind], sequence, { ...settled, kind }, async function (value) {
             if (signal.aborted || !generations.isCurrent(generation)) throw abortError();
             if (value.error) {
               recordFailedOlderWork(entry, value.workItem, kind, value.error, generation);
@@ -427,7 +475,7 @@
             });
             callbacks.onCommit?.(kind);
           });
-        }));
+        });
       });
       await Promise.all([orderedByKind.observations.flush(), orderedByKind.aqi.flush()]);
       return { work_count: work.length, observation_work_count: observationWorkCount };
@@ -572,10 +620,38 @@
         await renderScheduler.flush();
         const observationFailure = settled.find(function (item) { return item.status === "rejected" && !isAbort(item.reason); });
         if (observationFailure) throw observationFailure.reason;
+        const observationCoverage = observationCoverageSummary(range);
         loading = false;
-        renderAll({ reason, generation, complete: true });
-        diagnostics.event("station_chart_load_completed", { generation, reason, source: clientKind });
-        return currentState({ reason, generation, complete: true });
+        const completion = {
+          reason,
+          generation,
+          complete: observationCoverage.complete,
+          observation_complete: observationCoverage.complete,
+          observation_coverage: observationCoverage,
+        };
+        renderAll(completion);
+        if (observationCoverage.complete) {
+          diagnostics.event("station_chart_load_completed", {
+            generation,
+            reason,
+            source: clientKind,
+            observation_complete: true,
+          });
+        } else {
+          diagnostics.event("station_chart_load_incomplete", {
+            generation,
+            reason,
+            source: clientKind,
+            observation_complete: false,
+            retryable_transport_failure: observationCoverage.failed_interval_count > 0,
+            source_partial: observationCoverage.partial_interval_count > 0,
+            failed_interval_count: observationCoverage.failed_interval_count,
+            partial_interval_count: observationCoverage.partial_interval_count,
+            uncovered_interval_count: observationCoverage.uncovered_interval_count,
+            incomplete_series: observationCoverage.incomplete_series,
+          });
+        }
+        return currentState(completion);
       } catch (error) {
         if (!isAbort(error) && generations.isCurrent(generation)) {
           loading = false;
@@ -731,6 +807,7 @@
     defaultOlderChunkMs,
     buildOlderWorkPlan,
     runQueueWithConcurrency,
+    scheduleOrderedSettlement,
     createRenderScheduler,
   };
 });

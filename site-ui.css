@@ -869,6 +869,7 @@ body.home-page .dashboard-table--areas {
   width: 100%;
   min-width: 0 !important;
   table-layout: fixed;
+  --area-group-border: #a9adb1;
 }
 
 body.home-page .dashboard-table--areas .dashboard-table-area-type-col {
@@ -893,6 +894,8 @@ body.home-page .dashboard-table--areas .area-reading {
 body.home-page .dashboard-table--areas .area-reading-name {
   grid-column: 1;
   min-width: 0;
+  overflow-wrap: normal !important;
+  word-break: normal !important;
 }
 
 body.home-page .dashboard-table--areas .area-reading-metric {
@@ -942,4 +945,79 @@ body.home-page .dashboard-table--areas .area-reading-value {
     grid-column: auto;
     justify-self: auto;
   }
+}
+
+/* Grouped five-row fallback. JavaScript enables this only when a normally
+   wrapped area-type label still has horizontal rendered overflow. */
+body.home-page .dashboard-table--areas .area-reading-group-row {
+  display: none;
+}
+
+body.home-page .dashboard-table--areas.area-table--grouped .dashboard-table-area-type-col {
+  width: 0 !important;
+  visibility: collapse;
+}
+
+body.home-page .dashboard-table--areas.area-table--grouped col:not(.dashboard-table-area-type-col) {
+  width: 33.333333% !important;
+}
+
+body.home-page .dashboard-table--areas.area-table--grouped thead th:first-child,
+body.home-page .dashboard-table--areas.area-table--grouped tbody tr[data-area-type] > th:first-child {
+  display: none !important;
+}
+
+body.home-page .dashboard-table--areas.area-table--grouped thead th:nth-child(2) {
+  border-left: 0 !important;
+  border-top-left-radius: 15px;
+}
+
+body.home-page .dashboard-table--areas.area-table--grouped .area-reading-group-row {
+  display: table-row;
+}
+
+body.home-page .dashboard-table--areas.area-table--grouped .area-reading-group-row > th {
+  display: table-cell;
+  padding: 0.55rem 0.65rem;
+  border-top: 2px solid var(--area-group-border);
+  border-right: 2px solid var(--area-group-border);
+  border-bottom: 1px solid var(--area-group-border);
+  border-left: 2px solid var(--area-group-border);
+  background: #fff;
+  color: #172535;
+  font-size: inherit;
+  font-weight: 800;
+  line-height: 1.15;
+  text-align: left;
+  white-space: normal;
+}
+
+body.home-page .dashboard-table--areas.area-table--grouped tbody tr[data-area-type] > td {
+  border-bottom: 2px solid var(--area-group-border) !important;
+}
+
+body.home-page .dashboard-table--areas.area-table--grouped tbody tr[data-area-type] > td:nth-child(2) {
+  border-left: 2px solid var(--area-group-border) !important;
+}
+
+body.home-page .dashboard-table--areas.area-table--grouped tbody tr[data-area-type] > td:last-child {
+  border-right: 2px solid var(--area-group-border) !important;
+}
+
+body.home-page .dashboard-table--areas.area-table--grouped tbody tr[data-area-type] > td + td {
+  border-left: 1px solid rgba(30, 42, 51, 0.12);
+}
+
+/* Preserve normal wrapping. Only a residual single-word overflow is allowed to
+   reduce that individual area name. */
+body.home-page .dashboard-table--areas .area-reading-name.area-reading-name--fit-90 {
+  font-size: 90% !important;
+}
+
+body.home-page .dashboard-table--areas .area-reading-name.area-reading-name--fit-85 {
+  font-size: 85% !important;
+}
+
+body.home-page .dashboard-table--areas .area-reading-name.area-reading-name--emergency-wrap {
+  overflow-wrap: anywhere !important;
 }

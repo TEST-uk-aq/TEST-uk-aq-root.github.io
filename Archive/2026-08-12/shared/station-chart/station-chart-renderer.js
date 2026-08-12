@@ -47,9 +47,6 @@
     let frame = null;
     let lastState = null;
     let resizeObserver = null;
-    let progressBar = null;
-    let animationFrameId = null;
-    let animationGeneration = 0;
 
     function dimensions(value = {}) {
       const svgEl = refs?.svgEl;
@@ -64,7 +61,6 @@
       const marginTop = Math.max(52, Math.round(size.height * 0.12));
       const margin = { top: marginTop, right: 24, bottom: 44, left: 72 };
       const svg = refs.svg;
-      progressBar = null;
       svg.selectAll("*").remove();
       svg.attr("viewBox", `0 0 ${size.width} ${size.height}`);
       const clipId = `${options.clipIdPrefix || "station-chart"}-${Math.random().toString(36).slice(2)}`;
@@ -138,16 +134,9 @@
     function ensureFrame(state) {
       if (!refs || !state?.range) return null;
       if (!frame) return createFrame(state);
+      frame.xScale.domain([state.range.startDate, state.range.endDate]);
       layoutFrame(state);
       return frame;
-    }
-
-    function cancelDomainAnimation() {
-      animationGeneration += 1;
-      if (animationFrameId !== null && typeof cancelAnimationFrame === "function") {
-        cancelAnimationFrame(animationFrameId);
-      }
-      animationFrameId = null;
     }
 
     function observationExtent(state) {
@@ -165,13 +154,12 @@
       return min === max ? [min, min + 1] : [min, max];
     }
 
-    function drawAxes(state, updateDomains) {
-      const current = frame;
+    function renderAxes(state) {
+      lastState = state;
+      const current = ensureFrame(state);
       if (!current) return;
-      if (updateDomains !== false) {
-        current.xScale.domain([state.range.startDate, state.range.endDate]);
-        current.yScale.domain(observationExtent(state)).nice(5);
-      }
+      current.xScale.domain([state.range.startDate, state.range.endDate]);
+      current.yScale.domain(observationExtent(state)).nice(5);
       current.xAxis.call(buildXAxis(d3, current.xScale, state.range.endMs - state.range.startMs));
       current.yAxis.call(d3.axisLeft(current.yScale).ticks(5).tickSizeOuter(0));
       const guideline = Number(state.guideline?.limit_value);
@@ -189,16 +177,9 @@
       }
     }
 
-    function renderAxes(state) {
+    function renderObservations(state) {
       lastState = state;
-      cancelDomainAnimation();
       const current = ensureFrame(state);
-      if (!current) return;
-      drawAxes(state, true);
-    }
-
-    function drawObservations(state, includeSymbols) {
-      const current = frame;
       if (!current) return;
       const line = d3.line().defined(function (point) { return Number.isFinite(Number(point?.value)); })
         .x(function (point) { return current.xScale(point.date); })
@@ -212,14 +193,7 @@
           const points = state.observations.get(entry.station_id) || [];
           return ChartCore.buildSegments(points).map(function (segment) { return line(segment); }).filter(Boolean).join(" ") || null;
         });
-      const pointCount = Array.from(state.observations.values()).reduce(function (count, points) { return count + points.length; }, 0);
-      current.empty.selectAll("*").remove();
-      if (!pointCount && !state.loading) renderEmpty(options.noHistoryMessage || "No chart data is available in the selected range");
-      if (includeSymbols === false) {
-        current.symbols.style("opacity", 0);
-        return;
-      }
-      current.symbols.style("opacity", 1).selectAll("*").remove();
+      current.symbols.selectAll("*").remove();
       entries.forEach(function (entry, index) {
         const points = state.observations.get(entry.station_id) || [];
         const segments = ChartCore.buildSegments(points);
@@ -234,13 +208,9 @@
             .attr("fill", SERIES_COLOUR).attr("stroke", "#fff").attr("stroke-width", 1.5);
         });
       });
-    }
-
-    function renderObservations(state) {
-      lastState = state;
-      const current = ensureFrame(state);
-      if (!current) return;
-      drawObservations(state, true);
+      const pointCount = Array.from(state.observations.values()).reduce(function (count, points) { return count + points.length; }, 0);
+      current.empty.selectAll("*").remove();
+      if (!pointCount && !state.loading) renderEmpty(options.noHistoryMessage || "No chart data is available in the selected range");
     }
 
     function drawBand(label, key, colours, y, state) {
@@ -267,8 +237,9 @@
       });
     }
 
-    function drawAqi(state) {
-      const current = frame;
+    function renderAqi(state) {
+      lastState = state;
+      const current = ensureFrame(state);
       if (!current) return;
       current.aqi.selectAll("*").remove();
       current.aqi.classed("is-loading", state.aqi_loading === true);
@@ -281,87 +252,6 @@
       if (symbol) current.aqi.append("path").attr("class", "aqi-band-source-symbol")
         .attr("d", symbol).attr("transform", `translate(${current.margin.left - 62},24)`)
         .attr("fill", SERIES_COLOUR).attr("stroke", "#fff").attr("stroke-width", 1.35);
-    }
-
-    function renderAqi(state) {
-      lastState = state;
-      const current = ensureFrame(state);
-      if (!current) return;
-      drawAqi(state);
-    }
-
-    function animateDomains(state) {
-      lastState = state;
-      const current = ensureFrame(state);
-      if (!current) return;
-      if (typeof requestAnimationFrame !== "function") {
-        renderAxes(state);
-        renderObservations(state);
-        renderAqi(state);
-        return;
-      }
-      cancelDomainAnimation();
-      const generation = animationGeneration;
-      const startX = current.xScale.domain().map(function (value) { return value.getTime(); });
-      const endX = [state.range.startMs, state.range.endMs];
-      if (!startX.every(Number.isFinite) || startX.every(function (value, index) { return value === endX[index]; })) {
-        current.xScale.domain([state.range.startDate, state.range.endDate]);
-        drawAxes(state, false);
-        drawObservations(state, true);
-        drawAqi(state);
-        return;
-      }
-      const startY = current.yScale.domain().slice();
-      const startedAt = typeof performance !== "undefined" && typeof performance.now === "function"
-        ? performance.now()
-        : Date.now();
-      const durationMs = Math.max(1, Number(options.domainAnimationMs) || 240);
-      current.symbols.style("opacity", 0);
-      const step = function (nowValue) {
-        if (generation !== animationGeneration || !frame) return;
-        const now = Number.isFinite(nowValue) ? nowValue : Date.now();
-        const raw = Math.min(1, Math.max(0, (now - startedAt) / durationMs));
-        const eased = raw < 0.5 ? 2 * raw * raw : -1 + (4 - 2 * raw) * raw;
-        current.xScale.domain([
-          new Date(startX[0] + (endX[0] - startX[0]) * eased),
-          new Date(startX[1] + (endX[1] - startX[1]) * eased),
-        ]);
-        current.yScale.domain(startY);
-        drawAxes(state, false);
-        drawObservations(state, false);
-        drawAqi(state);
-        if (raw < 1) {
-          animationFrameId = requestAnimationFrame(step);
-        } else {
-          animationFrameId = null;
-          current.xScale.domain([state.range.startDate, state.range.endDate]);
-          drawAxes(state, false);
-          drawObservations(state, true);
-          drawAqi(state);
-        }
-      };
-      animationFrameId = requestAnimationFrame(step);
-    }
-
-    function updateProgress(settled, total) {
-      const totalCount = Math.max(0, Math.floor(Number(total) || 0));
-      if (!totalCount || !frame || !refs?.svgEl) {
-        if (!totalCount) clearProgress();
-        return;
-      }
-      if (!progressBar) {
-        progressBar = ChartCore.renderProgressBar(refs.svgEl, {
-          margin: frame.margin,
-          width: frame.width,
-          height: frame.height,
-        });
-      }
-      progressBar.update(Math.max(0, Number(settled) || 0) / totalCount);
-    }
-
-    function clearProgress() {
-      progressBar?.remove?.();
-      progressBar = null;
     }
 
     function clearAqi() {
@@ -432,7 +322,6 @@
     }
 
     function destroy() {
-      cancelDomainAnimation();
       resizeObserver?.disconnect?.();
       resizeObserver = null;
       refs?.svg?.selectAll("*").remove();
@@ -440,7 +329,6 @@
       refs = null;
       frame = null;
       lastState = null;
-      progressBar = null;
     }
 
     return Object.freeze({
@@ -452,9 +340,6 @@
       renderEmpty,
       renderError,
       renderAqiUnavailable,
-      animateDomains,
-      updateProgress,
-      clearProgress,
       setLoading,
       resize,
       destroy,

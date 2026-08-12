@@ -8,23 +8,17 @@
     || (typeof module === "object" && module.exports ? require("./aqi-source-controller.js") : null);
   const diagnosticsModule = root.UkAqStationChartDiagnostics
     || (typeof module === "object" && module.exports ? require("./station-chart-diagnostics.js") : null);
-  const historyLoader = root.UkAqStationHistoryLoader
-    || (typeof module === "object" && module.exports ? require("./station-history-loader.js") : null);
-  const api = factory(domain, cache, sourceModule, diagnosticsModule, historyLoader);
+  const api = factory(domain, cache, sourceModule, diagnosticsModule);
   if (typeof module === "object" && module.exports) module.exports = api;
   root.UkAqStationChartController = api;
-})(typeof globalThis !== "undefined" ? globalThis : this, function (domain, cache, sourceModule, diagnosticsModule, historyLoader) {
+})(typeof globalThis !== "undefined" ? globalThis : this, function (domain, cache, sourceModule, diagnosticsModule) {
   "use strict";
 
-  if (!domain || !cache || !sourceModule || !historyLoader) {
-    throw new Error("Shared station-chart domain, cache, AQI-source, and history-loader modules are required");
+  if (!domain || !cache || !sourceModule) {
+    throw new Error("Shared station-chart domain, cache, and AQI-source modules are required");
   }
 
   const DEFAULT_OLDER_CHUNK_MS = 7 * 24 * domain.HOUR_MS;
-  const DEFAULT_PRIMARY_OBSERVATION_CONCURRENCY = 3;
-  const DEFAULT_ADDITIONAL_OBSERVATION_CONCURRENCY = 2;
-  const DEFAULT_PRIMARY_AQI_CONCURRENCY = 2;
-  const DEFAULT_PRIORITIES = Object.freeze({ primary: 0, observations: 1, aqiPrefetch: 2 });
 
   function abortError() {
     const error = new Error("Station-chart load aborted");
@@ -74,113 +68,6 @@
     });
   }
 
-  function defaultOlderChunkMs(windowLabel) {
-    if (windowLabel === "24h") return 6 * domain.HOUR_MS;
-    if (windowLabel === "7d") return 24 * domain.HOUR_MS;
-    if (windowLabel === "31d") return 3 * 24 * domain.HOUR_MS;
-    if (windowLabel === "90d") return 7 * 24 * domain.HOUR_MS;
-    return 24 * domain.HOUR_MS;
-  }
-
-  function resolvePositiveLimit(value, fallback) {
-    return Math.max(1, Math.floor(Number(value) || fallback));
-  }
-
-  function buildOlderWorkPlan(record, initialResult, requestedRange, parts, spanMs, priority) {
-    const byRequest = new Map();
-    ["observations", "aqi"].forEach(function (kind) {
-      if (parts?.[kind] !== true) return;
-      const section = initialResult?.[kind];
-      const cursorEndUtc = resultBoundary(section, kind);
-      if (!cursorEndUtc) return;
-      const stableHeadStartUtc = domain.toDate(section?.stable_head_start_utc)?.toISOString() || cursorEndUtc;
-      cache.buildMissingChunkWorkList(
-        record,
-        kind,
-        requestedRange.startIso,
-        cursorEndUtc,
-        spanMs,
-      ).forEach(function (item) {
-        const requestKey = `${item.range.start_utc}|${item.range.end_utc}|${stableHeadStartUtc}`;
-        if (!byRequest.has(requestKey)) {
-          byRequest.set(requestKey, {
-            range: item.range,
-            stable_head_start_utc: stableHeadStartUtc,
-            observations: false,
-            aqi: false,
-          });
-        }
-        byRequest.get(requestKey)[kind] = true;
-      });
-    });
-    let observationSequence = 0;
-    let aqiSequence = 0;
-    return Array.from(byRequest.values()).sort(function (left, right) {
-      return Date.parse(right.range.end_utc) - Date.parse(left.range.end_utc)
-        || Date.parse(right.range.start_utc) - Date.parse(left.range.start_utc)
-        || Number(right.observations) - Number(left.observations);
-    }).map(function (item, sequence) {
-      return Object.freeze({
-        ...item,
-        sequence,
-        observation_sequence: item.observations ? observationSequence++ : null,
-        aqi_sequence: item.aqi ? aqiSequence++ : null,
-        parts: Object.freeze({
-          observations: item.observations,
-          aqi: item.aqi,
-          priority,
-        }),
-      });
-    });
-  }
-
-  async function runQueueWithConcurrency(queue, concurrency, iterator) {
-    const items = Array.isArray(queue) ? queue : [];
-    if (!items.length) return;
-    const limit = Math.min(resolvePositiveLimit(concurrency, 1), items.length);
-    let cursor = 0;
-    await Promise.all(Array.from({ length: limit }, async function () {
-      while (cursor < items.length) {
-        const index = cursor;
-        cursor += 1;
-        await iterator(items[index], index);
-      }
-    }));
-  }
-
-  function createRenderScheduler(render, isCurrent) {
-    let frameId = null;
-    let pending = Promise.resolve();
-    let resolvePending = null;
-    const run = function () {
-      if (frameId === null) return;
-      frameId = null;
-      const resolve = resolvePending;
-      resolvePending = null;
-      if (isCurrent()) render();
-      resolve?.();
-    };
-    return {
-      schedule() {
-        if (frameId !== null) return pending;
-        pending = new Promise(function (resolve) { resolvePending = resolve; });
-        if (typeof requestAnimationFrame === "function") frameId = requestAnimationFrame(run);
-        else {
-          frameId = -1;
-          queueMicrotask(run);
-        }
-        return pending;
-      },
-      flush() {
-        if (frameId !== null) {
-          if (frameId >= 0 && typeof cancelAnimationFrame === "function") cancelAnimationFrame(frameId);
-          run();
-        }
-        return pending;
-      },
-    };
-  }
-
   function createStationChartController(options = {}) {
     const renderer = options.renderer;
     const clients = {
@@ -201,7 +88,6 @@
       || { event() {}, timing() {} };
     const records = options.records instanceof Map ? options.records : new Map();
     const aqiPrefetchInFlight = new Map();
-    const backgroundAbortControllers = new Set();
     const generations = domain.createGenerationTracker();
     const aqiSourceController = options.aqiSourceController
       || sourceModule.createAqiSourceController({ diagnostics, transitionMs: options.aqiTransitionMs ?? 50 });
@@ -214,7 +100,6 @@
     let mounted = false;
     let clientKind = options.useCompatibility === true ? "compatibility" : "calculated";
     let renderRevision = 0;
-    let loading = false;
 
     function client() {
       return clients[clientKind];
@@ -263,7 +148,6 @@
         observations,
         aqi: source ? pointsInRange(recordFor(source)?.aqi_points, range) : [],
         guideline: source ? recordFor(source)?.guideline || source.guideline || null : null,
-        loading,
         revision: renderRevision,
         ...extra,
       });
@@ -284,14 +168,13 @@
       renderer.renderAqi?.(currentState({ ...extra, aqi_only: true }));
     }
 
-    function commitResult(entry, result, requestedRange, mode, requestedKinds = null) {
+    function commitResult(entry, result, requestedRange, mode) {
       const record = recordFor(entry);
       if (!record || result?.identity_valid !== true) {
         throw new Error("station_series_authoritative_identity_invalid");
       }
       record.identity = result.identity;
-      const allows = function (kind) { return !requestedKinds || requestedKinds.includes(kind); };
-      if (allows("observations") && result.observations?.enabled === true) {
+      if (result.observations?.enabled === true) {
         const bounds = mode === "current" ? sectionBounds(result.observations, requestedRange) : requestedRange;
         record.observation_points = mode === "current"
           ? cache.replaceAuthoritativeObservationHead(
@@ -313,7 +196,7 @@
           observationSettlement,
         );
       }
-      if (allows("aqi") && result.aqi?.enabled === true) {
+      if (result.aqi?.enabled === true) {
         const bounds = mode === "current" ? sectionBounds(result.aqi, requestedRange) : requestedRange;
         const merged = mode === "current"
           ? cache.replaceAuthoritativeAqiHead(record.aqi_points, result.aqi.points, bounds.startIso, bounds.endIso)
@@ -344,185 +227,96 @@
       return record;
     }
 
-    function olderChunkMs() {
-      const configured = typeof options.olderChunkMs === "function"
-        ? options.olderChunkMs(options.getWindowLabel?.())
-        : options.olderChunkMs;
-      return Math.max(
-        domain.HOUR_MS,
-        Number(configured) || defaultOlderChunkMs(options.getWindowLabel?.()) || DEFAULT_OLDER_CHUNK_MS,
-      );
-    }
-
-    function recordFailedOlderWork(entry, workItem, kind, error, generation) {
-      const record = recordFor(entry);
-      cache.recordCoverageInterval(record, kind, workItem.range, "failed");
-      diagnostics.event("station_history_chunk_failed", {
-        generation,
-        source: clientKind,
-        timeseries_id: entry.timeseries_id,
-        start_utc: workItem.range.start_utc,
-        end_utc: workItem.range.end_utc,
-        kind,
-        error: error?.message || String(error),
-      });
-    }
-
-    async function loadOlder(entry, initialResult, requestedRange, parts, signal, generation, callbacks = {}) {
-      const record = recordFor(entry);
-      const work = buildOlderWorkPlan(
-        record,
-        initialResult,
-        requestedRange,
-        parts,
-        olderChunkMs(),
-        parts.priority,
-      );
-      const observationWorkCount = work.filter(function (item) { return item.observations; }).length;
-      callbacks.onPlanned?.(observationWorkCount, work);
-      if (!work.length) return { work_count: 0, observation_work_count: 0 };
-      const orderedByKind = {
-        observations: historyLoader.createOrderedSettlementBuffer(0),
-        aqi: historyLoader.createOrderedSettlementBuffer(0),
-      };
-      const containsObservations = work.some(function (item) { return item.observations; });
-      const concurrency = containsObservations
-        ? resolvePositiveLimit(
-            parts.primary === true ? options.primaryObservationConcurrency : options.additionalObservationConcurrency,
-            parts.primary === true ? DEFAULT_PRIMARY_OBSERVATION_CONCURRENCY : DEFAULT_ADDITIONAL_OBSERVATION_CONCURRENCY,
-          )
-        : resolvePositiveLimit(options.primaryAqiConcurrency, DEFAULT_PRIMARY_AQI_CONCURRENCY);
-
-      await runQueueWithConcurrency(work, concurrency, async function (workItem) {
-        if (signal.aborted || !generations.isCurrent(generation)) throw abortError();
-        const chunkRange = domain.snapshotChartRange(workItem.range);
-        let settled;
-        try {
-          const result = await client().loadOlder(requestFor(entry, chunkRange, workItem.parts, {
-            stable_head_start_utc: workItem.stable_head_start_utc,
-          }), workItem.parts, signal);
-          settled = { workItem, chunkRange, result };
-        } catch (error) {
-          if (isAbort(error) || signal.aborted || !generations.isCurrent(generation)) throw abortError();
-          settled = { workItem, chunkRange, error };
-        }
-        if (workItem.observations) callbacks.onObservationSettled?.();
-        const kinds = [workItem.observations && "observations", workItem.aqi && "aqi"].filter(Boolean);
-        await Promise.all(kinds.map(function (kind) {
-          const sequence = kind === "observations" ? workItem.observation_sequence : workItem.aqi_sequence;
-          return orderedByKind[kind].settle(sequence, { ...settled, kind }, async function (value) {
-            if (signal.aborted || !generations.isCurrent(generation)) throw abortError();
-            if (value.error) {
-              recordFailedOlderWork(entry, value.workItem, kind, value.error, generation);
-              return;
-            }
-            commitResult(entry, value.result, value.chunkRange, "older", [kind]);
-            diagnostics.event("station_history_chunk_committed", {
-              generation,
-              source: clientKind,
-              timeseries_id: entry.timeseries_id,
-              start_utc: value.chunkRange.startIso,
-              end_utc: value.chunkRange.endIso,
-              kind,
-            });
-            callbacks.onCommit?.(kind);
-          });
-        }));
-      });
-      await Promise.all([orderedByKind.observations.flush(), orderedByKind.aqi.flush()]);
-      return { work_count: work.length, observation_work_count: observationWorkCount };
-    }
-
-    function startBackgroundAqiPrefetch(entry, requestedRange, parentSignal, generation) {
-      if (options.backgroundAqiPrefetch === false) return;
-      const abortController = new AbortController();
-      const abort = function () { abortController.abort(); };
-      parentSignal?.addEventListener?.("abort", abort, { once: true });
-      backgroundAbortControllers.add(abortController);
-      void prefetchEntryAqi(entry, requestedRange, abortController.signal, generation)
-        .catch(function (error) {
-          if (!isAbort(error)) diagnostics.event("station_chart_aqi_prefetch_failed", {
-            generation,
-            timeseries_id: entry.timeseries_id,
-            error: error?.message || String(error),
-          });
-        })
-        .finally(function () {
-          parentSignal?.removeEventListener?.("abort", abort);
-          backgroundAbortControllers.delete(abortController);
+    async function loadOlder(entry, initialResult, requestedRange, parts, signal, generation, onCommit) {
+      const requestedKinds = [parts.observations && "observations", parts.aqi && "aqi"].filter(Boolean);
+      const boundaries = requestedKinds.map(function (kind) {
+        return resultBoundary(initialResult[kind], kind);
+      }).filter(Boolean);
+      if (!boundaries.length) return;
+      let cursorEndUtc = boundaries.sort(function (left, right) { return Date.parse(right) - Date.parse(left); })[0];
+      const stableHeadStartUtc = initialResult.aqi?.stable_head_start_utc
+        || initialResult.observations?.stable_head_start_utc
+        || cursorEndUtc;
+      const spanMs = Math.max(domain.HOUR_MS, Number(options.olderChunkMs) || DEFAULT_OLDER_CHUNK_MS);
+      while (cursorEndUtc && !signal.aborted && generations.isCurrent(generation)) {
+        const chunk = cache.nextChunkRange(requestedRange.startIso, cursorEndUtc, spanMs);
+        if (!chunk || !cache.intervalBounds(chunk)) break;
+        const chunkRange = domain.snapshotChartRange(chunk);
+        const record = recordFor(entry);
+        const needsNetwork = requestedKinds.some(function (kind) {
+          return cache.getUncoveredRanges(record, kind, chunkRange).length > 0;
         });
+        if (!needsNetwork) {
+          cursorEndUtc = chunk.start_utc;
+          continue;
+        }
+        const result = await client().loadOlder(requestFor(entry, chunkRange, parts, {
+          stable_head_start_utc: stableHeadStartUtc,
+        }), parts, signal);
+        if (signal.aborted || !generations.isCurrent(generation)) throw abortError();
+        commitResult(entry, result, chunkRange, "older");
+        diagnostics.event("station_history_chunk_committed", {
+          generation,
+          source: clientKind,
+          timeseries_id: entry.timeseries_id,
+          start_utc: chunkRange.startIso,
+          end_utc: chunkRange.endIso,
+        });
+        onCommit?.();
+        const nextBoundaries = requestedKinds.map(function (kind) {
+          return resultBoundary(result[kind], kind);
+        }).filter(Boolean);
+        const next = nextBoundaries.length
+          ? nextBoundaries.sort(function (left, right) { return Date.parse(right) - Date.parse(left); })[0]
+          : chunk.start_utc;
+        if (Date.parse(next) >= Date.parse(cursorEndUtc)) break;
+        cursorEndUtc = Date.parse(next) > requestedRange.startMs ? next : null;
+      }
     }
 
-    async function loadEntry(entry, requestedRange, parts, signal, generation, callbacks = {}) {
+    async function loadEntry(entry, requestedRange, parts, signal, generation, onCommit) {
       const result = await client().loadCurrent(requestFor(entry, requestedRange, parts), parts, signal);
       if (signal.aborted || !generations.isCurrent(generation)) throw abortError();
       commitResult(entry, result, requestedRange, "current");
-      callbacks.onCommit?.("current");
-      await loadOlder(entry, result, requestedRange, parts, signal, generation, {
-        onPlanned: callbacks.onPlanned,
-        onObservationSettled: callbacks.onObservationSettled,
-        onCommit: function () { callbacks.onCommit?.("older"); },
-      });
-      if (parts.observations === true && parts.aqi !== true) {
-        startBackgroundAqiPrefetch(entry, requestedRange, signal, generation);
+      onCommit?.("current");
+      if (parts.observations === true && parts.aqi !== true && options.backgroundAqiPrefetch !== false) {
+        void prefetchEntryAqi(entry, requestedRange, signal, generation)
+          .catch(function (error) {
+            if (!isAbort(error)) diagnostics.event("station_chart_aqi_prefetch_failed", {
+              generation,
+              timeseries_id: entry.timeseries_id,
+              error: error?.message || String(error),
+            });
+          });
       }
+      await loadOlder(entry, result, requestedRange, parts, signal, generation, function () { onCommit?.("older"); });
       return result;
     }
 
     async function prefetchEntryAqi(entry, requestedRange, signal, generation) {
       const inFlightKey = `${recordKey(entry)}|${requestedRange.startIso}|${requestedRange.endIso}|${clientKind}`;
-      const existing = aqiPrefetchInFlight.get(inFlightKey);
-      if (existing && !existing.signal?.aborted) return existing.promise;
-      if (existing) aqiPrefetchInFlight.delete(inFlightKey);
-      let holder = null;
+      if (aqiPrefetchInFlight.has(inFlightKey)) return aqiPrefetchInFlight.get(inFlightKey);
       const work = (async function () {
         const parts = { observations: false, aqi: true };
         const result = await client().prefetchAqi(requestFor(entry, requestedRange, parts), signal);
         if (signal.aborted || !generations.isCurrent(generation)) throw abortError();
         commitResult(entry, result, requestedRange, "current");
-        await loadOlder(entry, result, requestedRange, {
-          ...parts,
-          priority: Number(options.priorities?.aqiPrefetch ?? DEFAULT_PRIORITIES.aqiPrefetch),
-          primary: true,
-        }, signal, generation);
+        await loadOlder(entry, result, requestedRange, parts, signal, generation);
         return result;
       })().finally(function () {
-        if (aqiPrefetchInFlight.get(inFlightKey) === holder) aqiPrefetchInFlight.delete(inFlightKey);
+        if (aqiPrefetchInFlight.get(inFlightKey) === work) aqiPrefetchInFlight.delete(inFlightKey);
       });
-      holder = { promise: work, signal };
-      aqiPrefetchInFlight.set(inFlightKey, holder);
+      aqiPrefetchInFlight.set(inFlightKey, work);
       return work;
     }
 
     async function load(reason) {
       if (destroyed || !mounted || !range) return null;
       activeAbortController?.abort();
-      backgroundAbortControllers.forEach(function (controller) { controller.abort(); });
-      backgroundAbortControllers.clear();
       const abortController = new AbortController();
       activeAbortController = abortController;
       const generation = generations.next();
       const source = selectedSource();
-      const renderScheduler = createRenderScheduler(renderAll, function () {
-        return !abortController.signal.aborted && generations.isCurrent(generation);
-      });
-      let observationProgressTotal = 0;
-      let observationProgressSettled = 0;
-      const updateObservationProgress = function () {
-        if (observationProgressTotal > 0) {
-          renderer.updateProgress?.(observationProgressSettled, observationProgressTotal);
-        }
-      };
-      const addObservationProgress = function (count) {
-        const value = Math.max(0, Math.floor(Number(count) || 0));
-        if (!value) return;
-        observationProgressTotal += value;
-        updateObservationProgress();
-      };
-      const settleObservationProgress = function () {
-        observationProgressSettled = Math.min(observationProgressTotal, observationProgressSettled + 1);
-        updateObservationProgress();
-      };
       diagnostics.event("station_chart_load_started", {
         generation,
         reason,
@@ -530,55 +324,30 @@
         selected_count: selection.length,
         aqi_source_id: source?.station_id || null,
       });
-      renderer.clearProgress?.();
-      loading = true;
       renderer.setLoading?.(true, { reason, generation });
       options.onMessage?.("");
       if (!selection.length) {
-        loading = false;
         renderer.renderEmpty?.(options.emptyMessage || "Select a sensor to draw a chart.");
         renderer.setLoading?.(false, { reason, generation });
         if (activeAbortController === abortController) activeAbortController = null;
         return null;
       }
       try {
-        if (["window-change", "refresh"].includes(reason)) {
-          renderer.animateDomains?.(currentState({ reason, generation, loading: true }));
-        }
-        const orderedSelection = source
-          ? [source, ...selection.filter(function (entry) { return entry.station_id !== source.station_id; })]
-          : selection.slice();
-        const work = orderedSelection.map(function (entry) {
-          const primary = entry.station_id === source?.station_id;
-          const parts = {
+        const work = selection.map(function (entry) {
+          return loadEntry(entry, range, {
             observations: true,
-            aqi: primary,
-            primary,
-            priority: Number(primary
-              ? options.priorities?.primary ?? DEFAULT_PRIORITIES.primary
-              : options.priorities?.observations ?? DEFAULT_PRIORITIES.observations),
-          };
-          return loadEntry(entry, range, parts, abortController.signal, generation, {
-            onCommit: function (mode) {
-              if (mode === "current") renderAll();
-              else void renderScheduler.schedule();
-            },
-            onPlanned: addObservationProgress,
-            onObservationSettled: settleObservationProgress,
-          });
+            aqi: entry.station_id === source?.station_id,
+          }, abortController.signal, generation, renderAll);
         });
         const settled = await Promise.allSettled(work);
         if (!generations.isCurrent(generation) || abortController.signal.aborted) return null;
-        await renderScheduler.flush();
         const observationFailure = settled.find(function (item) { return item.status === "rejected" && !isAbort(item.reason); });
         if (observationFailure) throw observationFailure.reason;
-        loading = false;
         renderAll({ reason, generation, complete: true });
         diagnostics.event("station_chart_load_completed", { generation, reason, source: clientKind });
         return currentState({ reason, generation, complete: true });
       } catch (error) {
         if (!isAbort(error) && generations.isCurrent(generation)) {
-          loading = false;
           diagnostics.event("station_chart_load_failed", {
             generation,
             reason,
@@ -592,8 +361,6 @@
       } finally {
         if (activeAbortController === abortController) {
           activeAbortController = null;
-          loading = false;
-          renderer.clearProgress?.();
           renderer.setLoading?.(false, { reason, generation });
         }
       }
@@ -692,8 +459,6 @@
       mounted = false;
       activeAbortController?.abort();
       sourceAbortController?.abort();
-      backgroundAbortControllers.forEach(function (controller) { controller.abort(); });
-      backgroundAbortControllers.clear();
       activeAbortController = null;
       sourceAbortController = null;
       generations.invalidate();
@@ -728,9 +493,5 @@
     normalizeEntry,
     resultBoundary,
     pointsInRange,
-    defaultOlderChunkMs,
-    buildOlderWorkPlan,
-    runQueueWithConcurrency,
-    createRenderScheduler,
   };
 });

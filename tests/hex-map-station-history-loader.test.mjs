@@ -2,11 +2,13 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 import controllerModule from "../shared/station-chart/station-chart-controller.js";
 import sourceModule from "../shared/station-chart/aqi-source-controller.js";
+import cacheModule from "../shared/station-chart/station-chart-cache.js";
 
 const page = fs.readFileSync(new URL("../hex_map/index.html", import.meta.url), "utf8");
 const adapter = fs.readFileSync(new URL("../hex_map/hex-map-station-chart-adapter.js", import.meta.url), "utf8");
 const networkControls = fs.readFileSync(new URL("../hex_map/hex-map-network-controls.js", import.meta.url), "utf8");
 const controllerSource = fs.readFileSync(new URL("../shared/station-chart/station-chart-controller.js", import.meta.url), "utf8");
+const rendererSource = fs.readFileSync(new URL("../shared/station-chart/station-chart-renderer.js", import.meta.url), "utf8");
 const calculatedClientSource = fs.readFileSync(new URL("../shared/station-chart/station-history-client.js", import.meta.url), "utf8");
 const compatibilityClientSource = fs.readFileSync(new URL("../shared/station-chart/station-history-compatibility-client.js", import.meta.url), "utf8");
 
@@ -40,6 +42,10 @@ assert.match(controllerSource, /function refresh/);
 assert.match(controllerSource, /function resize/);
 assert.match(controllerSource, /function destroy/);
 assert.doesNotMatch(controllerSource, /\bd3\.|querySelector|createElement|appendChild/);
+assert.match(controllerSource, /createOrderedSettlementBuffer/);
+assert.match(controllerSource, /renderer\.updateProgress/);
+assert.match(rendererSource, /ChartCore\.renderProgressBar/);
+assert.match(rendererSource, /function animateDomains/);
 
 assert.match(networkControls, /installNetworkScopeDropdownGuard/);
 assert.match(networkControls, /guardedEnsureSearchDataLoaded/);
@@ -114,5 +120,144 @@ assert.equal(counters.observations, beforeSwitch.observations, "AQI-only source 
 assert.equal(counters.clearAqi, beforeSwitch.clearAqi + 1, "the old AQI layer is cleared once");
 assert.equal(counters.aqi, beforeSwitch.aqi + 1, "the target AQI layer commits once");
 controller.destroy();
+
+const independentRange = {
+  startIso: "2026-07-01T00:00:00.000Z",
+  endIso: "2026-07-10T00:00:00.000Z",
+  startMs: Date.parse("2026-07-01T00:00:00.000Z"),
+  endMs: Date.parse("2026-07-10T00:00:00.000Z"),
+};
+const independentPlan = controllerModule.buildOlderWorkPlan(
+  cacheModule.createCacheRecord(),
+  {
+    observations: {
+      stable_head_start_utc: "2026-07-08T00:00:00.000Z",
+      next_older_observation_chunk_end_utc: "2026-07-08T00:00:00.000Z",
+    },
+    aqi: {
+      stable_head_start_utc: "2026-07-06T00:00:00.000Z",
+      next_older_aqi_chunk_end_utc: "2026-07-06T00:00:00.000Z",
+    },
+  },
+  independentRange,
+  { observations: true, aqi: true },
+  24 * 60 * 60 * 1000,
+  0,
+);
+assert.equal(independentPlan.filter((item) => item.observations).length, 7,
+  "observation work independently reaches its own older boundary");
+assert.equal(independentPlan.filter((item) => item.aqi).length, 5,
+  "AQI work independently reaches its own older boundary");
+assert.equal(independentPlan.some((item) => item.observations && item.aqi), false,
+  "different stable-head boundaries are not collapsed into ambiguous combined requests");
+
+const rangeDurations = new Map([
+  ["12h", 12 * 60 * 60 * 1000],
+  ["24h", 24 * 60 * 60 * 1000],
+  ["7d", 7 * 24 * 60 * 60 * 1000],
+  ["31d", 31 * 24 * 60 * 60 * 1000],
+  ["90d", 90 * 24 * 60 * 60 * 1000],
+]);
+for (const [label, durationMs] of rangeDurations) {
+  const endMs = Date.parse("2026-08-10T00:00:00.000Z");
+  const startMs = endMs - durationMs;
+  const tracedRange = {
+    startIso: new Date(startMs).toISOString(), endIso: new Date(endMs).toISOString(), startMs, endMs,
+  };
+  const tracedPlan = controllerModule.buildOlderWorkPlan(
+    cacheModule.createCacheRecord(),
+    { observations: {
+      stable_head_start_utc: tracedRange.endIso,
+      next_older_observation_chunk_end_utc: tracedRange.endIso,
+    } },
+    tracedRange,
+    { observations: true, aqi: false },
+    controllerModule.defaultOlderChunkMs(label),
+    1,
+  );
+  assert.equal(tracedPlan[0].range.end_utc, tracedRange.endIso, `${label} work starts with the newest interval`);
+  assert.equal(tracedPlan.at(-1).range.start_utc, tracedRange.startIso, `${label} work reaches the requested start`);
+}
+
+const concurrentRequests = [];
+const committedEnds = [];
+const progressUpdates = [];
+let activeOlder = 0;
+let maxActiveOlder = 0;
+const concurrentClient = {
+  kind: "calculated",
+  async loadCurrent(request, parts) {
+    const result = makeResult(request, parts);
+    return {
+      ...result,
+      observations: {
+        ...result.observations,
+        stable_head_start_utc: "2026-07-05T00:00:00.000Z",
+        stable_head_end_utc: request.end_utc,
+        next_older_observation_chunk_end_utc: "2026-07-05T00:00:00.000Z",
+      },
+      aqi: {
+        ...result.aqi,
+        stable_head_start_utc: "2026-07-05T00:00:00.000Z",
+        stable_head_end_utc: request.end_utc,
+        next_older_aqi_chunk_end_utc: "2026-07-05T00:00:00.000Z",
+      },
+    };
+  },
+  async loadOlder(request, parts) {
+    concurrentRequests.push(request.end_utc);
+    activeOlder += 1;
+    maxActiveOlder = Math.max(maxActiveOlder, activeOlder);
+    const day = new Date(request.end_utc).getUTCDate();
+    await new Promise((resolve) => setTimeout(resolve, Math.max(0, day - 2) * 4));
+    activeOlder -= 1;
+    return makeResult(request, parts);
+  },
+  async prefetchAqi(request) { return makeResult(request, { observations: false, aqi: true }); },
+};
+const concurrentRecords = new Map();
+const concurrentController = controllerModule.createStationChartController({
+  renderer: {
+    initialise() {}, renderAxes() {}, renderObservations() {}, renderAqi() {}, setLoading() {},
+    updateProgress(settled, total) { progressUpdates.push([settled, total]); },
+    clearProgress() {}, destroy() {},
+  },
+  calculatedClient: concurrentClient,
+  compatibilityClient: concurrentClient,
+  records: concurrentRecords,
+  backgroundAqiPrefetch: false,
+  olderChunkMs: 24 * 60 * 60 * 1000,
+  primaryObservationConcurrency: 3,
+  diagnostics: {
+    timing() {},
+    event(name, details) {
+      if (name === "station_history_chunk_committed" && details.kind === "observations") committedEnds.push(details.end_utc);
+    },
+  },
+});
+concurrentController.mount({});
+await concurrentController.setRange(independentRange);
+await concurrentController.setSelection([
+  { station_id: 501, timeseries_id: 601, connector_id: 701, pollutant: "pm25" },
+]);
+assert.equal(maxActiveOlder, 3, "primary older history uses its bounded per-stream concurrency");
+assert.deepEqual(concurrentRequests.slice(0, 3), [
+  "2026-07-05T00:00:00.000Z",
+  "2026-07-04T00:00:00.000Z",
+  "2026-07-03T00:00:00.000Z",
+], "newest primary chunks launch first without serial waiting");
+assert.deepEqual(committedEnds, [
+  "2026-07-05T00:00:00.000Z",
+  "2026-07-04T00:00:00.000Z",
+  "2026-07-03T00:00:00.000Z",
+  "2026-07-02T00:00:00.000Z",
+], "out-of-order network completions commit newest to oldest");
+assert.deepEqual(progressUpdates.at(-1), [4, 4], "observation progress settles every planned history chunk");
+const concurrentRecord = concurrentRecords.values().next().value;
+assert.equal(cacheModule.getUncoveredRanges(concurrentRecord, "observations", independentRange).length, 0,
+  "the complete requested observation range is covered after history settlement");
+assert.equal(cacheModule.getUncoveredRanges(concurrentRecord, "aqi", independentRange).length, 0,
+  "the complete requested AQI range is covered independently");
+concurrentController.destroy();
 
 console.log("Hex Map shared station-chart harness passed");

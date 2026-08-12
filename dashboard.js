@@ -1,16 +1,22 @@
 (() => {
   "use strict";
 
-  const POLLUTANTS = [
-    { key: "pm25", label: "PM2.5", html: "PM2.5" },
-    { key: "pm10", label: "PM10", html: "PM10" },
-    { key: "no2", label: "NO₂", html: "NO<sub>2</sub>" },
-  ];
+  const pollutantDomain = window.UkAqPollutants;
+  const networkCatalogClient = window.UkAqNetworkCatalog;
+  if (!pollutantDomain?.definitions || !networkCatalogClient?.load) {
+    throw new Error("UK AQ shared domain/data modules must load before the dashboard.");
+  }
+  const POLLUTANTS = pollutantDomain.definitions.map((definition) => ({
+    key: definition.key,
+    label: definition.typographicLabel,
+    html: definition.htmlLabel,
+  }));
   const FALLBACK_NETWORKS = [
     { code: "gov_uk_aurn", label: "GOV.UK AURN" },
     { code: "breathelondon", label: "Breathe London" },
     { code: "sensorcommunity", label: "Sensor.Community" },
   ];
+  const PREFERRED_INITIAL_NETWORK_CODES = new Set(["gov_uk_aurn", "breathelondon"]);
   const DASHBOARD_ACTIVE_WINDOW_HOURS = 6;
   const DASHBOARD_ACTIVE_WINDOW = `${DASHBOARD_ACTIVE_WINDOW_HOURS}h`;
   const DASHBOARD_REFRESH_INTERVAL_MS = 5 * 60 * 1000;
@@ -53,6 +59,11 @@
   let fitValuesTimer = null;
   let areaLayoutFrame = null;
   let lastAreaTableObservedWidth = null;
+
+  if (networkPickerClearAll) {
+    networkPickerClearAll.setAttribute("aria-label", "Keep one network selected");
+    networkPickerClearAll.title = "Keep one network selected";
+  }
 
   function parseBooleanFlag(value) {
     return /^(1|true|yes|on)$/i.test(String(value || "").trim());
@@ -111,17 +122,17 @@
   }
 
   async function fetchNetworkCatalog() {
-    const response = await fetchCacheApi(`${cacheBaseUrl}/networks`, { credentials: "include" });
-    if (!response.ok) throw new Error(`Network catalog request failed: ${response.status}`);
-    const payload = await response.json();
-    return (Array.isArray(payload?.data) ? payload.data : [])
-      .filter((row) => row?.public_display_enabled === true)
-      .map((row) => ({
-        code: String(row.network_code || "").trim(),
-        label: String(row.network_label || "").trim(),
-        type: row.network_type || null,
-      }))
-      .filter((row) => row.code && row.label);
+    const rows = await networkCatalogClient.load({
+      url: `${cacheBaseUrl}/networks`,
+      fetchApi: fetchCacheApi,
+      init: { credentials: "include" },
+      requirePublicDisplayEnabled: true,
+    });
+    return rows.map((row) => ({
+      code: row.code,
+      label: row.label,
+      type: row.network_type,
+    }));
   }
 
   async function fetchAreaNames() {
@@ -681,7 +692,11 @@
     const availableCodes = new Set(networkCatalog.map(({ code }) => code));
     if (!hasInitializedNetworkSelection) {
       selectedNetworks.clear();
-      networkCatalog.forEach(({ code }) => selectedNetworks.add(code));
+      const preferredNetworks = networkCatalog.filter(({ code }) =>
+        PREFERRED_INITIAL_NETWORK_CODES.has(code)
+      );
+      const initialNetworks = preferredNetworks.length ? preferredNetworks : networkCatalog;
+      initialNetworks.forEach(({ code }) => selectedNetworks.add(code));
       hasInitializedNetworkSelection = true;
       return;
     }
@@ -894,4 +909,131 @@
   scheduleAreaTableLayout();
   requestDashboardRefresh();
   scheduleNextDashboardRefresh();
+})();
+
+(function initWhoGuidelineReference() {
+  "use strict";
+
+  const footer = document.querySelector(".home-page .who-card-footer");
+  if (!footer || footer.querySelector(".who-guideline-reference-v2")) return;
+
+  const reference = document.createElement("div");
+  reference.className = "who-guideline-reference-v2";
+  reference.innerHTML = `
+    <div class="who-guideline-heading-v2">
+      <strong>World Health Organization guideline values <span class="who-guideline-unit-v2">(&micro;g/m<sup>3</sup>)</span></strong>
+      <button
+        type="button"
+        class="who-guideline-info-toggle-v2"
+        aria-expanded="false"
+        aria-controls="who-guideline-note-v2"
+        aria-label="Show note about WHO guideline values"
+      >
+        <img src="/images/Info-Icon-alpha.svg" alt="" aria-hidden="true">
+      </button>
+    </div>
+    <table class="who-guideline-table-v2">
+      <caption class="sr-only">World Health Organization air quality guideline values in micrograms per cubic metre</caption>
+      <thead>
+        <tr>
+          <th scope="col">Pollutant</th>
+          <th scope="col">Daily</th>
+          <th scope="col">Yearly</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <th scope="row">PM2.5</th>
+          <td>15</td>
+          <td>5</td>
+        </tr>
+        <tr>
+          <th scope="row">PM10</th>
+          <td>45</td>
+          <td>15</td>
+        </tr>
+        <tr>
+          <th scope="row">NO<sub>2</sub></th>
+          <td>25</td>
+          <td>10</td>
+        </tr>
+      </tbody>
+    </table>
+    <div class="who-guideline-note-v2" id="who-guideline-note-v2" role="note">
+      <strong>Note:</strong> Daily averages use GMT days from midnight to midnight. &ldquo;Above guideline&rdquo; means above WHO health-based guidelines, not UK legal limits.
+    </div>
+  `;
+
+  footer.replaceChildren(reference);
+
+  const heading = reference.querySelector(".who-guideline-heading-v2");
+  const toggle = reference.querySelector(".who-guideline-info-toggle-v2");
+  const note = reference.querySelector(".who-guideline-note-v2");
+  const mobileMedia = window.matchMedia("(max-width: 767px)");
+  let noteOpen = false;
+
+  function syncNoteTop() {
+    if (!heading) return;
+    reference.style.setProperty("--who-guideline-note-top", `${heading.offsetHeight + 6}px`);
+  }
+
+  function setNoteOpen(open) {
+    noteOpen = Boolean(open && mobileMedia.matches);
+    reference.classList.toggle("who-guideline-note-open-v2", noteOpen);
+    toggle.setAttribute("aria-expanded", String(noteOpen));
+    toggle.setAttribute(
+      "aria-label",
+      noteOpen ? "Hide note about WHO guideline values" : "Show note about WHO guideline values",
+    );
+    note.hidden = mobileMedia.matches ? !noteOpen : false;
+    if (noteOpen) syncNoteTop();
+  }
+
+  function closeNote() {
+    if (noteOpen) setNoteOpen(false);
+  }
+
+  function syncViewport() {
+    noteOpen = false;
+    reference.classList.remove("who-guideline-note-open-v2");
+    toggle.setAttribute("aria-expanded", "false");
+    toggle.setAttribute("aria-label", "Show note about WHO guideline values");
+    note.hidden = mobileMedia.matches;
+    syncNoteTop();
+  }
+
+  toggle.addEventListener("click", () => {
+    setNoteOpen(!noteOpen);
+  });
+
+  document.addEventListener("pointerdown", (event) => {
+    if (!noteOpen) return;
+    if (toggle.contains(event.target) || note.contains(event.target)) return;
+    closeNote();
+  });
+
+  document.addEventListener("focusin", (event) => {
+    if (!noteOpen) return;
+    if (toggle.contains(event.target) || note.contains(event.target)) return;
+    closeNote();
+  });
+
+  document.addEventListener("keydown", (event) => {
+    if (event.key === "Escape") closeNote();
+  });
+
+  document.addEventListener("scroll", closeNote, { passive: true, capture: true });
+  window.addEventListener("resize", () => {
+    closeNote();
+    syncNoteTop();
+  }, { passive: true });
+  window.addEventListener("orientationchange", closeNote, { passive: true });
+  document.addEventListener("visibilitychange", closeNote);
+
+  syncViewport();
+  if (typeof mobileMedia.addEventListener === "function") {
+    mobileMedia.addEventListener("change", syncViewport);
+  } else {
+    mobileMedia.addListener?.(syncViewport);
+  }
 })();

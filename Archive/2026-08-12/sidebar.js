@@ -511,7 +511,7 @@
       <div class="ukaq-site-footer-sources" aria-label="Air quality data sources and licences">
         <section class="ukaq-site-footer-source" aria-label="GOV.UK and UK-AIR attribution">
           <div class="ukaq-site-footer-mark">
-            <a class="ukaq-site-footer-gov-pill" href="https://uk-air.defra.gov.uk/" aria-label="GOV.UK AURN">GOV.UK AURN</a>
+            <a class="ukaq-site-footer-gov-pill" href="https://uk-air.defra.gov.uk/">GOV.UK AURN</a>
           </div>
           <p class="ukaq-site-footer-copy">&copy; Crown 2026 copyright Defra via <a href="https://uk-air.defra.gov.uk/">uk-air.defra.gov.uk</a>, licenced under the <a href="${oglUrl}">Open Government Licence (OGL)</a>.</p>
         </section>

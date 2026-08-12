@@ -1,9 +1,9 @@
-// Compatibility facade for the progressively extracted station-chart modules.
+// Shared progressive station-history planning facade.
 (function (root, factory) {
   const domain = root.UkAqStationChartDomain
-    || (typeof module === "object" && module.exports ? require("./station_chart/station-chart-domain.js") : null);
+    || (typeof module === "object" && module.exports ? require("./station-chart-domain.js") : null);
   const cache = root.UkAqStationChartCache
-    || (typeof module === "object" && module.exports ? require("./station_chart/station-chart-cache.js") : null);
+    || (typeof module === "object" && module.exports ? require("./station-chart-cache.js") : null);
   const api = factory(domain, cache);
   if (typeof module === "object" && module.exports) module.exports = api;
   root.UkAqStationHistoryLoader = api;

@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
-import cache from "../station_chart/station-chart-cache.js";
-import diagnosticsModule from "../station_chart/station-chart-diagnostics.js";
-import sourceControllerModule from "../station_chart/aqi-source-controller.js";
+import cache from "../shared/station-chart/station-chart-cache.js";
+import diagnosticsModule from "../shared/station-chart/station-chart-diagnostics.js";
+import sourceControllerModule from "../shared/station-chart/aqi-source-controller.js";
 
 const { DEFAULT_TRANSITION_MS, createAqiSourceController } = sourceControllerModule;
 assert.equal(DEFAULT_TRANSITION_MS, 50, "the shared controller owns the 50ms transition");

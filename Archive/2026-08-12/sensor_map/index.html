@@ -302,14 +302,9 @@
     <div id="map" role="application" aria-label="UK AQ sensor map"></div>
     
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" crossorigin="anonymous"></script>
-    <script src="/shared/domain/pollutants.js"></script>
     <script src="/js/uk-aq-cache-auth.js"></script>
     <script>
       (() => {
-        const pollutantDomain = window.UkAqPollutants;
-        if (!pollutantDomain?.definitions) {
-          throw new Error("UK AQ pollutant domain must load before the Sensor Map.");
-        }
         const PROJECT_REF_PLACEHOLDER = "zztjgmdiftqtdcrlfpvc";
         const ANON_KEY_PLACEHOLDER = "sb_publishable_Cru7ACLoK8kKQdID5jPaDw_3RHvQNxO";
         const FALLBACK_CACHE_BASE_URL = "https://cic-test.chronicillnesschannel.co.uk/api/aq";
@@ -343,9 +338,7 @@
         let currentUpdatedWithin = updatedWithinParam || "all";
 
         const READINGS_URL = cacheBaseUrl ? `${cacheBaseUrl}/latest` : "";
-        const READING_POLLUTANTS = pollutantDomain.definitions.map(
-          (definition) => definition.readingScope,
-        );
+        const READING_POLLUTANTS = ["pm2.5", "pm10", "no2"];
         const STATIONS_URL = cacheBaseUrl ? `${cacheBaseUrl}/stations` : "";
         const STATIONS_MAP_FALLBACK_URL = cacheBaseUrl ? `${cacheBaseUrl}/stations-map` : "";
 
@@ -482,11 +475,23 @@
 
         function normalizeReadingScope(value) {
           const normalized = normalizeText(value).toLowerCase();
-          return pollutantDomain.getByReadingScope(normalized)?.readingScope || "all";
+          if (normalized === "pm2.5" || normalized === "pm10" || normalized === "no2") {
+            return normalized;
+          }
+          return "all";
         }
 
         function formatPollutantKey(value) {
-          return pollutantDomain.getByReadingScope(value)?.label || value || "readings";
+          if (value === "pm2.5") {
+            return "PM2.5";
+          }
+          if (value === "pm10") {
+            return "PM10";
+          }
+          if (value === "no2") {
+            return "NO2";
+          }
+          return value || "readings";
         }
 
         function getActiveReadingPollutants() {

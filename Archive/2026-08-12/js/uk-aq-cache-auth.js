@@ -27,7 +27,6 @@
   let widgetId = null;
   let resolveToken = null;
   let rejectToken = null;
-  let tokenTimeoutId = null;
 
   function debug(event, details = {}) {
     if (params.get("turnstile_debug") === "1") {
@@ -107,15 +106,6 @@
     return container;
   }
 
-  function clearTurnstilePendingState() {
-    if (tokenTimeoutId !== null) {
-      clearTimeout(tokenTimeoutId);
-      tokenTimeoutId = null;
-    }
-    resolveToken = null;
-    rejectToken = null;
-  }
-
   async function ensureTurnstileScript() {
     if (window.turnstile?.render) return;
     if (!scriptInflight) {
@@ -144,11 +134,7 @@
     if (!siteKey) throw new Error("Missing Turnstile site key.");
     await ensureTurnstileScript();
     if (widgetId !== null) return widgetId;
-    const turnstileApi = window.turnstile;
-    if (!turnstileApi || typeof turnstileApi.render !== "function") {
-      throw new Error("Turnstile SDK unavailable.");
-    }
-    widgetId = turnstileApi.render(ensureTurnstileContainer(), {
+    widgetId = window.turnstile.render(ensureTurnstileContainer(), {
       sitekey: siteKey,
       appearance: "interaction-only",
       execution: "execute",
@@ -156,31 +142,18 @@
       "before-interactive-callback": showTurnstileContainer,
       callback: (token) => {
         const resolve = resolveToken;
-        clearTurnstilePendingState();
-        debug("turnstile-token-received");
+        resolveToken = null;
+        rejectToken = null;
         hideTurnstileContainer();
         if (resolve) resolve(token);
       },
       "error-callback": (code) => {
         const reject = rejectToken;
-        clearTurnstilePendingState();
-        debug("turnstile-error", { code: code || "unknown" });
+        resolveToken = null;
+        rejectToken = null;
         if (reject) reject(new Error(`Turnstile failed: ${code || "unknown error"}`));
       },
-      "expired-callback": () => {
-        const reject = rejectToken;
-        clearTurnstilePendingState();
-        debug("turnstile-token-expired");
-        if (reject) reject(new Error("Turnstile token expired."));
-      },
-      "timeout-callback": () => {
-        const reject = rejectToken;
-        clearTurnstilePendingState();
-        debug("turnstile-challenge-timed-out");
-        if (reject) reject(new Error("Turnstile challenge timed out."));
-      },
     });
-    debug("turnstile-widget-rendered", { widgetId: widgetId !== null });
     return widgetId;
   }
 
@@ -188,26 +161,18 @@
     if (!tokenInflight) {
       tokenInflight = (async () => {
         const id = await ensureTurnstileWidget();
-        const turnstileApi = window.turnstile;
-        if (!turnstileApi || typeof turnstileApi.execute !== "function") {
-          throw new Error("Turnstile execute unavailable.");
-        }
         const promise = new Promise((resolve, reject) => {
           resolveToken = resolve;
           rejectToken = reject;
-          tokenTimeoutId = setTimeout(() => {
-            const timeoutReject = rejectToken;
-            clearTurnstilePendingState();
-            if (timeoutReject) timeoutReject(new Error("Turnstile token timed out."));
+          setTimeout(() => {
+            if (rejectToken === reject) {
+              resolveToken = null;
+              rejectToken = null;
+              reject(new Error("Turnstile token timed out."));
+            }
           }, 30000);
         });
-        try {
-          debug("turnstile-execute-started");
-          turnstileApi.execute(id);
-        } catch (error) {
-          clearTurnstilePendingState();
-          throw error;
-        }
+        window.turnstile.execute(id);
         return promise;
       })().finally(() => { tokenInflight = null; });
     }
@@ -231,10 +196,7 @@
         if (!response.ok) throw new Error(`Session start failed: ${response.status}`);
         const payload = await response.json().catch(() => ({}));
         const seconds = Number(payload?.session_expires_in);
-        const validSeconds = Number.isFinite(seconds) && seconds > 0
-          ? seconds
-          : 300;
-        sessionUntil = Date.now() + Math.max(30000, validSeconds * 1000);
+        sessionUntil = Date.now() + Math.max(30000, (Number.isFinite(seconds) ? seconds : 300) * 1000);
         writeHint(sessionUntil);
         debug("session-started");
         return "session";

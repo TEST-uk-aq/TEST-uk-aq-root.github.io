@@ -26,7 +26,6 @@
   <link
     href="https://fonts.googleapis.com/css2?family=Fraunces:wght@400;600&family=Space+Grotesk:wght@400;500;600&display=swap"
     rel="stylesheet" />
-  <link rel="stylesheet" href="/shared/station-chart/station-chart.css">
   <style>
     :root {
       --surface: #ffffff;
@@ -537,24 +536,15 @@
   </main>
 
   <script src="https://cdn.jsdelivr.net/npm/d3@7.9.0/dist/d3.min.js" crossorigin="anonymous"></script>
-  <script src="/shared/domain/pollutants.js"></script>
-  <script src="/shared/station-chart/timeseries-client.js"></script>
+  <script src="/timeseries-client.js"></script>
   <script src="/chart-core.js"></script>
-  <script src="/shared/station-chart/station-chart-domain.js"></script>
-  <script src="/shared/station-chart/station-chart-cache.js"></script>
-  <script src="/shared/station-chart/station-chart-diagnostics.js"></script>
-  <script src="/shared/station-chart/aqi-source-controller.js"></script>
-  <script src="/shared/station-chart/station-history-loader.js"></script>
-  <script src="/shared/station-chart/station-history-client.js"></script>
-  <script src="/shared/station-chart/station-history-compatibility-client.js"></script>
-  <script src="/shared/station-chart/station-chart-renderer.js"></script>
-  <script src="/shared/station-chart/station-chart-controller.js"></script>
+  <script src="/station_chart/station-chart-domain.js"></script>
+  <script src="/station_chart/station-chart-cache.js"></script>
+  <script src="/station_chart/station-chart-diagnostics.js"></script>
+  <script src="/station_chart/aqi-source-controller.js"></script>
+  <script src="/station-history-loader.js"></script>
   <script src="/js/uk-aq-cache-auth.js"></script>
   <script>
-    const pollutantDomain = window.UkAqPollutants;
-    if (!pollutantDomain?.normalizeSupportedLabel) {
-      throw new Error("UK AQ pollutant domain must load before the Sensors page.");
-    }
     const PROJECT_REF_PLACEHOLDER = "zztjgmdiftqtdcrlfpvc";
     const ANON_KEY_PLACEHOLDER = "sb_publishable_Cru7ACLoK8kKQdID5jPaDw_3RHvQNxO";
     const params = new URLSearchParams(window.location.search);
@@ -1670,7 +1660,20 @@
     }
 
     function normalizeAqiSupportedPollutant(label) {
-      return pollutantDomain.normalizeSupportedLabel(label);
+      const compact = String(label || "").trim().toLowerCase().replace(/[^a-z0-9]+/g, "");
+      if (!compact) {
+        return null;
+      }
+      if (compact === "pm25" || compact === "particulatematter25") {
+        return "pm25";
+      }
+      if (compact === "pm10" || compact === "particulatematter10") {
+        return "pm10";
+      }
+      if (compact === "no2" || compact === "nitrogendioxide") {
+        return "no2";
+      }
+      return null;
     }
 
     function getAqiFieldMappingForPollutant(pollutantKey) {

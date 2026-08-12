@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import controllerModule from "../station_chart/pollutant-context-controller.js";
+import controllerModule from "../shared/station-chart/pollutant-context-controller.js";
 import adapterModule from "../hex_map/hex-map-station-chart-adapter.js";
 
 const { createPollutantContextController, RENDER_MODES } = controllerModule;

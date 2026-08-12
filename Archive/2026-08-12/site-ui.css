@@ -8,14 +8,6 @@
 }
 
 /* Make the WHO guideline heading read as a proper title on desktop and mobile. */
-.home-page .who-card-footer {
-  background: #fff;
-}
-
-.home-page .who-guideline-table-v2 thead th {
-  background: #edf6fd;
-}
-
 .home-page .who-guideline-heading-v2 strong {
   font-size: clamp(1.05rem, 1.3vw, 1.18rem);
   font-weight: 800;
@@ -1028,36 +1020,4 @@ body.home-page .dashboard-table--areas .area-reading-name.area-reading-name--fit
 
 body.home-page .dashboard-table--areas .area-reading-name.area-reading-name--emergency-wrap {
   overflow-wrap: anywhere !important;
-}
-
-/* Homepage network table overflow sequence. The permanent controller applies
-   these classes after measuring the rendered table against its wrapper. */
-body.home-page .dashboard-table--networks {
-  width: 100% !important;
-  min-width: 0 !important;
-  table-layout: auto;
-}
-
-body.home-page .dashboard-table--networks tbody th[scope="row"] {
-  white-space: nowrap;
-}
-
-body.home-page .dashboard-table--networks.is-network-name-wrap tbody th[scope="row"],
-body.home-page .dashboard-table--networks tbody th.network-summary-label-split {
-  white-space: normal !important;
-}
-
-body.home-page .dashboard-table--networks th:nth-child(2),
-body.home-page .dashboard-table--networks td:nth-child(2) {
-  width: 1%;
-  white-space: nowrap;
-}
-
-body.home-page .dashboard-table--networks td:nth-child(2) time {
-  white-space: nowrap;
-}
-
-body.home-page .dashboard-table--networks.is-network-updated-hidden th:nth-child(2),
-body.home-page .dashboard-table--networks.is-network-updated-hidden td:nth-child(2) {
-  display: none !important;
 }

@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import fs from "node:fs";
-import loader from "../station-history-loader.js";
-import cache from "../station_chart/station-chart-cache.js";
+import loader from "../shared/station-chart/station-history-loader.js";
+import cache from "../shared/station-chart/station-chart-cache.js";
 
 const fields = {
   daqiField: "daqi_pm25_rolling24h_index_level",

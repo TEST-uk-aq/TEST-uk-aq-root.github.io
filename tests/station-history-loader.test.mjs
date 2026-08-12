@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 import loader from "../shared/station-chart/station-history-loader.js";
 import cache from "../shared/station-chart/station-chart-cache.js";
+import sensorsAdapterModule from "../sensors/sensor-station-chart-adapter.js";
 
 const fields = {
   daqiField: "daqi_pm25_rolling24h_index_level",
@@ -464,21 +465,54 @@ const replacedObservations = loader.replaceAuthoritativeObservationHead(
 assert.deepEqual(replacedObservations.map((point) => point.date.toISOString()), ["2026-07-15T11:15:00.000Z"]);
 
 const page = fs.readFileSync(new URL("../sensors/index.html", import.meta.url), "utf8");
-const stationHead = page.indexOf('"station_series_head"');
-const headRender = page.indexOf('applyAqiContextState(record.aqiPoints, context);', stationHead);
-const observationRender = page.indexOf('record.observationPoints = parseStationSeriesObservationPoints', stationHead);
-assert.ok(headRender >= 0 && observationRender > headRender, "AQI head is processed before observations");
-assert.match(page, /domainStartMs: fullRange\.startMs,[\s\S]*domainEndMs: fullRange\.endMs/);
-assert.match(page, /renderSeriesChart\(\[\], meta, windowValue/);
-assert.match(page, /Current recent data is unavailable\. Cached historical data is shown as stale\./);
-assert.match(page, /aqi_replacement_contract_error/);
-assert.match(page, /aqi_stable_head_overlap/);
-assert.match(page, /retained completed chunks after failure/);
-assert.match(page, /const periodEndIndex = columns\.indexOf\("period_end_utc"\)/);
-assert.match(page, /return createAqiIntervalPoint\(endpoint, daqiRaw, eaqiRaw\)/);
-assert.match(page, /const clippedStartMs = Math\.max\(domainStart\.getTime\(\), periodStartMs\)/);
-assert.match(page, /const clippedEndMs = Math\.min\(domainEnd\.getTime\(\), endpointMs\)/);
-assert.match(page, /point\.date\.getTime\(\) > stableHeadStartMs/);
-assert.match(page, /point\.date\.getTime\(\) <= stableHeadStartMs/);
+const sensorsAdapter = fs.readFileSync(new URL("../sensors/sensor-station-chart-adapter.js", import.meta.url), "utf8");
+const sensorsPage = fs.readFileSync(new URL("../sensors/sensors-page.js", import.meta.url), "utf8");
+assert.deepEqual(sensorsAdapterModule.normalizeEntry({
+  station_id: "42",
+  timeseries_id: "420",
+  connector_id: "2",
+  pollutant: "PM2.5",
+  units: "ug/m3",
+}), {
+  station_id: "42",
+  timeseries_id: 420,
+  connector_id: 2,
+  pollutant: "pm25",
+  units: "ug/m3",
+}, "the Sensors adapter passes the authoritative logical-series identity to the shared controller");
+assert.equal(sensorsAdapterModule.normalizeEntry({
+  station_id: "42",
+  timeseries_id: "420",
+  pollutant: "PM2.5",
+}), null, "the Sensors adapter fails closed when connector identity is absent");
+for (const script of [
+  "station-chart-domain.js",
+  "station-chart-cache.js",
+  "station-chart-diagnostics.js",
+  "aqi-source-controller.js",
+  "station-history-loader.js",
+  "station-history-client.js",
+  "station-history-compatibility-client.js",
+  "station-chart-renderer.js",
+  "station-chart-controller.js",
+  "pollutant-context-controller.js",
+]) {
+  assert.match(page, new RegExp(`<script src="/shared/station-chart/${script.replaceAll(".", "\\.")}"></script>`));
+}
+assert.match(page, /<script src="\/sensors\/sensor-station-chart-adapter\.js"><\/script>/);
+assert.match(page, /<script src="\/sensors\/sensors-page\.js"><\/script>/);
+assert.match(page, /<link rel="stylesheet" href="\/shared\/station-chart\/station-chart\.css">/);
+assert.doesNotMatch(page, /function loadSeriesData|function renderAqiBands|stationHistoryCacheByKey|chartLoadingSvg|d3\.select/,
+  "the Sensors inline chart architecture is no longer active");
+assert.match(sensorsAdapter, /UkAqStationChartController\.createStationChartController/);
+assert.match(sensorsAdapter, /UkAqStationChartRenderer\.createStationChartRenderer/);
+assert.match(sensorsAdapter, /UkAqPollutantContextController\.createPollutantContextController/);
+assert.match(sensorsAdapter, /UkAqCalculatedStationHistoryClient\.createCalculatedStationHistoryClient/);
+assert.match(sensorsAdapter, /UkAqCompatibilityStationHistoryClient\.createCompatibilityStationHistoryClient/);
+assert.match(sensorsAdapter, /station_id:[\s\S]*timeseries_id:[\s\S]*connector_id:[\s\S]*pollutant/,
+  "the Sensors adapter constructs the shared controller's authoritative identity");
+assert.doesNotMatch(sensorsAdapter, /\bd3\.|fetchStation|renderAqiBands|stationHistoryCacheByKey/);
+assert.doesNotMatch(sensorsPage, /createStationChartController|createStationChartRenderer|renderAqiBands|stationHistoryCacheByKey|\bd3\./,
+  "Sensors page UI does not retain chart implementation");
 
 console.log("station-history loader harness passed");

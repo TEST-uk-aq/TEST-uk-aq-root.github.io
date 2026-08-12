@@ -279,7 +279,6 @@
       }
       state.pollutantContextController = root.UkAqPollutantContextController.createPollutantContextController({
         onLoading(load) {
-          setMessage(`Loading ${String(currentContext()?.pollutantLabel || load.pollutant).toUpperCase()} chart…`);
           void state.controller?.replacePollutantContext(stationContext(load, "loading"));
         },
         onFailed(load) {

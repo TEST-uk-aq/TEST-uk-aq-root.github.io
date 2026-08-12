@@ -20,6 +20,7 @@
   const networkLabels = new Map(FALLBACK_NETWORKS.map(({ code, label }) => [code, label]));
   const areaNames = { pcon: new Map(), la: new Map() };
   const dashboard = document.querySelector(".readings-dashboard");
+  const areaReadingsTable = document.querySelector(".dashboard-table--areas");
   const networkPicker = document.getElementById("home-network-picker");
   const networkPickerButton = document.getElementById("network-picker-button");
   const networkPickerButtonText = document.getElementById("network-picker-button-text");
@@ -50,6 +51,8 @@
   let dashboardRefreshTimeout = null;
   let fitValuesFrame = null;
   let fitValuesTimer = null;
+  let areaLayoutFrame = null;
+  let lastAreaTableObservedWidth = null;
 
   function parseBooleanFlag(value) {
     return /^(1|true|yes|on)$/i.test(String(value || "").trim());
@@ -323,6 +326,74 @@
     fitValuesFrame = window.requestAnimationFrame(() => {
       fitValuesFrame = null;
       fitAllPollutantValues();
+    });
+  }
+
+  function ensureAreaGroupRows() {
+    const body = areaReadingsTable?.tBodies?.[0];
+    if (!body) return;
+
+    ["pcon", "la"].forEach((type) => {
+      const dataRow = body.querySelector(`tr[data-area-type="${type}"]`);
+      if (!dataRow || body.querySelector(`tr[data-area-group="${type}"]`)) return;
+      const label = dataRow.cells[0]?.textContent?.trim();
+      if (!label) return;
+
+      const groupRow = document.createElement("tr");
+      groupRow.className = "area-reading-group-row";
+      groupRow.dataset.areaGroup = type;
+      const heading = document.createElement("th");
+      heading.colSpan = areaReadingsTable.tHead?.rows?.[0]?.cells?.length || 4;
+      heading.textContent = label;
+      groupRow.append(heading);
+      body.insertBefore(groupRow, dataRow);
+    });
+  }
+
+  function hasHorizontalOverflow(element) {
+    return Boolean(element && element.clientWidth > 0 && element.scrollWidth > element.clientWidth + 1);
+  }
+
+  function fitAreaReadingName(nameEl) {
+    if (!nameEl) return;
+    nameEl.classList.remove(
+      "area-reading-name--fit-90",
+      "area-reading-name--fit-85",
+      "area-reading-name--emergency-wrap",
+    );
+    if (!nameEl.textContent.trim() || nameEl.clientWidth <= 0 || !hasHorizontalOverflow(nameEl)) return;
+
+    nameEl.classList.add("area-reading-name--fit-90");
+    if (!hasHorizontalOverflow(nameEl)) return;
+
+    nameEl.classList.remove("area-reading-name--fit-90");
+    nameEl.classList.add("area-reading-name--fit-85");
+    if (hasHorizontalOverflow(nameEl)) {
+      nameEl.classList.add("area-reading-name--emergency-wrap");
+    }
+  }
+
+  function applyAreaTableLayout() {
+    if (!areaReadingsTable) return;
+    ensureAreaGroupRows();
+
+    // Always measure the real three-row presentation first. Normal wrapping is
+    // allowed, so horizontal overflow here means an unbroken word no longer fits.
+    areaReadingsTable.classList.remove("area-table--grouped");
+    const areaTypeCells = areaReadingsTable.querySelectorAll(
+      'tbody tr[data-area-type] > th:first-child',
+    );
+    const shouldGroup = Array.from(areaTypeCells).some(hasHorizontalOverflow);
+    areaReadingsTable.classList.toggle("area-table--grouped", shouldGroup);
+
+    areaReadingsTable.querySelectorAll(".area-reading-name").forEach(fitAreaReadingName);
+  }
+
+  function scheduleAreaTableLayout() {
+    if (areaLayoutFrame !== null) window.cancelAnimationFrame(areaLayoutFrame);
+    areaLayoutFrame = window.requestAnimationFrame(() => {
+      areaLayoutFrame = null;
+      applyAreaTableLayout();
     });
   }
 
@@ -640,6 +711,7 @@
     renderUpdated();
     renderNetworkPicker();
     schedulePollutantValueFit();
+    scheduleAreaTableLayout();
   }
 
   function setDashboardBusy(isBusy) {
@@ -769,6 +841,16 @@
     scheduleNextDashboardRefresh();
   }
 
+  const areaTableWidthObserver = areaReadingsTable && typeof ResizeObserver === "function"
+    ? new ResizeObserver((entries) => {
+      const width = entries[0]?.contentRect?.width;
+      if (!Number.isFinite(width)) return;
+      if (lastAreaTableObservedWidth !== null && Math.abs(width - lastAreaTableObservedWidth) < 0.5) return;
+      lastAreaTableObservedWidth = width;
+      scheduleAreaTableLayout();
+    })
+    : null;
+
   networkPickerButton?.addEventListener("click", () => {
     setNetworkPickerOpen(networkPickerPanel.hidden);
   });
@@ -793,14 +875,23 @@
   });
   window.addEventListener("resize", () => {
     window.clearTimeout(fitValuesTimer);
-    fitValuesTimer = window.setTimeout(schedulePollutantValueFit, 120);
+    fitValuesTimer = window.setTimeout(() => {
+      schedulePollutantValueFit();
+      scheduleAreaTableLayout();
+    }, 120);
   });
   refreshButton?.addEventListener("click", requestDashboardRefresh);
   document.addEventListener("visibilitychange", syncDashboardRefreshSchedule);
   window.addEventListener("focus", syncDashboardRefreshSchedule);
   window.addEventListener("blur", clearDashboardRefreshTimeout);
-  document.fonts?.ready?.then(schedulePollutantValueFit);
+  document.fonts?.ready?.then(() => {
+    schedulePollutantValueFit();
+    scheduleAreaTableLayout();
+  });
+  ensureAreaGroupRows();
+  areaTableWidthObserver?.observe(areaReadingsTable);
   applyDashboardWindowCopy();
+  scheduleAreaTableLayout();
   requestDashboardRefresh();
   scheduleNextDashboardRefresh();
 })();

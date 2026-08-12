@@ -13,7 +13,7 @@
   const DAY_MS = 24 * 60 * 60 * 1000;
   const RANGE_VALUES = new Set(["12h", "24h", "7d", "31d", "90d"]);
 
-  // Retained narrow pollutant-context facade used by the shared pollutant controller harness.
+  // Narrow page-readiness facade for the shared pollutant-context controller.
   function createHexMapStationChartAdapter(options = {}) {
     const eventTarget = options.eventTarget || (typeof window !== "undefined" ? window : null);
     const controller = options.controller;
@@ -209,6 +209,8 @@
       aqiSourceId: null,
       controller: null,
       renderer: null,
+      pollutantContextController: null,
+      pollutantAdapter: null,
     };
 
     function mapAdapter(mapKey = state.mapKey) { return mapKey === "cr" ? root.crMap : root.ukMap; }
@@ -223,6 +225,83 @@
       if (!element) return;
       element.textContent = String(text || "");
       element.classList.toggle("is-error", options.error === true);
+    }
+
+    function selectionContext() {
+      const selectedStationIds = Array.from(state.selectedIds);
+      return {
+        selectedStationIds,
+        primaryStationId: selectedStationIds[0] || null,
+        aqiSourceStationId: state.aqiSourceId,
+      };
+    }
+
+    function contextGuard(load) {
+      return Object.freeze({
+        generation: load.generation,
+        signal: load.signal,
+        isCurrent: load.isCurrent,
+      });
+    }
+
+    function stationContext(load, status) {
+      return {
+        pollutant: load.pollutant,
+        status,
+        entries: status === "ready" ? load.entries : [],
+        selectedStationIds: load.selectedStationIds,
+        primaryStationId: load.primaryStationId,
+        aqiSourceStationId: load.aqiSourceStationId,
+        renderMode: load.renderMode,
+        contextGuard: contextGuard(load),
+      };
+    }
+
+    function applyReadyPollutantContext(load) {
+      const context = currentContext();
+      const entries = load.entries.map((entry) => normalizeEntry(entry, context)).filter(Boolean);
+      const byStationId = new Map(entries.map((entry) => [entry.station_id, entry]));
+      const selected = load.selectedStationIds.map((stationId) => byStationId.get(stationId)).filter(Boolean);
+      state.visibleEntries = entries;
+      state.selectedIds = new Set(selected.map((entry) => entry.station_id));
+      state.retainedEntries = new Map(selected.map((entry) => [entry.station_id, entry]));
+      state.aqiSourceId = state.selectedIds.has(load.aqiSourceStationId)
+        ? load.aqiSourceStationId
+        : selected[0]?.station_id || null;
+      renderChips(context);
+      syncTable(state.mapKey);
+      notifySelection();
+    }
+
+    function createPollutantHandoff() {
+      if (!root.UkAqPollutantContextController?.createPollutantContextController) {
+        throw new Error("pollutant_context_controller_required");
+      }
+      state.pollutantContextController = root.UkAqPollutantContextController.createPollutantContextController({
+        onLoading(load) {
+          setMessage(`Loading ${String(currentContext()?.pollutantLabel || load.pollutant).toUpperCase()} chart…`);
+          void state.controller?.replacePollutantContext(stationContext(load, "loading"));
+        },
+        onFailed(load) {
+          void state.controller?.replacePollutantContext(stationContext(load, "failed"));
+          setMessage(`${String(currentContext()?.pollutantLabel || load.pollutant).toUpperCase()} map data is unavailable. Try Refresh.`, { error: true });
+        },
+        async onRender(load) {
+          const replacement = state.controller?.replacePollutantContext(stationContext(load, "ready"));
+          if (!replacement) return;
+          load.commitVisible(function () { applyReadyPollutantContext(load); });
+          const result = await replacement;
+          if (result?.committed !== true) return;
+          load.complete(function () { setMessage(""); });
+        },
+      });
+      state.pollutantAdapter = createHexMapStationChartAdapter({
+        controller: state.pollutantContextController,
+        eventTarget: root,
+        isActive: (mapKey) => Boolean(state.active && (!mapKey || state.mapKey === mapKey)),
+        getSelection: selectionContext,
+      });
+      state.pollutantAdapter.mount();
     }
 
     function createController(mapKey) {
@@ -245,6 +324,7 @@
       });
       const refs = domByMap[mapKey];
       state.controller.mount({ svg: refs.svg, tooltip: refs.tooltip, wrap: refs.wrap });
+      createPollutantHandoff();
     }
 
     function syncPanels() {
@@ -362,14 +442,18 @@
       if (rangeSelect) rangeSelect.value = state.rangeLabel;
       syncPanels();
       createController(mapKey);
-      state.controller.setRange(resolveRange(state.rangeLabel));
-      void commitSelection();
+      void state.controller.setRange(resolveRange(state.rangeLabel));
+      state.pollutantAdapter.sync({ ...context, entries: state.visibleEntries }, context.dataStatus);
       return true;
     }
 
     function exit() {
       const previousMapKey = state.mapKey;
+      state.pollutantAdapter?.destroy?.();
+      state.pollutantContextController?.destroy?.();
       state.controller?.destroy?.();
+      state.pollutantAdapter = null;
+      state.pollutantContextController = null;
       state.controller = null;
       state.renderer = null;
       state.active = false;
@@ -437,11 +521,14 @@
         exit();
         return false;
       }
-      if (options.dataStatus === "failed") {
-        setMessage(`${String(context?.pollutantLabel || "Pollutant")} map data is unavailable. Try Refresh.`, { error: true });
-        return false;
+      const visibleEntries = (context.entries || []).map((entry) => normalizeEntry(entry, context)).filter(Boolean);
+      const normalizedContext = { ...context, entries: visibleEntries };
+      const status = state.pollutantAdapter?.resolveStatus(normalizedContext, options.dataStatus);
+      const pollutant = domain.normalizePollutant(normalizedContext.pollutant);
+      if (status !== "ready" || pollutant !== state.pollutantContextController?.renderedPollutant) {
+        return state.pollutantAdapter?.sync(normalizedContext, options.dataStatus) === true;
       }
-      state.visibleEntries = (context.entries || []).map((entry) => normalizeEntry(entry, context)).filter(Boolean);
+      state.visibleEntries = visibleEntries;
       const visibleIds = new Set(state.visibleEntries.map((entry) => entry.station_id));
       state.selectedIds.forEach((id) => {
         const visible = state.visibleEntries.find((entry) => entry.station_id === id);
@@ -459,8 +546,10 @@
     async function refresh() {
       if (!state.active) return;
       await mapAdapter()?.refreshForChartMode?.();
-      syncFromMap(state.mapKey, { preserveChartMode: true, updateChart: false });
-      await state.controller?.setRange(resolveRange(state.rangeLabel));
+      const pollutant = domain.normalizePollutant(currentContext()?.pollutant);
+      if (pollutant && pollutant === state.pollutantContextController?.renderedPollutant) {
+        await state.controller?.setRange(resolveRange(state.rangeLabel));
+      }
     }
 
     rangeSelect?.addEventListener("change", () => {
@@ -472,9 +561,6 @@
     backButton?.addEventListener("click", exit);
     root.addEventListener("resize", () => {
       if (state.active) state.controller?.resize({});
-    });
-    root.addEventListener("pollutantchange", (event) => {
-      if (state.active) setMessage(`Loading ${String(event?.detail?.pollutant || "pollutant").toUpperCase()} chart…`);
     });
     Object.values(domByMap).forEach((refs) => {
       refs.panel?.addEventListener("click", (event) => event.stopPropagation());

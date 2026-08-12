@@ -1,9 +1,21 @@
 import assert from "node:assert/strict";
+import fs from "node:fs";
 import controllerModule from "../shared/station-chart/pollutant-context-controller.js";
 import adapterModule from "../hex_map/hex-map-station-chart-adapter.js";
 
 const { createPollutantContextController, RENDER_MODES } = controllerModule;
 const { createHexMapStationChartAdapter } = adapterModule;
+
+const productionAdapterSource = fs.readFileSync(new URL("../hex_map/hex-map-station-chart-adapter.js", import.meta.url), "utf8");
+const productionInstallSource = productionAdapterSource.slice(productionAdapterSource.indexOf("function installHexMapStationChart"));
+assert.match(productionInstallSource, /UkAqPollutantContextController\.createPollutantContextController/,
+  "the real Hex installation creates the shared pollutant-context owner");
+assert.match(productionInstallSource, /state\.pollutantAdapter = createHexMapStationChartAdapter/,
+  "the real Hex installation mounts the tested page-readiness facade");
+assert.match(productionInstallSource, /state\.controller\?\.replacePollutantContext\(stationContext\(load, "loading"\)\)/,
+  "the real loading path reaches the atomic shared station-chart handoff");
+assert.doesNotMatch(productionInstallSource, /root\.addEventListener\("pollutantchange", \(event\) => \{\s*if \(state\.active\) setMessage/,
+  "the old message-only production listener is removed");
 
 function entry(stationId, pollutant, timeseriesId = `${stationId}-${pollutant}`) {
   return { stationId, pollutant, timeseriesId };

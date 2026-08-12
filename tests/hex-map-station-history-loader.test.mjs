@@ -37,6 +37,7 @@ for (const source of [calculatedClientSource, compatibilityClientSource]) {
   assert.match(source, /prefetchAqi/);
 }
 assert.match(controllerSource, /function setSelection/);
+assert.match(controllerSource, /function replacePollutantContext/);
 assert.match(controllerSource, /function setAqiSource/);
 assert.match(controllerSource, /function setRange/);
 assert.match(controllerSource, /function refresh/);
@@ -47,6 +48,7 @@ assert.match(controllerSource, /createOrderedSettlementBuffer/);
 assert.match(controllerSource, /renderer\.updateProgress/);
 assert.match(rendererSource, /ChartCore\.renderProgressBar/);
 assert.match(rendererSource, /function animateDomains/);
+assert.match(rendererSource, /function replacePollutantContext/);
 assert.match(rendererSource, /const endY = observationDomain\(state\)/);
 assert.match(rendererSource, /startY\[0\] \+ \(endY\[0\] - startY\[0\]\) \* eased/);
 assert.match(rendererSource, /pendingDomainState = retainNewestState/);
@@ -124,6 +126,129 @@ assert.equal(counters.observations, beforeSwitch.observations, "AQI-only source 
 assert.equal(counters.clearAqi, beforeSwitch.clearAqi + 1, "the old AQI layer is cleared once");
 assert.equal(counters.aqi, beforeSwitch.aqi + 1, "the target AQI layer commits once");
 controller.destroy();
+
+function createContextGuard(generation) {
+  const abortController = new AbortController();
+  let current = true;
+  return {
+    value: Object.freeze({
+      generation,
+      signal: abortController.signal,
+      isCurrent: () => current && !abortController.signal.aborted,
+    }),
+    invalidate() {
+      current = false;
+      abortController.abort();
+    },
+  };
+}
+
+const replacementRequests = [];
+const replacementRenders = [];
+let releasePm10Current;
+const replacementClient = {
+  kind: "calculated",
+  async loadCurrent(request, parts) {
+    replacementRequests.push({ ...request });
+    if (request.pollutant === "pm10") {
+      await new Promise((resolve) => { releasePm10Current = resolve; });
+    }
+    return makeResult(request, parts);
+  },
+  async loadOlder(request, parts) { return makeResult(request, parts); },
+  async prefetchAqi(request) { return makeResult(request, { observations: false, aqi: true }); },
+};
+const replacementController = controllerModule.createStationChartController({
+  renderer: {
+    initialise() {}, setLoading() {}, clearProgress() {}, updateProgress() {}, destroy() {},
+    replacePollutantContext(state) {
+      replacementRenders.push({ type: "replace", pollutant: state.pollutant, renderMode: state.render_mode });
+    },
+    renderAxes(state) { replacementRenders.push({ type: "axes", pollutant: state.pollutant }); },
+    renderObservations() {}, renderAqi() {},
+  },
+  calculatedClient: replacementClient,
+  compatibilityClient: replacementClient,
+  backgroundAqiPrefetch: false,
+});
+replacementController.mount({});
+await replacementController.setRange({ start_utc: "2026-08-12T00:00:00Z", end_utc: "2026-08-12T01:00:00Z" });
+
+const pm25Guard = createContextGuard(1);
+const pm25Replacement = await replacementController.replacePollutantContext({
+  pollutant: "pm25",
+  status: "ready",
+  entries: [{ station_id: 101, timeseries_id: 201, connector_id: 301, pollutant: "pm25" }],
+  selectedStationIds: ["101"],
+  primaryStationId: "101",
+  aqiSourceStationId: "101",
+  renderMode: "initial",
+  contextGuard: pm25Guard.value,
+});
+assert.equal(pm25Replacement.committed, true);
+const requestsBeforeLoading = replacementRequests.length;
+const no2LoadingGuard = createContextGuard(2);
+await replacementController.replacePollutantContext({
+  pollutant: "no2", status: "loading", entries: [], selectedStationIds: ["101"],
+  renderMode: "pollutant-replacement", contextGuard: no2LoadingGuard.value,
+});
+assert.equal(replacementRequests.length, requestsBeforeLoading,
+  "loading target context invalidates old work without starting target history");
+assert.equal(replacementController.range.startIso, "2026-08-12T00:00:00.000Z", "pollutant loading preserves range");
+
+const no2ReadyGuard = createContextGuard(2);
+const no2Replacement = await replacementController.replacePollutantContext({
+  pollutant: "no2",
+  status: "ready",
+  entries: [{ station_id: 101, timeseries_id: 901, connector_id: 902, pollutant: "no2" }],
+  selectedStationIds: ["101"],
+  primaryStationId: "101",
+  aqiSourceStationId: "101",
+  renderMode: "pollutant-replacement",
+  contextGuard: no2ReadyGuard.value,
+});
+assert.equal(no2Replacement.committed, true);
+assert.equal(replacementController.selection[0].timeseries_id, 901, "target entry replaces the retained timeseries identity");
+assert.equal(replacementController.selection[0].connector_id, 902, "target entry replaces the retained connector identity");
+assert.equal(replacementRequests.at(-1).pollutant, "no2");
+assert.equal(replacementRequests.at(-1).timeseries_id, 901);
+assert.equal(replacementRequests.at(-1).connector_id, 902);
+assert.equal(replacementRenders.filter((event) => event.type === "replace").at(-1).renderMode, "pollutant-replacement",
+  "pollutant replacement reaches the renderer with its explicit non-initial mode");
+
+const pm10Guard = createContextGuard(3);
+const latePm10 = replacementController.replacePollutantContext({
+  pollutant: "pm10",
+  status: "ready",
+  entries: [{ station_id: 101, timeseries_id: 1001, connector_id: 1002, pollutant: "pm10" }],
+  selectedStationIds: ["101"],
+  primaryStationId: "101",
+  aqiSourceStationId: "101",
+  renderMode: "pollutant-replacement",
+  contextGuard: pm10Guard.value,
+});
+await new Promise((resolve) => setImmediate(resolve));
+const rendersBeforePm10Release = replacementRenders.length;
+pm10Guard.invalidate();
+const rapidNo2Guard = createContextGuard(4);
+await replacementController.replacePollutantContext({
+  pollutant: "no2", status: "loading", entries: [], selectedStationIds: ["101"],
+  renderMode: "pollutant-replacement", contextGuard: rapidNo2Guard.value,
+});
+releasePm10Current();
+const latePm10Result = await latePm10;
+assert.equal(latePm10Result.committed, false);
+assert.equal(replacementRenders.length, rendersBeforePm10Release,
+  "a late obsolete PM10 response performs no progressive visible commit after NO2 loading begins");
+
+const emptyGuard = createContextGuard(5);
+const emptyReplacement = await replacementController.replacePollutantContext({
+  pollutant: "no2", status: "ready", entries: [], selectedStationIds: [],
+  renderMode: "pollutant-replacement", contextGuard: emptyGuard.value,
+});
+assert.equal(emptyReplacement.committed, true, "an authoritative empty target settles normally");
+assert.deepEqual(replacementController.selection, [], "authoritative empty target retains no old-pollutant entry fallback");
+replacementController.destroy();
 
 const independentRange = {
   startIso: "2026-07-01T00:00:00.000Z",

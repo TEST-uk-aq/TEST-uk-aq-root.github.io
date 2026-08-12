@@ -36,6 +36,31 @@
     return error?.name === "AbortError";
   }
 
+  function contextGuardCurrent(guard) {
+    if (!guard) return true;
+    return Boolean(
+      !guard.signal?.aborted
+      && typeof guard.isCurrent === "function"
+      && guard.isCurrent(),
+    );
+  }
+
+  function normalizeContextGuard(value) {
+    if (
+      !value
+      || !Number.isFinite(Number(value.generation))
+      || !value.signal
+      || typeof value.isCurrent !== "function"
+    ) {
+      return null;
+    }
+    return Object.freeze({
+      generation: Number(value.generation),
+      signal: value.signal,
+      isCurrent: value.isCurrent,
+    });
+  }
+
   function normalizeEntry(entry) {
     const timeseriesId = domain.positiveInteger(entry?.timeseries_id ?? entry?.timeseriesId ?? entry?.id);
     const connectorId = domain.positiveInteger(entry?.connector_id ?? entry?.connectorId);
@@ -224,6 +249,7 @@
     let clientKind = options.useCompatibility === true ? "compatibility" : "calculated";
     let renderRevision = 0;
     let loading = false;
+    let chartPollutant = null;
 
     function client() {
       return clients[clientKind];
@@ -306,6 +332,7 @@
       });
       return Object.freeze({
         selection: selection.slice(),
+        pollutant: chartPollutant,
         aqi_source_id: source?.station_id || null,
         range,
         observations,
@@ -315,6 +342,22 @@
         revision: renderRevision,
         ...extra,
       });
+    }
+
+    function invalidateActiveWork() {
+      const active = activeAbortController;
+      activeAbortController = null;
+      active?.abort();
+      sourceAbortController?.abort();
+      sourceAbortController = null;
+      backgroundAbortControllers.forEach(function (controller) { controller.abort(); });
+      backgroundAbortControllers.clear();
+      generations.invalidate();
+      aqiSourceController.invalidate();
+      aqiPrefetchInFlight.clear();
+      renderer.invalidatePollutantContext?.();
+      renderer.clearProgress?.();
+      loading = false;
     }
 
     function renderAll(extra = {}) {
@@ -542,7 +585,7 @@
       return work;
     }
 
-    async function load(reason) {
+    async function load(reason, loadOptions = {}) {
       if (destroyed || !mounted || !range) return null;
       activeAbortController?.abort();
       backgroundAbortControllers.forEach(function (controller) { controller.abort(); });
@@ -550,14 +593,30 @@
       const abortController = new AbortController();
       activeAbortController = abortController;
       const generation = generations.next();
+      const contextGuard = loadOptions.contextGuard || null;
+      const abortForContext = function () { abortController.abort(); };
+      contextGuard?.signal?.addEventListener?.("abort", abortForContext, { once: true });
+      const isCurrent = function () {
+        return Boolean(
+          !abortController.signal.aborted
+          && generations.isCurrent(generation)
+          && contextGuardCurrent(contextGuard),
+        );
+      };
       const source = selectedSource();
-      const renderScheduler = createRenderScheduler(renderAll, function () {
-        return !abortController.signal.aborted && generations.isCurrent(generation);
+      const renderScheduler = createRenderScheduler(function () {
+        renderAll({
+          reason,
+          generation,
+          render_mode: loadOptions.renderMode || null,
+        });
+      }, function () {
+        return isCurrent();
       });
       let observationProgressTotal = 0;
       let observationProgressSettled = 0;
       const updateObservationProgress = function () {
-        if (observationProgressTotal > 0) {
+        if (observationProgressTotal > 0 && isCurrent()) {
           renderer.updateProgress?.(observationProgressSettled, observationProgressTotal);
         }
       };
@@ -581,13 +640,45 @@
       renderer.clearProgress?.();
       loading = true;
       renderer.setLoading?.(true, { reason, generation });
-      options.onMessage?.("");
+      if (loadOptions.preserveMessage !== true) options.onMessage?.("");
+      if (!isCurrent()) {
+        contextGuard?.signal?.removeEventListener?.("abort", abortForContext);
+        if (activeAbortController === abortController) activeAbortController = null;
+        loading = false;
+        return null;
+      }
+      if (loadOptions.replaceFrame === true) {
+        renderRevision += 1;
+        renderer.replacePollutantContext?.(currentState({
+          reason,
+          generation,
+          loading: true,
+          render_mode: loadOptions.renderMode || "pollutant-replacement",
+        }));
+      }
       if (!selection.length) {
         loading = false;
-        renderer.renderEmpty?.(options.emptyMessage || "Select a sensor to draw a chart.");
+        if (loadOptions.replaceFrame === true) {
+          renderAll({
+            reason,
+            generation,
+            complete: true,
+            render_mode: loadOptions.renderMode || "pollutant-replacement",
+          });
+        } else {
+          renderer.renderEmpty?.(options.emptyMessage || "Select a sensor to draw a chart.");
+        }
         renderer.setLoading?.(false, { reason, generation });
+        renderer.clearProgress?.();
+        contextGuard?.signal?.removeEventListener?.("abort", abortForContext);
         if (activeAbortController === abortController) activeAbortController = null;
-        return null;
+        return currentState({
+          reason,
+          generation,
+          complete: true,
+          observation_complete: true,
+          render_mode: loadOptions.renderMode || null,
+        });
       }
       try {
         if (["window-change", "refresh"].includes(reason)) {
@@ -608,7 +699,12 @@
           };
           return loadEntry(entry, range, parts, abortController.signal, generation, {
             onCommit: function (mode) {
-              if (mode === "current") renderAll();
+              if (!isCurrent()) return;
+              if (mode === "current") renderAll({
+                reason,
+                generation,
+                render_mode: loadOptions.renderMode || null,
+              });
               else void renderScheduler.schedule();
             },
             onPlanned: addObservationProgress,
@@ -616,8 +712,9 @@
           });
         });
         const settled = await Promise.allSettled(work);
-        if (!generations.isCurrent(generation) || abortController.signal.aborted) return null;
+        if (!isCurrent()) return null;
         await renderScheduler.flush();
+        if (!isCurrent()) return null;
         const observationFailure = settled.find(function (item) { return item.status === "rejected" && !isAbort(item.reason); });
         if (observationFailure) throw observationFailure.reason;
         const observationCoverage = observationCoverageSummary(range);
@@ -628,6 +725,7 @@
           complete: observationCoverage.complete,
           observation_complete: observationCoverage.complete,
           observation_coverage: observationCoverage,
+          render_mode: loadOptions.renderMode || null,
         };
         renderAll(completion);
         if (observationCoverage.complete) {
@@ -653,7 +751,7 @@
         }
         return currentState(completion);
       } catch (error) {
-        if (!isAbort(error) && generations.isCurrent(generation)) {
+        if (!isAbort(error) && isCurrent()) {
           loading = false;
           diagnostics.event("station_chart_load_failed", {
             generation,
@@ -666,13 +764,91 @@
         }
         return null;
       } finally {
+        contextGuard?.signal?.removeEventListener?.("abort", abortForContext);
         if (activeAbortController === abortController) {
           activeAbortController = null;
           loading = false;
           renderer.clearProgress?.();
-          renderer.setLoading?.(false, { reason, generation });
+          if (contextGuardCurrent(contextGuard)) renderer.setLoading?.(false, { reason, generation });
         }
       }
+    }
+
+    function replacePollutantContext(config = {}) {
+      if (destroyed) return Promise.resolve({ status: "destroyed", committed: false });
+      const pollutant = domain.normalizePollutant(config.pollutant);
+      const status = String(config.status || "").trim().toLowerCase();
+      const contextGuard = normalizeContextGuard(config.contextGuard);
+      if (!pollutant || !["loading", "ready", "failed"].includes(status) || !contextGuard) {
+        return Promise.reject(new Error("station_chart_pollutant_context_invalid"));
+      }
+      if (!contextGuardCurrent(contextGuard)) {
+        return Promise.resolve({ status: "obsolete", committed: false });
+      }
+
+      invalidateActiveWork();
+      if (status === "loading") {
+        loading = true;
+        renderer.setLoading?.(true, {
+          reason: "pollutant-loading",
+          pollutant,
+          context_generation: contextGuard.generation,
+        });
+        diagnostics.event("station_chart_pollutant_loading", {
+          pollutant,
+          context_generation: contextGuard.generation,
+        });
+        return Promise.resolve({ status, committed: false });
+      }
+      if (status === "failed") {
+        renderer.setLoading?.(false, {
+          reason: "pollutant-failed",
+          pollutant,
+          context_generation: contextGuard.generation,
+        });
+        diagnostics.event("station_chart_pollutant_failed", {
+          pollutant,
+          context_generation: contextGuard.generation,
+        });
+        return Promise.resolve({ status, committed: false });
+      }
+
+      const byStationId = new Map();
+      (Array.isArray(config.entries) ? config.entries : []).forEach(function (entry) {
+        const normalized = normalizeEntry(entry);
+        if (!normalized || normalized.pollutant !== pollutant || byStationId.has(normalized.station_id)) return;
+        byStationId.set(normalized.station_id, normalized);
+      });
+      const seen = new Set();
+      selection = (Array.isArray(config.selectedStationIds) ? config.selectedStationIds : []).map(function (stationId) {
+        return domain.normalizeStationIdentity(stationId);
+      }).filter(function (stationId) {
+        if (!stationId || seen.has(stationId) || !byStationId.has(stationId)) return false;
+        seen.add(stationId);
+        return true;
+      }).slice(0, Math.max(1, Number(options.maxSelection) || 4)).map(function (stationId) {
+        return byStationId.get(stationId);
+      });
+      const requestedAqiSourceId = domain.normalizeStationIdentity(config.aqiSourceStationId);
+      const requestedPrimaryId = domain.normalizeStationIdentity(config.primaryStationId);
+      aqiSourceId = selection.some(function (entry) { return entry.station_id === requestedAqiSourceId; })
+        ? requestedAqiSourceId
+        : selection.some(function (entry) { return entry.station_id === requestedPrimaryId; })
+          ? requestedPrimaryId
+          : selection[0]?.station_id || null;
+      chartPollutant = pollutant;
+      const renderMode = String(config.renderMode || "pollutant-replacement");
+      return load("pollutant-replacement", {
+        contextGuard,
+        preserveMessage: true,
+        replaceFrame: true,
+        renderMode,
+      }).then(function (state) {
+        if (!state || !contextGuardCurrent(contextGuard)) {
+          return { status: contextGuardCurrent(contextGuard) ? "failed" : "obsolete", committed: false };
+        }
+        return { status: "committed", committed: true, state };
+      });
     }
 
     function setSelection(entries) {
@@ -686,6 +862,7 @@
       if (!selection.some(function (entry) { return entry.station_id === aqiSourceId; })) {
         aqiSourceId = selection[0]?.station_id || null;
       }
+      if (!chartPollutant && selection[0]) chartPollutant = selection[0].pollutant;
       return load("sensor-change");
     }
 
@@ -779,10 +956,12 @@
       selection = [];
       range = null;
       aqiSourceId = null;
+      chartPollutant = null;
     }
 
     return Object.freeze({
       mount,
+      replacePollutantContext,
       setSelection,
       setAqiSource,
       setRange,
@@ -791,6 +970,7 @@
       setClientKind,
       destroy,
       get selection() { return selection.slice(); },
+      get pollutant() { return chartPollutant; },
       get aqi_source_id() { return aqiSourceId; },
       get range() { return range; },
       get client_kind() { return clientKind; },

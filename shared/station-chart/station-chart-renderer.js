@@ -154,6 +154,19 @@
       pendingDomainState = null;
     }
 
+    function invalidatePollutantContext() {
+      if (!activeDomainAnimation) return;
+      const retained = retainNewestState(activeDomainAnimation.state, pendingDomainState) || lastState;
+      cancelDomainAnimation();
+      if (!frame || !retained?.range) return;
+      lastState = retained;
+      frame.xScale.domain([retained.range.startDate, retained.range.endDate]);
+      frame.yScale.domain(observationDomain(retained));
+      drawAxes(retained, false);
+      drawObservations(retained, true);
+      drawAqi(retained);
+    }
+
     function retainNewestState(current, candidate) {
       if (!candidate) return current;
       if (!current) return candidate;
@@ -295,10 +308,10 @@
       current.aqi.classed("is-loading", state.aqi_loading === true);
       drawBand("DAQI", "daqi", DAQI_COLORS, 1, state);
       drawBand("EAQI", "eaqi", EAQI_COLORS, 27, state);
-      const sourceIndex = Math.max(0, (state.selection || []).findIndex(function (entry) {
+      const sourceIndex = (state.selection || []).findIndex(function (entry) {
         return entry.station_id === state.aqi_source_id;
-      }));
-      const symbol = ChartCore.getSymbolPathData(sourceIndex, 130);
+      });
+      const symbol = sourceIndex >= 0 ? ChartCore.getSymbolPathData(sourceIndex, 130) : null;
       if (symbol) current.aqi.append("path").attr("class", "aqi-band-source-symbol")
         .attr("d", symbol).attr("transform", `translate(${current.margin.left - 62},24)`)
         .attr("fill", SERIES_COLOUR).attr("stroke", "#fff").attr("stroke-width", 1.35);
@@ -318,6 +331,19 @@
       }
       const current = ensureFrame(state);
       if (!current) return;
+      drawAqi(state);
+    }
+
+    function replacePollutantContext(state) {
+      lastState = state;
+      if (!refs || !state?.range) return;
+      cancelDomainAnimation();
+      if (refs.tooltip) refs.tooltip.style.opacity = "0";
+      frame = null;
+      const current = createFrame(state);
+      if (!current) return;
+      drawAxes(state, true);
+      drawObservations(state, true);
       drawAqi(state);
     }
 
@@ -510,6 +536,8 @@
 
     return Object.freeze({
       initialise,
+      invalidatePollutantContext,
+      replacePollutantContext,
       renderObservations,
       renderAqi,
       clearAqi,

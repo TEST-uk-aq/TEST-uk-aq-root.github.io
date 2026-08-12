@@ -1400,91 +1400,7 @@
     <script src="/shared/station-chart/station-history-compatibility-client.js"></script>
     <script src="/shared/station-chart/station-chart-renderer.js"></script>
     <script src="/shared/station-chart/station-chart-controller.js"></script>
-    <script>
-      // ── Top summary boxes — shared updater ───────────────────────────────────
-      window.updateTopSummary = function(data, idPrefix) {
-        const pre = idPrefix || 'top';
-        const elById = (id) => document.getElementById(id);
-        const p = (name) => elById(`${pre}-${name}`);
-
-        // Box 1: Total Active Sensors
-        const sensorsEl = p('total-sensors');
-        if (sensorsEl) {
-          sensorsEl.textContent = Number.isFinite(data.totalSensors)
-            ? data.totalSensors.toLocaleString()
-            : '—';
-        }
-
-        // Box 2: Coverage
-        const coveragePct = p('coverage-percent');
-        const coverageDetail = p('coverage-detail');
-        const coverageBar = p('coverage-bar');
-        const coverageFill = p('coverage-fill');
-        if (coveragePct && coverageDetail) {
-          const covered = data.pconCovered ?? 0;
-          const total = data.pconTotal ?? 0;
-          const ratio = total ? covered / total : 0;
-          const pct = total ? Math.round(ratio * 100) : 0;
-          coveragePct.textContent = total ? `${pct}%` : '—';
-          const label = data.areaLabel || 'constituencies';
-          coverageDetail.textContent = total
-            ? `${covered.toLocaleString()} / ${total.toLocaleString()} ${label}`
-            : '—';
-          if (coverageFill) {
-            const safePct = total ? Math.max(0, Math.min(100, ratio * 100)) : 0;
-            coverageFill.style.width = `${safePct}%`;
-          }
-          if (coverageBar) {
-            coverageBar.setAttribute('aria-valuenow', String(pct));
-            coverageBar.setAttribute(
-              'aria-valuetext',
-              total ? `${pct}% coverage (${covered} of ${total})` : 'No coverage data'
-            );
-          }
-        }
-
-        // Box 3: Highest reading
-        const highestLabel = p('highest-label');
-        const highestHex = p('highest-hex');
-        const highestValue = p('highest-value');
-        const highestSensor = p('highest-sensor');
-        const highestNetwork = p('highest-network');
-        if (highestLabel) {
-          highestLabel.textContent = `Highest ${data.pollutantLabel || 'PM2.5'}`;
-        }
-        if (highestValue) {
-          highestValue.textContent = Number.isFinite(data.highestValue)
-            ? `${data.highestValue.toFixed(1)} ${data.pollutantUnits || ''}`
-            : '—';
-        }
-        if (highestHex) {
-          highestHex.style.background = data.highestColor || '';
-        }
-        if (highestSensor) {
-          highestSensor.textContent = data.highestSensor || '—';
-        }
-        if (highestNetwork) {
-          highestNetwork.textContent = data.highestNetwork || '—';
-        }
-
-        // Box 4: Updates — show DD/MM/YYYY HH:MM
-        const fmtTime = (iso) => {
-          if (!iso) return '—';
-          const d = new Date(iso);
-          if (isNaN(d.getTime())) return '—';
-          const dd = String(d.getDate()).padStart(2, '0');
-          const mm = String(d.getMonth() + 1).padStart(2, '0');
-          const yyyy = d.getFullYear();
-          const hh = String(d.getHours()).padStart(2, '0');
-          const min = String(d.getMinutes()).padStart(2, '0');
-          return `${dd}/${mm}/${yyyy} ${hh}:${min}`;
-        };
-        const latestEl = p('latest-update');
-        const oldestEl = p('oldest-update');
-        if (latestEl) latestEl.textContent = fmtTime(data.newestReadingISO);
-        if (oldestEl) oldestEl.textContent = fmtTime(data.oldestReadingISO);
-      };
-    </script>
+    <script src="/hex_map/hex-map-summary.js"></script>
     <script>
       window.attachPersistentScrollbar = function attachPersistentScrollbar(scrollEl, options = {}) {
         if (!scrollEl) return null;
@@ -4226,7 +4142,7 @@
           sensorShareBars.render(summary.shareData || []);
         }
         // ── Top summary boxes ──
-        if (typeof window.updateTopSummary === 'function') {
+        if (window.UkAqHexMapSummary?.updateSummary) {
           const pollutantLabel = getPollutantLabel(activePollutant);
           const pollutantUnits = getPollutantUnits(activePollutant);
           const capValue = getLegendCapValue();
@@ -4249,7 +4165,7 @@
             highestSensor = resolveStationName(h.row);
             highestNetwork = resolvePrimaryNetworkLabel(h.row) || "Unknown network";
           }
-          window.updateTopSummary({
+          window.UkAqHexMapSummary.updateSummary({
             totalSensors: totalSensorsForTopSummary,
             pconCovered: summary.pconCovered,
             pconTotal: summary.pconTotal,
@@ -8552,8 +8468,8 @@
           summaryHighestConnector.textContent = "-";
           summaryHighestName.textContent = `No ${pollutantLabel} data`;
           // ── Top summary boxes (no-data state) ──
-          if (typeof window.updateTopSummary === 'function') {
-            window.updateTopSummary({
+          if (window.UkAqHexMapSummary?.updateSummary) {
+            window.UkAqHexMapSummary.updateSummary({
               totalSensors: totalStations,
               pconCovered: 0,
               pconTotal: pconCodes.size,
@@ -8599,7 +8515,7 @@
         summaryHighestName.textContent = resolveStationName(highest.row);
 
         // ── Top summary boxes ──
-        if (typeof window.updateTopSummary === 'function') {
+        if (window.UkAqHexMapSummary?.updateSummary) {
           const capValue = getLegendCapValue();
           const coveredPcons = new Set(rowsWithPcon.map((row) => resolvePconCode(row)).filter(Boolean));
           let newest = null, oldest = null;
@@ -8612,7 +8528,7 @@
           });
           const palette = HEAT_STOPS.map((n, i) => resolveCssColor(n, HEAT_STOP_FALLBACKS[i]));
           const highestColor = d3.interpolateRgbBasis(palette)(mapValueToT(highest.value, capValue));
-          window.updateTopSummary({
+          window.UkAqHexMapSummary.updateSummary({
             totalSensors: totalStations,
             pconCovered: coveredPcons.size,
             pconTotal: pconCodes.size,

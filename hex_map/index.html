@@ -8648,7 +8648,7 @@
           detailsTableBody.innerHTML = "";
           updateInlinePanelHeight(0);
           updateSelectedHexViewportShift();
-          restoreDetailsScrollPosition(selectedPconCode, 0);
+          restoreDetailsScrollPosition(selectedAreaCode, 0);
           return;
         }
         const cutoff = getWindowCutoff();
@@ -8729,7 +8729,7 @@
         ].join("");
         updateInlinePanelHeight(entries.length, dividerRow ? 1 : 0);
         updateSelectedHexViewportShift();
-        restoreDetailsScrollPosition(selectedPconCode, previousScrollTop);
+        restoreDetailsScrollPosition(selectedAreaCode, previousScrollTop);
       }
 
       function updateNetworkSummary() {

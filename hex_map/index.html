@@ -1393,7 +1393,7 @@
     <script src="/shared/station-chart/station-chart-diagnostics.js"></script>
     <script src="/shared/station-chart/aqi-source-controller.js"></script>
     <script src="/shared/station-chart/pollutant-context-controller.js"></script>
-    <script src="/hex_map/hex-map-network-controls.js"></script>
+    <script src="/hex_map/hex-map-network-controller.js"></script>
     <script src="/hex_map/hex-map-station-chart-adapter.js"></script>
     <script src="/shared/station-chart/station-history-loader.js"></script>
     <script src="/shared/station-chart/station-history-client.js"></script>
@@ -1406,8 +1406,8 @@
     <script>
       const pollutantDomain = window.UkAqPollutants;
       const networkDomain = window.UkAqNetworks;
-      const networkCatalogClient = window.UkAqNetworkCatalog;
-      if (!pollutantDomain?.definitions || !networkDomain?.resolveCode || !networkCatalogClient?.load) {
+      const networkController = window.UkAqHexMapNetworkController;
+      if (!pollutantDomain?.definitions || !networkDomain?.resolveCode || !networkController?.loadCatalog) {
         throw new Error("UK AQ shared domain/data modules must load before the Hex Map.");
       }
       const PROJECT_REF_PLACEHOLDER = "zztjgmdiftqtdcrlfpvc";
@@ -1424,11 +1424,6 @@
       const mapDateParam = params.get("map_date");
       const pconVersionParam = params.get("pcon_version");
       const sharedSettings = (window.mapSettingsState = window.mapSettingsState || {});
-      const mapNetworkState = (window.mapNetworkState = window.mapNetworkState || {});
-      const MAP_KEY = "shared";
-      if (!mapNetworkState[MAP_KEY]) {
-        mapNetworkState[MAP_KEY] = { selected: null, allSelected: true };
-      }
       const initialMetric = (metricParam === "mean" || metricParam === "median")
         ? metricParam
         : (sharedSettings.metric || "mean");
@@ -1564,47 +1559,6 @@
       const BREATHE_LONDON_MATCHERS = ["breathelondon"];
       const LAQN_NETWORK_MATCHERS = ["laqn"];
       const SENSOR_COMMUNITY_MATCHERS = ["sensorcommunity"];
-      let networkCatalogDefs = [];
-      let networkCatalogByCode = new Map();
-      let networkCatalogPromise = null;
-      const NETWORK_LOGO_META = Object.freeze({
-        gov_uk_aurn: {
-          href: "https://www.ukairquality.net/",
-          ariaLabel: "Open GOV.UK AURN website (external link)",
-          boxClass: "network-card-logo-box--light network-card-logo-box--text",
-          text: "GOV.UK AURN",
-        },
-        openaq: {
-          href: "https://openaq.org/",
-          ariaLabel: "Open OpenAQ website (external link)",
-          boxClass: "network-card-logo-box--light",
-          imgSrc: "/sidebar-images/openaq_logo.svg",
-          imgAlt: "OpenAQ logo",
-          imgClass: "network-card-logo",
-        },
-        breathelondon: {
-          href: "https://www.breathelondon.org/",
-          ariaLabel: "Open Breathe London website (external link)",
-          boxClass: "network-card-logo-box--light",
-          imgSrc: "/sidebar-images/breathelondon_logo_v2.svg",
-          imgAlt: "Breathe London logo",
-          imgClass: "network-card-logo network-card-logo--breathe",
-        },
-        laqn: {
-          href: "https://www.londonair.org.uk/",
-          ariaLabel: "Open London Air LAQN website (external link)",
-          boxClass: "network-card-logo-box--light network-card-logo-box--text",
-          text: "London Air LAQN",
-        },
-        sensorcommunity: {
-          href: "https://sensor.community/en/",
-          ariaLabel: "Open Sensor.Community website (external link)",
-          boxClass: "network-card-logo-box--dark",
-          imgSrc: "/sidebar-images/scomm_logo_text.svg",
-          imgAlt: "Sensor.Community logo",
-          imgClass: "network-card-logo",
-        },
-      });
       const TOTAL_PCON_COUNT = 650;
       const SORT_DEFAULTS = {
         sensor: "asc",
@@ -1790,9 +1744,6 @@
       const colorScaleGroup = document.querySelector(".colour-scale-group");
       const colorScaleToggle = colorScaleGroup ? colorScaleGroup.querySelector(".colour-scale-toggle") : null;
       const networkPanel = document.querySelector(".network-panel");
-      const networkList = document.getElementById("network-list");
-      const networkSelectAll = document.getElementById("network-select-all");
-      const networkDeselectAll = document.getElementById("network-deselect-all");
       const sortHeaders = detailsTableWrap
         ? Array.from(detailsTableWrap.querySelectorAll("th[data-sort-key]"))
         : [];
@@ -1982,8 +1933,6 @@
       let ukWasHidden = true;
       let ukBootstrapReady = false;
       let populationLookup = new Map();
-      let networkInputs = [];
-      let networkSelectionMismatch = false;
       let selectedPconCode = null;
       let selectedCell = null;
       let areaRegionLookup = new Map();
@@ -2818,11 +2767,6 @@
         if (!cached) {
           return false;
         }
-        const storedSelection = getStoredNetworkSelection();
-        const previousSelection = getCurrentNetworkSelection() || storedSelection.selectedCodes;
-        const hadAllSelected = networkInputs.length > 0
-          ? networkInputs.every((input) => input.checked)
-          : storedSelection.defaultAll;
         baseLatestRows = cached.latestRows;
         const cachedAllRows = getPollutantCache(getLatestCacheKey(activePollutant, "all"));
         baseLatestRowsAllWindow = cachedAllRows?.latestRows || cached.latestRows || [];
@@ -2833,8 +2777,6 @@
         const coverageByCode = buildNetworkCoverageByCode(networkRowsForWindow);
         renderNetworkFiltersIfNeeded(
           windowNetworkDefs,
-          previousSelection,
-          hadAllSelected,
           coverageByCode,
           TOTAL_PCON_COUNT,
           "constituencies",
@@ -3087,29 +3029,18 @@
       }
 
       function getCatalogNetworkByCode(code) {
-        const key = code ? String(code).trim() : "";
-        return key ? networkCatalogByCode.get(key) || null : null;
+        return networkController.getCatalogByCode(code);
       }
 
       function resolveNetworkLabel(row) {
-        return networkDomain.resolveLabel(row, networkCatalogByCode);
+        return networkDomain.resolveLabel(row, networkController.getCatalogByCodeMap());
       }
 
       async function fetchNetworkCatalog() {
-        if (networkCatalogPromise) {
-          return networkCatalogPromise;
-        }
-        networkCatalogPromise = networkCatalogClient.load({
+        return networkController.loadCatalog({
           url: NETWORK_CATALOG_URL,
           fetchApi: fetchCacheApi,
-        }).then((rows) => {
-            networkCatalogDefs = rows.map((row) => ({ ...row, count: 0 }));
-            networkCatalogByCode = new Map(
-              networkCatalogDefs.map((definition) => [definition.code, definition])
-            );
-            return networkCatalogDefs;
-          });
-        return networkCatalogPromise;
+        });
       }
 
       function resolveStationName(row) {
@@ -3175,7 +3106,7 @@
 
       function buildNetworkDefs(rows) {
         const byCode = new Map(
-          networkCatalogDefs.map((def) => [
+          networkController.getCatalog().map((def) => [
             def.code,
             { ...def, count: 0 },
           ])
@@ -3199,42 +3130,9 @@
         return Array.from(byCode.values()).sort((a, b) => a.label.localeCompare(b.label));
       }
 
-      let networkDefsKey = "";
-
       function getNetworkRowsForWindow() {
         const windowed = filterRowsByWindow(baseLatestRows);
         return getRowsForActivePollutant(windowed);
-      }
-
-      function getNetworkDefsKey(defs) {
-        if (!defs.length) {
-          return "empty";
-        }
-        return defs.map((def) => `${def.code}:${def.label}:${def.count}`).join("|");
-      }
-
-      function resolveNetworkLogoMeta(def) {
-        const code = String(def?.code || "").toLowerCase();
-        if (NETWORK_LOGO_META[code]) {
-          return NETWORK_LOGO_META[code];
-        }
-        const label = String(def?.label || "").toLowerCase();
-        if (LAQN_NETWORK_MATCHERS.some((token) => label.includes(token))) {
-          return NETWORK_LOGO_META.laqn;
-        }
-        if (GOVUK_NETWORK_MATCHERS.some((token) => label.includes(token))) {
-          return NETWORK_LOGO_META.gov_uk_aurn;
-        }
-        if (OPENAQ_NETWORK_MATCHERS.some((token) => label.includes(token))) {
-          return NETWORK_LOGO_META.openaq;
-        }
-        if (BREATHE_LONDON_MATCHERS.some((token) => label.includes(token))) {
-          return NETWORK_LOGO_META.breathelondon;
-        }
-        if (SENSOR_COMMUNITY_MATCHERS.some((token) => label.includes(token))) {
-          return NETWORK_LOGO_META.sensorcommunity;
-        }
-        return null;
       }
 
       function buildNetworkCoverageByCode(rows) {
@@ -3260,236 +3158,12 @@
         return coverageByCode;
       }
 
-      function getNetworkDefsRenderKey(defs, coverageByCode, coverageTotal) {
-        if (!defs.length) {
-          return "empty";
-        }
-        return defs.map((def) => {
-          const code = String(def.code || "").trim();
-          const covered = coverageByCode.get(code)?.size || 0;
-          const pct = coverageTotal > 0 ? Math.round((covered / coverageTotal) * 100) : 0;
-          return `${def.code}:${def.label}:${def.count}:${covered}:${pct}`;
-        }).join("|");
-      }
-
-      function renderNetworkFiltersIfNeeded(defs, selectedCodes, defaultAll, coverageByCode, coverageTotal, coverageAreaLabel) {
-        const key = `${getNetworkDefsKey(defs)}|${getNetworkDefsRenderKey(defs, coverageByCode, coverageTotal)}`;
-        if (key === networkDefsKey) {
-          return false;
-        }
-        networkDefsKey = key;
-        renderNetworkFilters(defs, selectedCodes, defaultAll, coverageByCode, coverageTotal, coverageAreaLabel);
-        return true;
-      }
-
-      function getCurrentNetworkSelection() {
-        networkInputs = networkList
-          ? Array.from(networkList.querySelectorAll("input[data-network]"))
-          : [];
-        if (!networkInputs.length) {
-          return null;
-        }
-        return new Set(
-          networkInputs
-            .filter((input) => input.checked)
-            .map((input) => input.dataset.network)
-            .filter(Boolean)
-        );
-      }
-
-      function getStoredNetworkSelection() {
-        const state = mapNetworkState[MAP_KEY];
-        if (!state) {
-          return { selectedCodes: null, defaultAll: false };
-        }
-        return {
-          selectedCodes: Array.isArray(state.selected) ? new Set(state.selected) : null,
-          defaultAll: Boolean(state.allSelected),
-        };
-      }
-
-      function persistNetworkSelection() {
-        if (!networkInputs.length) {
-          return;
-        }
-        if (networkSelectionMismatch && networkInputs.every((input) => !input.checked)) {
-          return;
-        }
-        const allSelected = networkInputs.every((input) => input.checked);
-        if (allSelected) {
-          mapNetworkState[MAP_KEY] = { selected: null, allSelected: true };
-          return;
-        }
-        const selection = getCurrentNetworkSelection();
-        mapNetworkState[MAP_KEY] = {
-          selected: selection ? Array.from(selection) : [],
-          allSelected: false,
-        };
-      }
-
-      function applyStoredNetworkSelection() {
-        if (!networkInputs.length) {
-          return;
-        }
-        const stored = getStoredNetworkSelection();
-        if (stored.selectedCodes) {
-          const matches = networkInputs.filter((input) => stored.selectedCodes.has(input.dataset.network));
-          networkSelectionMismatch = stored.selectedCodes.size > 0 && matches.length === 0;
-          if (stored.selectedCodes.size === 0 || networkSelectionMismatch) {
-            networkInputs.forEach((input) => {
-              input.checked = false;
-            });
-          } else if (matches.length) {
-            networkInputs.forEach((input) => {
-              input.checked = stored.selectedCodes.has(input.dataset.network);
-            });
-          }
-        } else if (stored.defaultAll) {
-          networkSelectionMismatch = false;
-          networkInputs.forEach((input) => {
-            input.checked = true;
-          });
-        } else {
-          networkSelectionMismatch = false;
-          networkInputs.forEach((input) => {
-            input.checked = false;
-          });
-        }
-        syncNetworkActionState();
-        syncNetworkRowMutedState();
-      }
-
-      function renderNetworkFilters(defs, selectedCodes, defaultAll, coverageByCode, coverageTotal, coverageAreaLabel) {
-        if (!networkList) {
-          return;
-        }
-        networkList.innerHTML = "";
-        networkInputs = [];
-        if (!defs.length) {
-          networkList.innerHTML = '<span class="network-empty">No networks available.</span>';
-          syncNetworkActionState();
-          return;
-        }
-        const fragment = document.createDocumentFragment();
-        const hasSelection = selectedCodes !== null && selectedCodes !== undefined;
-        const totalNetworkSensors = defs.reduce((sum, def) => sum + (Number(def.count) || 0), 0);
-        defs.forEach((def) => {
-          const sharePercent = totalNetworkSensors
-            ? Math.max(0, Math.min(100, ((Number(def.count) || 0) / totalNetworkSensors) * 100))
-            : 0;
-          const label = document.createElement("label");
-          label.className = "checkbox network-option";
-          const input = document.createElement("input");
-          input.type = "checkbox";
-          input.dataset.network = def.code;
-          input.checked = defaultAll || (hasSelection ? selectedCodes.has(def.code) : true);
-          const mainRow = document.createElement("span");
-          mainRow.className = "network-option-main";
-          const leftGroup = document.createElement("span");
-          leftGroup.className = "network-option-left";
-          const nameWrap = document.createElement("span");
-          nameWrap.className = "network-name-wrap";
-          const text = document.createElement("span");
-          text.className = "network-name";
-          text.textContent = def.label;
-          nameWrap.appendChild(text);
-          if (def.network_type === "aggregator") {
-            const openaqTag = document.createElement("span");
-            openaqTag.className = "network-option-tag";
-            openaqTag.textContent = "AGGREGATOR";
-            nameWrap.appendChild(openaqTag);
-          }
-          leftGroup.append(input, nameWrap);
-          const count = document.createElement("span");
-          count.className = "network-count";
-          if (def.count > 0) count.textContent = def.count.toLocaleString();
-          mainRow.append(leftGroup, count);
-          const tooltipCount = Number(def.count) || 0;
-          const tooltipPct = Math.round(sharePercent);
-          label.title = `${def.label}\n${tooltipCount.toLocaleString()} active sensors\n${tooltipPct}% of sensors across all available networks`;
-          const shareBar = document.createElement("span");
-          shareBar.className = "network-share-bar";
-          shareBar.setAttribute("role", "progressbar");
-          shareBar.setAttribute("aria-label", `${def.label} share of active sensors`);
-          shareBar.setAttribute("aria-valuemin", "0");
-          shareBar.setAttribute("aria-valuemax", "100");
-          shareBar.setAttribute("aria-valuenow", String(tooltipPct));
-          shareBar.setAttribute("aria-valuetext", `${tooltipPct}% of active sensors`);
-          const shareFill = document.createElement("span");
-          shareFill.className = "network-share-fill";
-          shareFill.style.width = `${sharePercent.toFixed(1)}%`;
-          shareBar.appendChild(shareFill);
-          const code = String(def.code || "").toLowerCase();
-          const coverageCount = coverageByCode?.get(code)?.size || 0;
-          const coveragePercent = coverageTotal > 0 ? Math.round((coverageCount / coverageTotal) * 100) : 0;
-          const coverageText = document.createElement("span");
-          coverageText.className = "network-option-coverage";
-          coverageText.textContent = `${coveragePercent}% coverage`;
-          coverageText.setAttribute(
-            "aria-label",
-            `${def.label} coverage ${coveragePercent}% (${coverageCount} of ${coverageTotal} ${coverageAreaLabel})`,
-          );
-          label.append(mainRow, shareBar, coverageText);
-          const logoMeta = resolveNetworkLogoMeta(def);
-          if (logoMeta?.href) {
-            const logoLink = document.createElement("a");
-            logoLink.className = `network-option-logo-link network-card-logo-link network-card-logo-box ${logoMeta.boxClass || ""}`.trim();
-            logoLink.href = logoMeta.href;
-            logoLink.target = "_blank";
-            logoLink.rel = "noopener noreferrer";
-            logoLink.setAttribute("aria-label", logoMeta.ariaLabel || `Open ${def.label} website (external link)`);
-            logoLink.addEventListener("mousedown", (event) => event.stopPropagation());
-            logoLink.addEventListener("click", (event) => event.stopPropagation());
-            if (logoMeta.text) {
-              logoLink.appendChild(document.createTextNode(logoMeta.text));
-            } else if (logoMeta.imgSrc) {
-              const logoImg = document.createElement("img");
-              logoImg.className = logoMeta.imgClass || "network-card-logo";
-              logoImg.src = logoMeta.imgSrc;
-              logoImg.alt = logoMeta.imgAlt || `${def.label} logo`;
-              logoLink.appendChild(logoImg);
-            }
-            const linkIcon = document.createElement("img");
-            linkIcon.className = "network-card-link-icon";
-            linkIcon.src = "/images/Link Icon.svg";
-            linkIcon.alt = "";
-            linkIcon.setAttribute("aria-hidden", "true");
-            logoLink.appendChild(linkIcon);
-            label.appendChild(logoLink);
-          }
-          fragment.appendChild(label);
-        });
-        networkList.appendChild(fragment);
-        networkInputs = Array.from(networkList.querySelectorAll("input[data-network]"));
-        networkInputs.forEach((input) => input.addEventListener("change", handleNetworkToggle));
-        syncNetworkActionState();
-        syncNetworkRowMutedState();
-      }
-
-      function syncNetworkActionState() {
-        if (!networkSelectAll || !networkDeselectAll) {
-          return;
-        }
-        const hasNetworks = networkInputs.length > 0;
-        networkSelectAll.disabled = !hasNetworks;
-        networkDeselectAll.disabled = !hasNetworks;
-        if (!hasNetworks) {
-          window.dispatchEvent(new CustomEvent("networkselectionchange"));
-          return;
-        }
-        const allChecked = networkInputs.every((input) => input.checked);
-        const noneChecked = networkInputs.every((input) => !input.checked);
-        networkSelectAll.disabled = allChecked;
-        networkDeselectAll.disabled = noneChecked;
-        window.dispatchEvent(new CustomEvent("networkselectionchange"));
-      }
-
-      function syncNetworkRowMutedState() {
-        networkInputs.forEach((input) => {
-          const row = input.closest(".network-option") || input.closest(".checkbox");
-          if (row) {
-            row.classList.toggle("is-unselected", !input.checked);
-          }
+      function renderNetworkFiltersIfNeeded(defs, coverageByCode, coverageTotal, coverageAreaLabel) {
+        return networkController.updateScope("uk", {
+          definitions: defs,
+          coverageByCode,
+          coverageTotal,
+          coverageAreaLabel,
         });
       }
 
@@ -4781,35 +4455,11 @@
       }
 
       function getActiveNetworkCodes() {
-        if (!networkInputs.length) {
-          return null;
-        }
-        const active = networkInputs
-          .filter((input) => input.checked)
-          .map((input) => input.dataset.network)
-          .filter(Boolean);
-        if (!active.length) {
-          return new Set();
-        }
-        if (active.length === networkInputs.length) {
-          return null;
-        }
-        return new Set(active);
+        return networkController.getSelection();
       }
 
       function getCheckedNetworkEntries() {
-        if (!networkInputs.length) {
-          return [];
-        }
-        return networkInputs
-          .filter((input) => input.checked)
-          .map((input) => {
-            const code = String(input.dataset.network || "").toLowerCase();
-            const label = String(
-              input.closest("label")?.querySelector("span")?.textContent || ""
-            ).toLowerCase();
-            return { code, label };
-          });
+        return networkController.getSelectedEntries();
       }
 
       function selectionIncludesMatcher(entries, matchers) {
@@ -4828,7 +4478,7 @@
       }
 
       function updateNetworkSummaryCardVisibility() {
-        if (!networkInputs.length) {
+        if (!networkController.getCatalog().length) {
           return;
         }
         const entries = getCheckedNetworkEntries();
@@ -4918,21 +4568,11 @@
       }
 
       function applyNetworkFilters() {
-        networkInputs = networkList
-          ? Array.from(networkList.querySelectorAll("input[data-network]"))
-          : [];
-        const storedSelection = getStoredNetworkSelection();
-        const previousSelection = getCurrentNetworkSelection() || storedSelection.selectedCodes;
-        const hadAllSelected = networkInputs.length > 0
-          ? networkInputs.every((input) => input.checked)
-          : storedSelection.defaultAll;
         const networkRowsForWindow = getNetworkRowsForWindow();
         const windowNetworkDefs = buildNetworkDefs(networkRowsForWindow);
         const coverageByCode = buildNetworkCoverageByCode(networkRowsForWindow);
         renderNetworkFiltersIfNeeded(
           windowNetworkDefs,
-          previousSelection,
-          hadAllSelected,
           coverageByCode,
           TOTAL_PCON_COUNT,
           "constituencies",
@@ -4948,7 +4588,6 @@
           updateSummary();
           renderMap();
           updateDetailsPanel();
-          persistNetworkSelection();
           window.hexChartMode?.syncFromMap?.("uk", { preserveChartMode: true, updateChart: false });
           return;
         }
@@ -4977,7 +4616,6 @@
         updateDetailsPanel();
         window.hexChartMode?.syncFromMap?.("uk", { preserveChartMode: true, updateChart: false });
         refreshPinnedTooltip();
-        persistNetworkSelection();
       }
 
       function buildTooltipHtml(cell) {
@@ -5060,35 +4698,6 @@
         }
         tooltip.style.left = `${left}px`;
         tooltip.style.top = `${top}px`;
-      }
-
-      function handleNetworkAction(event) {
-        if (!networkInputs.length) {
-          return;
-        }
-        const actionButton = event.currentTarget instanceof HTMLButtonElement
-          ? event.currentTarget
-          : (event.target instanceof Element ? event.target.closest("button") : null);
-        networkSelectionMismatch = false;
-        if (actionButton === networkSelectAll) {
-          networkInputs.forEach((input) => {
-            input.checked = true;
-          });
-        } else if (actionButton === networkDeselectAll) {
-          networkInputs.forEach((input) => {
-            input.checked = false;
-          });
-        }
-        syncNetworkActionState();
-        syncNetworkRowMutedState();
-        applyNetworkFilters();
-      }
-
-      function handleNetworkToggle() {
-        networkSelectionMismatch = false;
-        syncNetworkActionState();
-        syncNetworkRowMutedState();
-        applyNetworkFilters();
       }
 
       function renderMapIfReady() {
@@ -5228,11 +4837,6 @@
         }
         latestPollutant = null;
         populationLookup = new Map();
-        const storedSelection = getStoredNetworkSelection();
-        const previousSelection = getCurrentNetworkSelection() || storedSelection.selectedCodes;
-        const hadAllSelected = networkInputs.length > 0
-          ? networkInputs.every((input) => input.checked)
-          : storedSelection.defaultAll;
         if (!REST_URL) {
           chartDataStatus = "failed";
           if (errorEl) {
@@ -5507,8 +5111,6 @@
           const coverageByCode = buildNetworkCoverageByCode(networkRowsForWindow);
           renderNetworkFiltersIfNeeded(
             windowNetworkDefs,
-            previousSelection,
-            hadAllSelected,
             coverageByCode,
             TOTAL_PCON_COUNT,
             "constituencies",
@@ -5737,12 +5339,6 @@
         pollutantSelector.addEventListener("keydown", handlePollutantKeydown);
       }
 
-      if (networkSelectAll) {
-        networkSelectAll.addEventListener("click", handleNetworkAction);
-      }
-      if (networkDeselectAll) {
-        networkDeselectAll.addEventListener("click", handleNetworkAction);
-      }
       sortHeaderButtons.forEach((button) => {
         button.addEventListener("click", (event) => {
           event.stopPropagation();
@@ -5963,8 +5559,7 @@
           syncSettingsPanelWidth();
         },
         restoreNetworks: () => {
-          networkDefsKey = "";
-          applyStoredNetworkSelection();
+          networkController.setActiveScope("uk");
           applyNetworkFilters();
         },
         markBootstrapReady: () => {
@@ -6028,6 +5623,7 @@
           return colorScale(value);
         },
       };
+      networkController.registerScope("uk", () => applyNetworkFilters());
     </script>
     <script>
 (() => {
@@ -6054,11 +5650,6 @@
 	      const mapDateParam = params.get("map_date");
 	      const laVersionParam = params.get("la_version");
       const sharedSettings = (window.mapSettingsState = window.mapSettingsState || {});
-      const mapNetworkState = (window.mapNetworkState = window.mapNetworkState || {});
-      const MAP_KEY = "shared";
-      if (!mapNetworkState[MAP_KEY]) {
-        mapNetworkState[MAP_KEY] = { selected: null, allSelected: true };
-      }
       if (!sharedSettings.metric) {
         sharedSettings.metric = (metricParam === "mean" || metricParam === "median") ? metricParam : "mean";
       }
@@ -6182,47 +5773,6 @@
       const BREATHE_LONDON_MATCHERS = ["breathelondon"];
       const LAQN_NETWORK_MATCHERS = ["laqn"];
       const SENSOR_COMMUNITY_MATCHERS = ["sensorcommunity"];
-      let networkCatalogDefs = [];
-      let networkCatalogByCode = new Map();
-      let networkCatalogPromise = null;
-      const NETWORK_LOGO_META = Object.freeze({
-        gov_uk_aurn: {
-          href: "https://www.ukairquality.net/",
-          ariaLabel: "Open GOV.UK AURN website (external link)",
-          boxClass: "network-card-logo-box--light network-card-logo-box--text",
-          text: "GOV.UK AURN",
-        },
-        openaq: {
-          href: "https://openaq.org/",
-          ariaLabel: "Open OpenAQ website (external link)",
-          boxClass: "network-card-logo-box--light",
-          imgSrc: "/sidebar-images/openaq_logo.svg",
-          imgAlt: "OpenAQ logo",
-          imgClass: "network-card-logo",
-        },
-        breathelondon: {
-          href: "https://www.breathelondon.org/",
-          ariaLabel: "Open Breathe London website (external link)",
-          boxClass: "network-card-logo-box--light",
-          imgSrc: "/sidebar-images/breathelondon_logo_v2.svg",
-          imgAlt: "Breathe London logo",
-          imgClass: "network-card-logo network-card-logo--breathe",
-        },
-        laqn: {
-          href: "https://www.londonair.org.uk/",
-          ariaLabel: "Open London Air LAQN website (external link)",
-          boxClass: "network-card-logo-box--light network-card-logo-box--text",
-          text: "London Air LAQN",
-        },
-        sensorcommunity: {
-          href: "https://sensor.community/en/",
-          ariaLabel: "Open Sensor.Community website (external link)",
-          boxClass: "network-card-logo-box--dark",
-          imgSrc: "/sidebar-images/scomm_logo_text.svg",
-          imgAlt: "Sensor.Community logo",
-          imgClass: "network-card-logo",
-        },
-      });
       const AREA_LABEL_PLURAL = "local authorities";
       const HEAT_STOPS = ["--heat-0", "--heat-1", "--heat-2", "--heat-3", "--heat-4"];
       const HEAT_STOP_FALLBACKS = ["#00a85a", "#ffd54a", "#ff9b3a", "#e03c3c", "#5b2a86"];
@@ -6422,9 +5972,6 @@
       const colorScaleToggle = colorScaleGroup ? colorScaleGroup.querySelector(".colour-scale-toggle") : null;
       const networkPanel = query(".network-panel");
       // Shared toolbar dropdown controls (single DOM instance moved between UK/CR tabs).
-      const networkList = document.getElementById("network-list");
-      const networkSelectAll = document.getElementById("network-select-all");
-      const networkDeselectAll = document.getElementById("network-deselect-all");
       const sortHeaders = detailsTableWrap
         ? Array.from(detailsTableWrap.querySelectorAll("th[data-sort-key]"))
         : [];
@@ -6617,8 +6164,6 @@
       let crWasHidden = true;
       let crBootstrapReady = false;
       let populationLookup = new Map();
-	      let networkInputs = [];
-	      let networkSelectionMismatch = false;
 	      let selectedAreaCode = null;
 	      let selectedCell = null;
 	      let pendingSelectedAreaCode = null;
@@ -7188,11 +6733,6 @@
         if (!cached) {
           return false;
         }
-        const storedSelection = getStoredNetworkSelection();
-        const previousSelection = getCurrentNetworkSelection() || storedSelection.selectedCodes;
-        const hadAllSelected = networkInputs.length > 0
-          ? networkInputs.every((input) => input.checked)
-          : storedSelection.defaultAll;
         baseLatestRows = cached.latestRows;
         const cachedAllRows = getPollutantCache(getLatestCacheKey(activePollutant, "all", activeRegion));
         baseLatestRowsAllWindow = cachedAllRows?.latestRows || cached.latestRows || [];
@@ -7203,8 +6743,6 @@
         const coverageByCode = buildNetworkCoverageByCode(networkRowsForWindow);
         renderNetworkFiltersIfNeeded(
           windowNetworkDefs,
-          previousSelection,
-          hadAllSelected,
           coverageByCode,
           pconCodes.size || 0,
           AREA_LABEL_PLURAL,
@@ -7396,29 +6934,18 @@
       }
 
       function getCatalogNetworkByCode(code) {
-        const key = code ? String(code).trim() : "";
-        return key ? networkCatalogByCode.get(key) || null : null;
+        return networkController.getCatalogByCode(code);
       }
 
       function resolveNetworkLabel(row) {
-        return networkDomain.resolveLabel(row, networkCatalogByCode);
+        return networkDomain.resolveLabel(row, networkController.getCatalogByCodeMap());
       }
 
       async function fetchNetworkCatalog() {
-        if (networkCatalogPromise) {
-          return networkCatalogPromise;
-        }
-        networkCatalogPromise = networkCatalogClient.load({
+        return networkController.loadCatalog({
           url: NETWORK_CATALOG_URL,
           fetchApi: fetchCacheApi,
-        }).then((rows) => {
-            networkCatalogDefs = rows.map((row) => ({ ...row, count: 0 }));
-            networkCatalogByCode = new Map(
-              networkCatalogDefs.map((definition) => [definition.code, definition])
-            );
-            return networkCatalogDefs;
-          });
-        return networkCatalogPromise;
+        });
       }
 
       function resolveStationName(row) {
@@ -7484,7 +7011,7 @@
 
       function buildNetworkDefs(rows) {
         const byCode = new Map(
-          networkCatalogDefs.map((def) => [
+          networkController.getCatalog().map((def) => [
             def.code,
             { ...def, count: 0 },
           ])
@@ -7508,42 +7035,9 @@
         return Array.from(byCode.values()).sort((a, b) => a.label.localeCompare(b.label));
       }
 
-      let networkDefsKey = "";
-
       function getNetworkRowsForWindow() {
         const windowed = filterRowsByWindow(baseLatestRows);
         return getRowsForActivePollutant(windowed);
-      }
-
-      function getNetworkDefsKey(defs) {
-        if (!defs.length) {
-          return "empty";
-        }
-        return defs.map((def) => `${def.code}:${def.label}:${def.count}`).join("|");
-      }
-
-      function resolveNetworkLogoMeta(def) {
-        const code = String(def?.code || "").toLowerCase();
-        if (NETWORK_LOGO_META[code]) {
-          return NETWORK_LOGO_META[code];
-        }
-        const label = String(def?.label || "").toLowerCase();
-        if (LAQN_NETWORK_MATCHERS.some((token) => label.includes(token))) {
-          return NETWORK_LOGO_META.laqn;
-        }
-        if (GOVUK_NETWORK_MATCHERS.some((token) => label.includes(token))) {
-          return NETWORK_LOGO_META.gov_uk_aurn;
-        }
-        if (OPENAQ_NETWORK_MATCHERS.some((token) => label.includes(token))) {
-          return NETWORK_LOGO_META.openaq;
-        }
-        if (BREATHE_LONDON_MATCHERS.some((token) => label.includes(token))) {
-          return NETWORK_LOGO_META.breathelondon;
-        }
-        if (SENSOR_COMMUNITY_MATCHERS.some((token) => label.includes(token))) {
-          return NETWORK_LOGO_META.sensorcommunity;
-        }
-        return null;
       }
 
       function buildNetworkCoverageByCode(rows) {
@@ -7569,237 +7063,12 @@
         return coverageByCode;
       }
 
-      function getNetworkDefsRenderKey(defs, coverageByCode, coverageTotal) {
-        if (!defs.length) {
-          return "empty";
-        }
-        return defs.map((def) => {
-          const code = String(def.code || "").trim();
-          const covered = coverageByCode.get(code)?.size || 0;
-          const pct = coverageTotal > 0 ? Math.round((covered / coverageTotal) * 100) : 0;
-          return `${def.code}:${def.label}:${def.count}:${covered}:${pct}`;
-        }).join("|");
-      }
-
-      function renderNetworkFiltersIfNeeded(defs, selectedCodes, defaultAll, coverageByCode, coverageTotal, coverageAreaLabel) {
-        const key = `${getNetworkDefsKey(defs)}|${getNetworkDefsRenderKey(defs, coverageByCode, coverageTotal)}`;
-        if (key === networkDefsKey) {
-          return false;
-        }
-        networkDefsKey = key;
-        renderNetworkFilters(defs, selectedCodes, defaultAll, coverageByCode, coverageTotal, coverageAreaLabel);
-        return true;
-      }
-
-      function getCurrentNetworkSelection() {
-        networkInputs = networkList
-          ? Array.from(networkList.querySelectorAll("input[data-network]"))
-          : [];
-        if (!networkInputs.length) {
-          return null;
-        }
-        return new Set(
-          networkInputs
-            .filter((input) => input.checked)
-            .map((input) => input.dataset.network)
-            .filter(Boolean)
-        );
-      }
-
-
-      function getStoredNetworkSelection() {
-        const state = mapNetworkState[MAP_KEY];
-        if (!state) {
-          return { selectedCodes: null, defaultAll: false };
-        }
-        return {
-          selectedCodes: Array.isArray(state.selected) ? new Set(state.selected) : null,
-          defaultAll: Boolean(state.allSelected),
-        };
-      }
-
-      function persistNetworkSelection() {
-        if (!networkInputs.length) {
-          return;
-        }
-        if (networkSelectionMismatch && networkInputs.every((input) => !input.checked)) {
-          return;
-        }
-        const allSelected = networkInputs.every((input) => input.checked);
-        if (allSelected) {
-          mapNetworkState[MAP_KEY] = { selected: null, allSelected: true };
-          return;
-        }
-        const selection = getCurrentNetworkSelection();
-        mapNetworkState[MAP_KEY] = {
-          selected: selection ? Array.from(selection) : [],
-          allSelected: false,
-        };
-      }
-
-      function applyStoredNetworkSelection() {
-        if (!networkInputs.length) {
-          return;
-        }
-        const stored = getStoredNetworkSelection();
-        if (stored.selectedCodes) {
-          const matches = networkInputs.filter((input) => stored.selectedCodes.has(input.dataset.network));
-          networkSelectionMismatch = stored.selectedCodes.size > 0 && matches.length === 0;
-          if (stored.selectedCodes.size === 0 || networkSelectionMismatch) {
-            networkInputs.forEach((input) => {
-              input.checked = false;
-            });
-          } else if (matches.length) {
-            networkInputs.forEach((input) => {
-              input.checked = stored.selectedCodes.has(input.dataset.network);
-            });
-          }
-        } else if (stored.defaultAll) {
-          networkSelectionMismatch = false;
-          networkInputs.forEach((input) => {
-            input.checked = true;
-          });
-        } else {
-          networkSelectionMismatch = false;
-          networkInputs.forEach((input) => {
-            input.checked = false;
-          });
-        }
-        syncNetworkActionState();
-        syncNetworkRowMutedState();
-      }
-
-      function renderNetworkFilters(defs, selectedCodes, defaultAll, coverageByCode, coverageTotal, coverageAreaLabel) {
-        if (!networkList) {
-          return;
-        }
-        networkList.innerHTML = "";
-        networkInputs = [];
-        if (!defs.length) {
-          networkList.innerHTML = '<span class="network-empty">No networks available.</span>';
-          syncNetworkActionState();
-          return;
-        }
-        const fragment = document.createDocumentFragment();
-        const hasSelection = selectedCodes !== null && selectedCodes !== undefined;
-        const totalNetworkSensors = defs.reduce((sum, def) => sum + (Number(def.count) || 0), 0);
-        defs.forEach((def) => {
-          const sharePercent = totalNetworkSensors
-            ? Math.max(0, Math.min(100, ((Number(def.count) || 0) / totalNetworkSensors) * 100))
-            : 0;
-          const label = document.createElement("label");
-          label.className = "checkbox network-option";
-          const input = document.createElement("input");
-          input.type = "checkbox";
-          input.dataset.network = def.code;
-          input.checked = defaultAll || (hasSelection ? selectedCodes.has(def.code) : true);
-          const mainRow = document.createElement("span");
-          mainRow.className = "network-option-main";
-          const leftGroup = document.createElement("span");
-          leftGroup.className = "network-option-left";
-          const nameWrap = document.createElement("span");
-          nameWrap.className = "network-name-wrap";
-          const text = document.createElement("span");
-          text.className = "network-name";
-          text.textContent = def.label;
-          nameWrap.appendChild(text);
-          if (def.network_type === "aggregator") {
-            const openaqTag = document.createElement("span");
-            openaqTag.className = "network-option-tag";
-            openaqTag.textContent = "AGGREGATOR";
-            nameWrap.appendChild(openaqTag);
-          }
-          leftGroup.append(input, nameWrap);
-          const count = document.createElement("span");
-          count.className = "network-count";
-          if (def.count > 0) count.textContent = def.count.toLocaleString();
-          mainRow.append(leftGroup, count);
-          const tooltipCount = Number(def.count) || 0;
-          const tooltipPct = Math.round(sharePercent);
-          label.title = `${def.label}\n${tooltipCount.toLocaleString()} active sensors\n${tooltipPct}% of sensors across all available networks`;
-          const shareBar = document.createElement("span");
-          shareBar.className = "network-share-bar";
-          shareBar.setAttribute("role", "progressbar");
-          shareBar.setAttribute("aria-label", `${def.label} share of active sensors`);
-          shareBar.setAttribute("aria-valuemin", "0");
-          shareBar.setAttribute("aria-valuemax", "100");
-          shareBar.setAttribute("aria-valuenow", String(tooltipPct));
-          shareBar.setAttribute("aria-valuetext", `${tooltipPct}% of active sensors`);
-          const shareFill = document.createElement("span");
-          shareFill.className = "network-share-fill";
-          shareFill.style.width = `${sharePercent.toFixed(1)}%`;
-          shareBar.appendChild(shareFill);
-          const code = String(def.code || "").toLowerCase();
-          const coverageCount = coverageByCode?.get(code)?.size || 0;
-          const coveragePercent = coverageTotal > 0 ? Math.round((coverageCount / coverageTotal) * 100) : 0;
-          const coverageText = document.createElement("span");
-          coverageText.className = "network-option-coverage";
-          coverageText.textContent = `${coveragePercent}% coverage`;
-          coverageText.setAttribute(
-            "aria-label",
-            `${def.label} coverage ${coveragePercent}% (${coverageCount} of ${coverageTotal} ${coverageAreaLabel})`,
-          );
-          label.append(mainRow, shareBar, coverageText);
-          const logoMeta = resolveNetworkLogoMeta(def);
-          if (logoMeta?.href) {
-            const logoLink = document.createElement("a");
-            logoLink.className = `network-option-logo-link network-card-logo-link network-card-logo-box ${logoMeta.boxClass || ""}`.trim();
-            logoLink.href = logoMeta.href;
-            logoLink.target = "_blank";
-            logoLink.rel = "noopener noreferrer";
-            logoLink.setAttribute("aria-label", logoMeta.ariaLabel || `Open ${def.label} website (external link)`);
-            logoLink.addEventListener("mousedown", (event) => event.stopPropagation());
-            logoLink.addEventListener("click", (event) => event.stopPropagation());
-            if (logoMeta.text) {
-              logoLink.appendChild(document.createTextNode(logoMeta.text));
-            } else if (logoMeta.imgSrc) {
-              const logoImg = document.createElement("img");
-              logoImg.className = logoMeta.imgClass || "network-card-logo";
-              logoImg.src = logoMeta.imgSrc;
-              logoImg.alt = logoMeta.imgAlt || `${def.label} logo`;
-              logoLink.appendChild(logoImg);
-            }
-            const linkIcon = document.createElement("img");
-            linkIcon.className = "network-card-link-icon";
-            linkIcon.src = "/images/Link Icon.svg";
-            linkIcon.alt = "";
-            linkIcon.setAttribute("aria-hidden", "true");
-            logoLink.appendChild(linkIcon);
-            label.appendChild(logoLink);
-          }
-          fragment.appendChild(label);
-        });
-        networkList.appendChild(fragment);
-        networkInputs = Array.from(networkList.querySelectorAll("input[data-network]"));
-        networkInputs.forEach((input) => input.addEventListener("change", handleNetworkToggle));
-        syncNetworkActionState();
-        syncNetworkRowMutedState();
-      }
-
-      function syncNetworkActionState() {
-        if (!networkSelectAll || !networkDeselectAll) {
-          return;
-        }
-        const hasNetworks = networkInputs.length > 0;
-        networkSelectAll.disabled = !hasNetworks;
-        networkDeselectAll.disabled = !hasNetworks;
-        if (!hasNetworks) {
-          window.dispatchEvent(new CustomEvent("networkselectionchange"));
-          return;
-        }
-        const allChecked = networkInputs.every((input) => input.checked);
-        const noneChecked = networkInputs.every((input) => !input.checked);
-        networkSelectAll.disabled = allChecked;
-        networkDeselectAll.disabled = noneChecked;
-        window.dispatchEvent(new CustomEvent("networkselectionchange"));
-      }
-
-      function syncNetworkRowMutedState() {
-        networkInputs.forEach((input) => {
-          const row = input.closest(".network-option") || input.closest(".checkbox");
-          if (row) {
-            row.classList.toggle("is-unselected", !input.checked);
-          }
+      function renderNetworkFiltersIfNeeded(defs, coverageByCode, coverageTotal, coverageAreaLabel) {
+        return networkController.updateScope("cr", {
+          definitions: defs,
+          coverageByCode,
+          coverageTotal,
+          coverageAreaLabel,
         });
       }
 
@@ -9537,35 +8806,11 @@
       }
 
       function getActiveNetworkCodes() {
-        if (!networkInputs.length) {
-          return null;
-        }
-        const active = networkInputs
-          .filter((input) => input.checked)
-          .map((input) => input.dataset.network)
-          .filter(Boolean);
-        if (!active.length) {
-          return new Set();
-        }
-        if (active.length === networkInputs.length) {
-          return null;
-        }
-        return new Set(active);
+        return networkController.getSelection();
       }
 
       function getCheckedNetworkEntries() {
-        if (!networkInputs.length) {
-          return [];
-        }
-        return networkInputs
-          .filter((input) => input.checked)
-          .map((input) => {
-            const code = String(input.dataset.network || "").toLowerCase();
-            const label = String(
-              input.closest("label")?.querySelector("span")?.textContent || ""
-            ).toLowerCase();
-            return { code, label };
-          });
+        return networkController.getSelectedEntries();
       }
 
       function selectionIncludesMatcher(entries, matchers) {
@@ -9584,7 +8829,7 @@
       }
 
       function updateNetworkSummaryCardVisibility() {
-        if (!networkInputs.length) {
+        if (!networkController.getCatalog().length) {
           return;
         }
         const entries = getCheckedNetworkEntries();
@@ -9678,22 +8923,12 @@
       }
 
       function applyNetworkFilters() {
-        networkInputs = networkList
-          ? Array.from(networkList.querySelectorAll("input[data-network]"))
-          : [];
-        const storedSelection = getStoredNetworkSelection();
-        const previousSelection = getCurrentNetworkSelection() || storedSelection.selectedCodes;
-        const hadAllSelected = networkInputs.length > 0
-          ? networkInputs.every((input) => input.checked)
-          : storedSelection.defaultAll;
         const networkRowsForWindow = getNetworkRowsForWindow();
         const windowNetworkDefs = buildNetworkDefs(networkRowsForWindow);
         const coverageByCode = buildNetworkCoverageByCode(networkRowsForWindow);
         const coverageTotal = pconCodes.size || 0;
         renderNetworkFiltersIfNeeded(
           windowNetworkDefs,
-          previousSelection,
-          hadAllSelected,
           coverageByCode,
           coverageTotal,
           AREA_LABEL_PLURAL,
@@ -9709,7 +8944,6 @@
           updateSummary();
           renderMap();
           updateDetailsPanel();
-          persistNetworkSelection();
           window.hexChartMode?.syncFromMap?.("cr", { preserveChartMode: true, updateChart: false });
           return;
         }
@@ -9737,7 +8971,6 @@
         renderMap();
         updateDetailsPanel();
         window.hexChartMode?.syncFromMap?.("cr", { preserveChartMode: true, updateChart: false });
-        persistNetworkSelection();
       }
 
       function positionTooltip(event) {
@@ -9755,35 +8988,6 @@
         }
         tooltip.style.left = `${left}px`;
         tooltip.style.top = `${top}px`;
-      }
-
-      function handleNetworkAction(event) {
-        if (!networkInputs.length) {
-          return;
-        }
-        const actionButton = event.currentTarget instanceof HTMLButtonElement
-          ? event.currentTarget
-          : (event.target instanceof Element ? event.target.closest("button") : null);
-        networkSelectionMismatch = false;
-        if (actionButton === networkSelectAll) {
-          networkInputs.forEach((input) => {
-            input.checked = true;
-          });
-        } else if (actionButton === networkDeselectAll) {
-          networkInputs.forEach((input) => {
-            input.checked = false;
-          });
-        }
-        syncNetworkActionState();
-        syncNetworkRowMutedState();
-        applyNetworkFilters();
-      }
-
-      function handleNetworkToggle() {
-        networkSelectionMismatch = false;
-        syncNetworkActionState();
-        syncNetworkRowMutedState();
-        applyNetworkFilters();
       }
 
       function renderMapIfReady() {
@@ -10006,11 +9210,6 @@
         }
         latestPollutant = null;
         populationLookup = new Map();
-        const storedSelection = getStoredNetworkSelection();
-        const previousSelection = getCurrentNetworkSelection() || storedSelection.selectedCodes;
-        const hadAllSelected = networkInputs.length > 0
-          ? networkInputs.every((input) => input.checked)
-          : storedSelection.defaultAll;
 	        const hasCredentials = Boolean(REST_URL) && Boolean(cacheSessionUrl);
 	        const canLoadData = hasCredentials;
 	        if (!hasCredentials) {
@@ -10314,8 +9513,6 @@
             const coverageByCode = buildNetworkCoverageByCode(networkRowsForWindow);
             renderNetworkFiltersIfNeeded(
               windowNetworkDefs,
-              previousSelection,
-              hadAllSelected,
               coverageByCode,
               pconCodes.size || 0,
               AREA_LABEL_PLURAL,
@@ -10355,7 +9552,7 @@
             latestRows = [];
             latestPollutant = null;
             populationLookup = new Map();
-            renderNetworkFiltersIfNeeded([], previousSelection, false, new Map(), 0, AREA_LABEL_PLURAL);
+            renderNetworkFiltersIfNeeded([], new Map(), 0, AREA_LABEL_PLURAL);
             if (lastUpdated) {
               lastUpdated.textContent = "Boundary only (no sensor data yet)";
             }
@@ -10575,12 +9772,6 @@
         updateDetailsPanel();
       });
 
-      if (networkSelectAll) {
-        networkSelectAll.addEventListener("click", handleNetworkAction);
-      }
-      if (networkDeselectAll) {
-        networkDeselectAll.addEventListener("click", handleNetworkAction);
-      }
       sortHeaderButtons.forEach((button) => {
         button.addEventListener("click", (event) => {
           event.stopPropagation();
@@ -10835,8 +10026,7 @@
           syncSettingsPanelWidth();
         },
         restoreNetworks: () => {
-          networkDefsKey = "";
-          applyStoredNetworkSelection();
+          networkController.setActiveScope("cr");
           applyNetworkFilters();
         },
         markBootstrapReady: () => {
@@ -10911,6 +10101,7 @@
           return colorScale(value);
         },
 	      };
+      networkController.registerScope("cr", () => applyNetworkFilters());
 })();
 
     </script>
@@ -11004,6 +10195,7 @@
     }
     panelUk.hidden = !isUk;
     panelCr.hidden = isUk;
+    window.UkAqHexMapNetworkController?.setActiveScope?.(tabKey);
     if (isUk) {
       window.ukMap?.render();
       window.ukMap?.restoreNetworks();
@@ -11091,21 +10283,8 @@
   const regionLabel = document.getElementById("toolbar-region-label");
   const regionMenu = document.getElementById("toolbar-region-menu");
   const popoverWrap = document.getElementById("toolbar-popover-wrap");
-  const networkDropdownMenu = document.getElementById("networks-panel-floating");
-  const networkDropdownCount = document.getElementById("network-dropdown-count");
-  const networkList = document.getElementById("network-list");
-  const networkSelectAll = document.getElementById("network-select-all");
-  const networkDeselectAll = document.getElementById("network-deselect-all");
-  const networkPanelPin = document.getElementById("networks-panel-pin");
-  const networkPanelPinIcon = document.getElementById("networks-panel-pin-icon");
-  const networkPills = Array.from(document.querySelectorAll("[data-networks-pill]"));
   const tabUk = document.getElementById("tab-uk");
   const tabCr = document.getElementById("tab-cr");
-  let networkPanelPinned = false;
-  let networkPanelAnchorPill = null;
-  let networkPanelPinnedWidthPx = null;
-  let networkPanelPinnedTopPx = null;
-  let networkPanelPinnedLeftPx = null;
   const WINDOW_ORDER = ["3h", "6h", "1d", "7d", "all"];
   const WINDOW_LABELS_FALLBACK = {
     "3h": "3 Hours",
@@ -11120,390 +10299,6 @@
   let prefersReducedMotion = !!reduceMotionQuery?.matches;
   let windowStepperKey = null;
   let windowStepperTimer = null;
-  let cachedNetworkPanelWidth = 0;
-  const NETWORK_PANEL_MARGIN_PX = 8;
-  const LONDON_NETWORK_MAP_GAP_PX = -72;
-  const NETWORK_PIN_ICON_OFF_SRC = "/images/UK-AQ_pin100_off.svg";
-  const NETWORK_PIN_ICON_ON_SRC = "/images/UK-AQ_pin100_on.svg";
-
-  function syncNetworkPanelPinIcon() {
-    if (!networkPanelPinIcon) return;
-    networkPanelPinIcon.src = networkPanelPinned ? NETWORK_PIN_ICON_ON_SRC : NETWORK_PIN_ICON_OFF_SRC;
-  }
-
-  function getNetworkInputs() {
-    if (!networkList) {
-      return [];
-    }
-    return Array.from(networkList.querySelectorAll("input[data-network]"));
-  }
-
-  function isPillVisible(pill) {
-    if (!pill || !document.body.contains(pill)) return false;
-    const panel = pill.closest(".tab-panel");
-    return panel ? !panel.hidden : true;
-  }
-
-  function getActivePill() {
-    // Only reuse the existing anchor if its tab is still active.
-    if (isPillVisible(networkPanelAnchorPill)) {
-      return networkPanelAnchorPill;
-    }
-    const visible = networkPills.find(isPillVisible);
-    return visible || networkPills[0] || null;
-  }
-
-  function isLondonRegionActive() {
-    return String(window.crMap?.getRegion?.() || "").toLowerCase() === "london";
-  }
-
-  function isCrTabActive() {
-    return window.mapTabController?.getActiveTab?.() === "cr";
-  }
-
-  function getMapCanvasWrapForPill(pill) {
-    if (!pill) return null;
-    const mapWrap = getMapWrapForPill(pill);
-    return mapWrap?.querySelector(".map-canvas-wrap") || null;
-  }
-
-  function getNetworkPanelWidth() {
-    if (!networkDropdownMenu) return 0;
-    if (Number.isFinite(networkPanelPinnedWidthPx) && networkPanelPinnedWidthPx > 0) {
-      return networkPanelPinnedWidthPx;
-    }
-    if (cachedNetworkPanelWidth > 0) return cachedNetworkPanelWidth;
-    const previousHidden = networkDropdownMenu.hidden;
-    const previousDisplay = networkDropdownMenu.style.display;
-    const previousVisibility = networkDropdownMenu.style.visibility;
-    const previousLeft = networkDropdownMenu.style.left;
-    const previousTop = networkDropdownMenu.style.top;
-    networkDropdownMenu.hidden = false;
-    networkDropdownMenu.style.display = "flex";
-    networkDropdownMenu.style.visibility = "hidden";
-    networkDropdownMenu.style.left = "-99999px";
-    networkDropdownMenu.style.top = "-99999px";
-    const measuredWidth = networkDropdownMenu.getBoundingClientRect().width;
-    networkDropdownMenu.style.display = previousDisplay;
-    networkDropdownMenu.style.visibility = previousVisibility;
-    networkDropdownMenu.style.left = previousLeft;
-    networkDropdownMenu.style.top = previousTop;
-    networkDropdownMenu.hidden = previousHidden;
-    cachedNetworkPanelWidth = Number.isFinite(measuredWidth) ? measuredWidth : 0;
-    return cachedNetworkPanelWidth;
-  }
-
-  function refreshNetworkPanelWidthCache() {
-    if (!networkDropdownMenu) return;
-    cachedNetworkPanelWidth = 0;
-    getNetworkPanelWidth();
-  }
-
-  function getMapWrapForPill(pill) {
-    return pill?.closest(".map-wrap") || null;
-  }
-
-  function getFloatingHostForPill(pill) {
-    return getMapWrapForPill(pill || getActivePill()) || document.body;
-  }
-
-  function getDockSlotForPill(pill) {
-    const mapWrap = getMapWrapForPill(pill || getActivePill());
-    if (!mapWrap) return null;
-    const dockSlot = mapWrap.querySelector("[data-networks-dock]");
-    return dockSlot || null;
-  }
-
-  function clearDockedNetworkPanelHosts() {
-    document.querySelectorAll(".map-wrap.has-docked-networks").forEach((wrap) => {
-      wrap.classList.remove("has-docked-networks");
-    });
-    document.querySelectorAll("[data-networks-dock]").forEach((slot) => {
-      slot.hidden = true;
-      slot.setAttribute("aria-hidden", "true");
-    });
-  }
-
-  function setNetworkPanelFloatingHost(pill = null) {
-    if (!networkDropdownMenu) return;
-    clearDockedNetworkPanelHosts();
-    const floatingHost = getFloatingHostForPill(pill);
-    if (networkDropdownMenu.parentElement !== floatingHost) {
-      floatingHost.appendChild(networkDropdownMenu);
-    }
-    networkDropdownMenu.classList.remove("is-docked");
-    networkDropdownMenu.classList.add("is-floating");
-    if (!networkPanelPinned) {
-      networkDropdownMenu.style.width = "";
-      networkDropdownMenu.style.top = "";
-      networkDropdownMenu.style.left = "";
-      networkDropdownMenu.style.right = "";
-    }
-  }
-
-  function applyPinnedFloatingPlacement() {
-    if (!networkDropdownMenu) return;
-    const anchorPill = networkPanelAnchorPill || getActivePill();
-    setNetworkPanelFloatingHost(anchorPill);
-    if (Number.isFinite(networkPanelPinnedWidthPx) && networkPanelPinnedWidthPx >= 0) {
-      networkDropdownMenu.style.width = `${networkPanelPinnedWidthPx}px`;
-    }
-    if (Number.isFinite(networkPanelPinnedTopPx)) {
-      networkDropdownMenu.style.top = `${networkPanelPinnedTopPx}px`;
-    }
-    if (Number.isFinite(networkPanelPinnedLeftPx)) {
-      networkDropdownMenu.style.left = `${networkPanelPinnedLeftPx}px`;
-    }
-    networkDropdownMenu.style.right = "auto";
-  }
-
-  function setNetworkPanelDockedHost(pill) {
-    if (!networkDropdownMenu) return null;
-    const dockSlot = getDockSlotForPill(pill);
-    if (!dockSlot) return null;
-    const mapWrap = dockSlot.closest(".map-wrap");
-    const alreadyDocked = (
-      networkDropdownMenu.parentElement === dockSlot
-      && networkDropdownMenu.classList.contains("is-docked")
-      && !dockSlot.hidden
-      && Boolean(mapWrap?.classList.contains("has-docked-networks"))
-    );
-    if (alreadyDocked) {
-      return dockSlot;
-    }
-    clearDockedNetworkPanelHosts();
-    if (mapWrap) {
-      mapWrap.classList.add("has-docked-networks");
-    }
-    dockSlot.hidden = false;
-    dockSlot.setAttribute("aria-hidden", "false");
-    if (networkDropdownMenu.parentElement !== dockSlot) {
-      dockSlot.appendChild(networkDropdownMenu);
-    }
-    networkDropdownMenu.classList.remove("is-floating");
-    networkDropdownMenu.classList.add("is-docked");
-    if (Number.isFinite(networkPanelPinnedWidthPx) && networkPanelPinnedWidthPx > 0) {
-      networkDropdownMenu.style.width = `${networkPanelPinnedWidthPx}px`;
-    } else {
-      networkDropdownMenu.style.width = "";
-    }
-    networkDropdownMenu.style.top = "";
-    networkDropdownMenu.style.left = "";
-    networkDropdownMenu.style.right = "";
-    return dockSlot;
-  }
-
-  function updateNetworkPanelSafeArea() {
-    if (!networkPanelPinned || !networkDropdownMenu || networkDropdownMenu.hidden) {
-      clearDockedNetworkPanelHosts();
-    } else {
-      applyPinnedFloatingPlacement();
-    }
-
-    let targetWrap = null;
-    let targetSafeRight = null;
-    const safeAreaEnabled = window.innerWidth > 900;
-    if (safeAreaEnabled && networkDropdownMenu && isCrTabActive() && isLondonRegionActive()) {
-      const anchorPill = networkPanelAnchorPill || getActivePill();
-      const wrap = getMapCanvasWrapForPill(anchorPill);
-      const pillRect = anchorPill?.getBoundingClientRect?.();
-      const panelWidth = getNetworkPanelWidth();
-      if (wrap && pillRect && panelWidth > 0) {
-        const wrapRect = wrap.getBoundingClientRect();
-        const margin = NETWORK_PANEL_MARGIN_PX;
-        let left = pillRect.right - panelWidth;
-        if (left < margin) left = margin;
-        if (left + panelWidth > window.innerWidth - margin) {
-          left = Math.max(margin, window.innerWidth - panelWidth - margin);
-        }
-        const safeRight = Math.max(0, wrapRect.right - left + LONDON_NETWORK_MAP_GAP_PX);
-        targetWrap = wrap;
-        targetSafeRight = `${Math.ceil(safeRight)}px`;
-      }
-    }
-
-    document.querySelectorAll(".map-canvas-wrap").forEach((wrap) => {
-      if (wrap === targetWrap && targetSafeRight) {
-        wrap.classList.add("has-networks-panel-safe-area");
-        wrap.style.setProperty("--networks-panel-safe-right", targetSafeRight);
-      } else {
-        wrap.classList.remove("has-networks-panel-safe-area");
-        wrap.style.removeProperty("--networks-panel-safe-right");
-      }
-    });
-  }
-
-  function positionNetworkPanel(pill) {
-    if (!networkDropdownMenu) return;
-    if (!pill) {
-      updateNetworkPanelSafeArea();
-      return;
-    }
-    if (networkPanelPinned) {
-      applyPinnedFloatingPlacement();
-      return;
-    }
-    setNetworkPanelFloatingHost(pill);
-    const floatingHost = getFloatingHostForPill(pill);
-    const rect = pill.getBoundingClientRect();
-    const panelRect = networkDropdownMenu.getBoundingClientRect();
-    // Anchor below the pill, right-aligned. Keep on-screen.
-    const hostRect = floatingHost.getBoundingClientRect();
-    let top = (rect.bottom - hostRect.top) + NETWORK_PANEL_MARGIN_PX;
-    let left = (rect.right - hostRect.left) - panelRect.width;
-    const hostWidth = floatingHost === document.body ? window.innerWidth : hostRect.width;
-    const hostHeight = floatingHost === document.body ? window.innerHeight : hostRect.height;
-    if (left < NETWORK_PANEL_MARGIN_PX) left = NETWORK_PANEL_MARGIN_PX;
-    if (left + panelRect.width > hostWidth - NETWORK_PANEL_MARGIN_PX) {
-      left = Math.max(NETWORK_PANEL_MARGIN_PX, hostWidth - panelRect.width - NETWORK_PANEL_MARGIN_PX);
-    }
-    if (top + panelRect.height > hostHeight - NETWORK_PANEL_MARGIN_PX) {
-      // Flip above the pill if it would overflow vertically.
-      const flippedTop = (rect.top - hostRect.top) - panelRect.height - NETWORK_PANEL_MARGIN_PX;
-      if (flippedTop >= NETWORK_PANEL_MARGIN_PX) top = flippedTop;
-    }
-    networkDropdownMenu.style.top = `${Math.max(NETWORK_PANEL_MARGIN_PX, top)}px`;
-    networkDropdownMenu.style.left = `${left}px`;
-    networkDropdownMenu.style.right = "auto";
-    updateNetworkPanelSafeArea();
-  }
-
-  function setNetworkDropdownOpen(isOpen, anchorPill) {
-    if (!networkDropdownMenu) {
-      return;
-    }
-    networkDropdownMenu.hidden = !isOpen;
-    if (isOpen) {
-      networkPanelAnchorPill = anchorPill || getActivePill();
-      // Position after layout so getBoundingClientRect on the panel is accurate.
-      window.requestAnimationFrame(() => positionNetworkPanel(networkPanelAnchorPill));
-    } else {
-      if (!networkPanelPinned) {
-        networkPanelAnchorPill = null;
-      }
-      setNetworkPanelFloatingHost();
-      updateNetworkPanelSafeArea();
-    }
-    networkPills.forEach((pill) => {
-      pill.setAttribute("aria-expanded", String(isOpen && pill === networkPanelAnchorPill));
-    });
-  }
-
-  function setNetworkPanelPinned(isPinned) {
-    networkPanelPinned = !!isPinned;
-    if (!networkPanelPinned) {
-      networkPanelPinnedWidthPx = null;
-      networkPanelPinnedTopPx = null;
-      networkPanelPinnedLeftPx = null;
-    } else if (networkDropdownMenu && !networkDropdownMenu.hidden) {
-      const needSnapshot =
-        !Number.isFinite(networkPanelPinnedWidthPx)
-        || !Number.isFinite(networkPanelPinnedTopPx)
-        || !Number.isFinite(networkPanelPinnedLeftPx);
-      if (needSnapshot) {
-        const rect = networkDropdownMenu.getBoundingClientRect();
-        const anchorPill = networkPanelAnchorPill || getActivePill();
-        const host = getFloatingHostForPill(anchorPill);
-        const hostRect = host.getBoundingClientRect();
-        const measuredWidth = rect.width;
-        if (Number.isFinite(measuredWidth) && measuredWidth > 0) networkPanelPinnedWidthPx = measuredWidth;
-        if (Number.isFinite(rect.top) && Number.isFinite(hostRect.top)) {
-          networkPanelPinnedTopPx = rect.top - hostRect.top;
-        }
-        if (Number.isFinite(rect.left) && Number.isFinite(hostRect.left)) {
-          networkPanelPinnedLeftPx = rect.left - hostRect.left;
-        }
-      }
-    }
-    if (networkPanelPin) {
-      networkPanelPin.setAttribute("aria-pressed", String(networkPanelPinned));
-      networkPanelPin.setAttribute(
-        "aria-label",
-        networkPanelPinned ? "Unpin networks panel" : "Pin networks panel",
-      );
-      networkPanelPin.setAttribute(
-        "title",
-        networkPanelPinned ? "Unpin networks panel" : "Pin networks panel",
-      );
-    }
-    syncNetworkPanelPinIcon();
-    if (networkDropdownMenu && !networkDropdownMenu.hidden) {
-      window.requestAnimationFrame(() => {
-        positionNetworkPanel(networkPanelAnchorPill || getActivePill());
-      });
-    } else if (!networkPanelPinned) {
-      setNetworkPanelFloatingHost();
-    }
-    updateNetworkPanelSafeArea();
-  }
-
-  syncNetworkPanelPinIcon();
-
-  function updateTotalSensorsSubtext(selected, total) {
-    const ids = ["top-total-sensors-subtext", "cr-top-total-sensors-subtext"];
-    ids.forEach((id) => {
-      const el = document.getElementById(id);
-      if (!el) return;
-      if (total === 0) {
-        el.textContent = "from selected networks";
-      } else if (selected === total) {
-        el.textContent = `from all ${total} networks`;
-      } else {
-        el.textContent = `from ${selected} of ${total} networks`;
-      }
-    });
-  }
-
-  function updateNetworkDropdownState() {
-    if (!networkDropdownCount) {
-      return;
-    }
-    const inputs = getNetworkInputs();
-    const total = inputs.length;
-    const selected = inputs.filter((input) => input.checked).length;
-    let pillText;
-    if (total === 0) {
-      pillText = "Networks: —";
-      networkDropdownCount.textContent = "0 / 0";
-    } else {
-      networkDropdownCount.textContent = `${selected} / ${total}`;
-      pillText = selected === total ? "Networks: All" : `Networks: ${selected} / ${total}`;
-    }
-    networkPills.forEach((pill) => {
-      const textEl = pill.querySelector(".networks-pill-text");
-      if (textEl) textEl.textContent = pillText;
-    });
-    updateTotalSensorsSubtext(selected, total);
-    if (networkDropdownMenu && networkDropdownMenu.hidden) {
-      // Keep London safe-area width in sync before first open so map does not jump on first click.
-      refreshNetworkPanelWidthCache();
-    }
-    // Re-position only in floating mode (count text width can shift anchor alignment).
-    if (networkDropdownMenu && !networkDropdownMenu.hidden) {
-      if (networkPanelPinned) {
-        updateNetworkPanelSafeArea();
-      } else {
-        window.requestAnimationFrame(() => positionNetworkPanel(networkPanelAnchorPill));
-      }
-    }
-  }
-
-  function getActiveMapForNetworkFilters() {
-    const activeTab = window.mapTabController?.getActiveTab?.();
-    return activeTab === "cr" ? window.crMap : window.ukMap;
-  }
-
-  let activeNetworkFilterRaf = null;
-  function scheduleActiveNetworkFilterApply() {
-    if (activeNetworkFilterRaf !== null) {
-      return;
-    }
-    activeNetworkFilterRaf = window.requestAnimationFrame(() => {
-      activeNetworkFilterRaf = null;
-      const activeMap = getActiveMapForNetworkFilters();
-      activeMap?.reapplyNetworkFilters?.();
-    });
-  }
 
   function normalizeWindowKey(value) {
     return WINDOW_ORDER.includes(value) ? value : "6h";
@@ -11641,62 +10436,20 @@
   // Region popover — open/close
   regionTrigger?.addEventListener("click", () => {
     const isOpen = !regionMenu.hidden;
-    setNetworkDropdownOpen(false);
+    window.UkAqHexMapNetworkController?.closePanel?.();
     regionMenu.hidden = isOpen;
     regionTrigger.classList.toggle("open", !isOpen);
     regionTrigger.setAttribute("aria-expanded", String(!isOpen));
     if (!isOpen) syncRegionActive();
   });
 
-  networkPills.forEach((pill) => {
-    pill.addEventListener("click", () => {
-      const isOpen = !(networkDropdownMenu?.hidden ?? true);
-      const sameAnchor = isOpen && networkPanelAnchorPill === pill;
-      regionMenu.hidden = true;
-      regionTrigger?.classList.remove("open");
-      regionTrigger?.setAttribute("aria-expanded", "false");
-      if (sameAnchor) {
-        setNetworkDropdownOpen(false);
-      } else {
-        setNetworkDropdownOpen(true, pill);
-      }
-      updateNetworkDropdownState();
-    });
-  });
-
-  networkPanelPin?.addEventListener("click", () => {
-    if (!networkPanelPinned && networkDropdownMenu && !networkDropdownMenu.hidden) {
-      const rect = networkDropdownMenu.getBoundingClientRect();
-      const anchorPill = networkPanelAnchorPill || getActivePill();
-      const host = getFloatingHostForPill(anchorPill);
-      const hostRect = host.getBoundingClientRect();
-      const measuredWidth = rect.width;
-      if (Number.isFinite(measuredWidth) && measuredWidth > 0) networkPanelPinnedWidthPx = measuredWidth;
-      const inlineTop = Number.parseFloat(networkDropdownMenu.style.top || "");
-      const inlineLeft = Number.parseFloat(networkDropdownMenu.style.left || "");
-      networkPanelPinnedTopPx = Number.isFinite(inlineTop) && inlineTop >= 0
-        ? inlineTop
-        : (Number.isFinite(rect.top) && Number.isFinite(hostRect.top) ? rect.top - hostRect.top : null);
-      networkPanelPinnedLeftPx = Number.isFinite(inlineLeft) && inlineLeft >= 0
-        ? inlineLeft
-        : (Number.isFinite(rect.left) && Number.isFinite(hostRect.left) ? rect.left - hostRect.left : null);
-    }
-    setNetworkPanelPinned(!networkPanelPinned);
-  });
-
-  // Close on outside click (pin-aware for networks panel)
+  // Close the region popover on outside click.
   document.addEventListener("mousedown", (e) => {
     if (popoverWrap && !popoverWrap.contains(e.target)) {
       regionMenu.hidden = true;
       regionTrigger?.classList.remove("open");
       regionTrigger?.setAttribute("aria-expanded", "false");
     }
-    if (networkPanelPinned) return;
-    if (!networkDropdownMenu || networkDropdownMenu.hidden) return;
-    const clickedPill = networkPills.some((pill) => pill.contains(e.target));
-    if (clickedPill) return;
-    if (networkDropdownMenu.contains(e.target)) return;
-    setNetworkDropdownOpen(false);
   });
 
   document.addEventListener("keydown", (event) => {
@@ -11706,23 +10459,7 @@
     regionMenu.hidden = true;
     regionTrigger?.classList.remove("open");
     regionTrigger?.setAttribute("aria-expanded", "false");
-    if (!networkPanelPinned) {
-      setNetworkDropdownOpen(false);
-    }
   });
-
-  // Re-position the floating panel on viewport resize/scroll while open
-  function repositionIfOpen() {
-    if (!networkDropdownMenu || networkDropdownMenu.hidden) return;
-    if (networkPanelPinned) return;
-    positionNetworkPanel(networkPanelAnchorPill || getActivePill());
-  }
-  window.addEventListener("resize", () => {
-    cachedNetworkPanelWidth = 0;
-    repositionIfOpen();
-    updateNetworkPanelSafeArea();
-  });
-  window.addEventListener("scroll", repositionIfOpen, { passive: true });
 
   // Region item clicks
   regionMenu?.querySelectorAll("[data-region]").forEach((item) => {
@@ -11734,41 +10471,7 @@
       if (regionLabel) regionLabel.textContent = region;
       syncRegionActive(region);
       window.crMap?.setRegion(region, { updateUrl: true });
-      window.requestAnimationFrame(updateNetworkPanelSafeArea);
     });
-  });
-
-  window.addEventListener("crregionchange", () => {
-    window.requestAnimationFrame(updateNetworkPanelSafeArea);
-  });
-
-  networkList?.addEventListener("change", () => {
-    updateNetworkDropdownState();
-    scheduleActiveNetworkFilterApply();
-  });
-
-  networkSelectAll?.addEventListener("click", () => {
-    window.requestAnimationFrame(updateNetworkDropdownState);
-    scheduleActiveNetworkFilterApply();
-  });
-
-  networkDeselectAll?.addEventListener("click", () => {
-    window.requestAnimationFrame(updateNetworkDropdownState);
-    scheduleActiveNetworkFilterApply();
-  });
-
-  if (networkList && typeof MutationObserver !== "undefined") {
-    const observer = new MutationObserver(() => {
-      updateNetworkDropdownState();
-    });
-    observer.observe(networkList, {
-      childList: true,
-      subtree: true,
-    });
-  }
-
-  window.addEventListener("networkselectionchange", () => {
-    updateNetworkDropdownState();
   });
 
   function syncRegionActive(active) {
@@ -11814,18 +10517,7 @@
     toolbarTabUk?.classList.toggle("active", isUk);
     toolbarTabCr?.classList.toggle("active", !isUk);
     if (regionSection) regionSection.classList.toggle("visible", !isUk);
-    // Pinned panel persists across tab swaps; re-anchor it to the now-visible pill.
-    // Unpinned panel closes (existing behaviour).
-    if (networkPanelPinned && networkDropdownMenu && !networkDropdownMenu.hidden) {
-      const nextPill = getActivePill();
-      networkPanelAnchorPill = nextPill;
-      networkPills.forEach((pill) => {
-        pill.setAttribute("aria-expanded", String(pill === nextPill));
-      });
-      window.requestAnimationFrame(() => positionNetworkPanel(nextPill));
-    } else {
-      setNetworkDropdownOpen(false);
-    }
+    window.UkAqHexMapNetworkController?.syncPanelForActiveScope?.();
     relocateStatusRefreshForTab(tabKey);
     if (!isUk && regionLabel) {
       const region = window.crMap?.getRegion?.();
@@ -11834,15 +10526,11 @@
         syncRegionActive(region);
       }
     }
-    updateNetworkDropdownState();
-    window.requestAnimationFrame(updateNetworkPanelSafeArea);
   };
 
   // Sync toolbar to the tab state that was already set before this script ran
   const initialTabKey = tabUk?.getAttribute("aria-selected") === "true" ? "uk" : "cr";
   window.syncToolbar(initialTabKey);
-  updateNetworkDropdownState();
-  window.requestAnimationFrame(updateNetworkPanelSafeArea);
   renderWindowStepper({ force: true });
 })();
     </script>

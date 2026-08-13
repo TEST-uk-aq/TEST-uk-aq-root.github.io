@@ -1,7 +1,5 @@
 // Page-lifetime Hex Map search controller for UK and countries/regions.
-import coordinator from "./hex-map-coordinator.js";
-
-function initHexMapSearch(root) {
+(function (root) {
   "use strict";
 
   function syncActiveTabInput(tabKey) {
@@ -218,7 +216,7 @@ function initHexMapSearch(root) {
     if (window.mapTabController?.getActiveTab) {
       return window.mapTabController.getActiveTab();
     }
-    return coordinator?.getActiveMap?.() || "uk";
+    return window.UkAqHexMapCoordinator?.getActiveMap?.() || "uk";
   }
 
   function switchToUkTab() {
@@ -1158,7 +1156,7 @@ function initHexMapSearch(root) {
   }
 
   let controller = null;
-  return Object.freeze({
+  root.UkAqHexMapSearch = Object.freeze({
     mount() {
       if (!controller) controller = createHexMapSearchController();
       return controller;
@@ -1167,7 +1165,4 @@ function initHexMapSearch(root) {
     preloadInactiveMap,
     get controller() { return controller; },
   });
-}
-
-const search = initHexMapSearch(globalThis);
-export default search;
+})(typeof globalThis !== "undefined" ? globalThis : this);

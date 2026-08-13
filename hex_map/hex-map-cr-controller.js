@@ -1,15 +1,21 @@
-(function initHexMapCrController() {
+import pollutantDomain from "../shared/domain/pollutants-module.js";
+import networkDomain from "../shared/domain/networks-module.js";
+import coordinator from "./hex-map-coordinator.js";
+import networkController from "./hex-map-network-controller.js";
+import urlState from "./hex-map-url-state.js";
+import summary from "./hex-map-summary.js";
+import scrollAffordances from "./hex-map-scroll-affordances.js";
+import "./hex-map-station-chart-adapter-module.js";
+import search from "./hex-map-search.js";
+import ukController from "./hex-map-uk-controller.js";
+
+function initHexMapCrController() {
   if (typeof window === "undefined" || !window.document || !document.body.classList.contains("hex-map-page")) return;
 
   const root = document.getElementById("tab-panel-cr");
   if (!root) {
     return;
   }
-  const pollutantDomain = window.UkAqPollutants;
-  const networkDomain = window.UkAqNetworks;
-  const networkController = window.UkAqHexMapNetworkController;
-  const coordinator = window.UkAqHexMapCoordinator;
-  const urlState = window.UkAqHexMapUrlState;
   if (!pollutantDomain?.definitions || !networkDomain?.resolveCode || !networkController?.loadCatalog || !coordinator?.registerMap || !urlState?.getInitialCrRegion) {
     throw new Error("UK AQ shared domain/data modules must load before the C&R Hex Map.");
   }
@@ -388,7 +394,7 @@
       const SENSOR_TABLE_HEADER_HEIGHT = 44;
       const SENSOR_PANEL_ROW_HEIGHT = 46;
       const SENSOR_PANEL_MAX_VISIBLE_ROWS = 4;
-      const detailScrollAffordances = window.UkAqHexMapScrollAffordances?.attachSensorTable?.(detailsTableWrap, {
+      const detailScrollAffordances = scrollAffordances?.attachSensorTable?.(detailsTableWrap, {
         contentEl: detailsTableBody,
         isScrollbarHidden: () => !detailsTableWrap?.classList.contains("is-scroll-forced"),
         trackOffsetTop: SENSOR_TABLE_HEADER_HEIGHT,
@@ -1848,8 +1854,8 @@
           summaryHighestConnector.textContent = "-";
           summaryHighestName.textContent = `No ${pollutantLabel} data`;
           // ── Top summary boxes (no-data state) ──
-          if (window.UkAqHexMapSummary?.updateSummary) {
-            window.UkAqHexMapSummary.updateSummary({
+          if (summary?.updateSummary) {
+            summary.updateSummary({
               totalSensors: totalStations,
               pconCovered: 0,
               pconTotal: pconCodes.size,
@@ -1895,7 +1901,7 @@
         summaryHighestName.textContent = resolveStationName(highest.row);
 
         // ── Top summary boxes ──
-        if (window.UkAqHexMapSummary?.updateSummary) {
+        if (summary?.updateSummary) {
           const capValue = getLegendCapValue();
           const coveredPcons = new Set(rowsWithPcon.map((row) => resolvePconCode(row)).filter(Boolean));
           let newest = null, oldest = null;
@@ -1908,7 +1914,7 @@
           });
           const palette = HEAT_STOPS.map((n, i) => resolveCssColor(n, HEAT_STOP_FALLBACKS[i]));
           const highestColor = d3.interpolateRgbBasis(palette)(mapValueToT(highest.value, capValue));
-          window.UkAqHexMapSummary.updateSummary({
+          summary.updateSummary({
             totalSensors: totalStations,
             pconCovered: coveredPcons.size,
             pconTotal: pconCodes.size,
@@ -2013,7 +2019,7 @@
         selectedCell = cell || null;
         selectedAreaCode = resolveCellAreaCode(cell);
         if (mapCanvasWrap) mapCanvasWrap.classList.toggle("hex-selected", !!cell);
-        window.UkAqHexMapUkController?.clearPinnedTooltip?.();
+        ukController?.clearPinnedTooltip?.();
         if (tooltip) {
           tooltip.classList.remove("visible");
         }
@@ -4462,7 +4468,6 @@
           return colorScale(value);
         },
 	      });
-      window.UkAqHexMapCrController = crController;
       window.crMap = Object.freeze(Object.fromEntries(
         Object.keys(crController).map((methodName) => [
           methodName,
@@ -4479,9 +4484,13 @@
         activate: () => {
           crController.render();
           crController.restoreNetworks();
-          window.UkAqHexMapSearch?.preloadInactiveMap?.("cr");
+          search?.preloadInactiveMap?.("cr");
           crController.markBootstrapReady();
         },
       });
       networkController.registerScope("cr", () => applyNetworkFilters());
-})();
+      return crController;
+}
+
+const crController = initHexMapCrController();
+export default crController;

@@ -1,10 +1,11 @@
 // Authoritative Hex Map application URL and browser-history adapter.
-import pollutantDomain from "../shared/domain/pollutants-module.js";
-
-function initHexMapUrlState(root) {
+(function initHexMapUrlState(root) {
   "use strict";
 
   if (!root?.document || !root.document.body.classList.contains("hex-map-page")) return;
+  if (root.UkAqHexMapUrlState) return;
+
+  const pollutantDomain = root.UkAqPollutants;
   if (!pollutantDomain?.normalize) {
     throw new Error("UkAqPollutants must load before the Hex Map URL-state adapter.");
   }
@@ -71,7 +72,7 @@ function initHexMapUrlState(root) {
   }
 
   function crController() {
-    const value = root.crMap;
+    const value = root.UkAqHexMapCrController || root.crMap;
     if (!value?.setRegion) {
       throw new Error("C&R Hex Map controller is unavailable.");
     }
@@ -203,14 +204,11 @@ function initHexMapUrlState(root) {
     bootstrap,
   });
 
+  root.UkAqHexMapUrlState = api;
   root.mapTabController = Object.freeze({
     getActiveTab: () => api.getActiveTab(),
     switchToUk: (options) => api.switchToUk(options),
     switchToCr: (region, options) => api.switchToCr(region, options),
     setCrRegion: (region, options) => api.setCrRegion(region, options),
   });
-  return api;
-}
-
-const urlState = initHexMapUrlState(globalThis);
-export default urlState;
+})(typeof globalThis !== "undefined" ? globalThis : this);

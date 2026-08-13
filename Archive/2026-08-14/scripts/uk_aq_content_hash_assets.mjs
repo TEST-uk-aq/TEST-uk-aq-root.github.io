@@ -17,11 +17,6 @@ const HTML_TAG_PATTERN = /<(script|link)\b[^>]*>/gi;
 const SIDEBAR_PATH = "sidebar.js";
 const SITE_FOOTER_PATH = "site-footer.css";
 const SIDEBAR_FOOTER_PATTERN = /(\blink\.href\s*=\s*`\$\{location\.origin\})(\/site-footer\.css(?:\?[^`#]*)?(?:#[^`]*)?)(`)/g;
-const STATIC_IMPORT_PATTERNS = Object.freeze([
-  /\bimport\s+(?:[\w*$\s{},]+\s+from\s+)?(["'])([^"']+)\1/g,
-  /\bexport\s+(?:\*|\{[\s\S]*?\})\s+from\s+(["'])([^"']+)\1/g,
-]);
-const DYNAMIC_IMPORT_PATTERN = /\bimport\s*\(/g;
 
 async function main() {
   const args = nodeProcess.argv.slice(2);
@@ -51,7 +46,6 @@ async function main() {
   }
 
   await addRuntimeDependencies(targetRoot, assets);
-  await addModuleDependencies(targetRoot, assets);
   await finaliseAssets(targetRoot, assets);
 
   let rewrittenReferenceCount = 0;
@@ -135,11 +129,7 @@ async function discoverHtmlAssetReferences(targetRoot, htmlPath, html) {
       const source = getQuotedAttribute(tag, "src");
       if (!source) continue;
       const reference = await resolveHtmlAssetReference(targetRoot, htmlPath, source.value, "js");
-      if (reference) {
-        const type = getQuotedAttribute(tag, "type");
-        reference.module = type?.value.toLowerCase() === "module";
-        references.push(reference);
-      }
+      if (reference) references.push(reference);
       continue;
     }
 
@@ -250,15 +240,12 @@ function registerAsset(assets, reference) {
   if (existing && existing.type !== reference.type) {
     throw new Error(`Canonical public asset has conflicting types: ${reference.path}`);
   }
-  if (existing && reference.module === true) existing.module = true;
   if (!existing) {
     assets.set(reference.path, {
       path: reference.path,
       type: reference.type,
-      module: reference.module === true,
       dependencies: new Set(),
       runtimeRules: [],
-      moduleImports: new Map(),
       hash: null,
     });
   }
@@ -285,50 +272,6 @@ async function addRuntimeDependencies(targetRoot, assets) {
     childPath: childReference.path,
     pattern: SIDEBAR_FOOTER_PATTERN,
   });
-}
-
-async function addModuleDependencies(targetRoot, assets) {
-  const pending = [...assets.values()].filter((asset) => asset.module);
-  const inspected = new Set();
-
-  while (pending.length) {
-    const asset = pending.shift();
-    if (!asset || inspected.has(asset.path)) continue;
-    inspected.add(asset.path);
-
-    const source = await readUtf8File(targetRoot, asset.path);
-    if (DYNAMIC_IMPORT_PATTERN.test(source)) {
-      throw new Error(`Dynamic import is unsupported in active module asset: ${asset.path}`);
-    }
-    DYNAMIC_IMPORT_PATTERN.lastIndex = 0;
-
-    for (const rawSpecifier of collectStaticImportSpecifiers(source)) {
-      const reference = await resolveHtmlAssetReference(targetRoot, asset.path, rawSpecifier, "js");
-      if (!reference) {
-        throw new Error(`External or bare static import is unsupported in active module asset ${asset.path}: ${rawSpecifier}`);
-      }
-      reference.module = true;
-      registerAsset(assets, reference);
-      const dependency = assets.get(reference.path);
-      asset.dependencies.add(reference.path);
-      asset.moduleImports.set(rawSpecifier, reference.path);
-      if (!inspected.has(reference.path)) pending.push(dependency);
-    }
-  }
-}
-
-function collectStaticImportSpecifiers(source) {
-  const results = [];
-  const seen = new Set();
-  for (const pattern of STATIC_IMPORT_PATTERNS) {
-    for (const match of source.matchAll(new RegExp(pattern.source, pattern.flags))) {
-      const specifier = String(match[2] || "").trim();
-      if (!specifier || seen.has(specifier)) continue;
-      seen.add(specifier);
-      results.push(specifier);
-    }
-  }
-  return results;
 }
 
 async function finaliseAssets(targetRoot, assets) {
@@ -371,14 +314,11 @@ async function finaliseAssets(targetRoot, assets) {
           throw new Error(`Runtime dependency rewrite count changed for ${asset.path}: ${replacementCount}`);
         }
       }
-      bytes = Buffer.from(source, "utf8");
-    }
-    if (asset.moduleImports.size) {
-      bytes = Buffer.from(rewriteModuleImports(bytes.toString("utf8"), asset, assets), "utf8");
-    }
-    const currentBytes = await fs.readFile(absolutePath);
-    if (!bytes.equals(currentBytes)) {
-      await fs.writeFile(absolutePath, bytes);
+      const updatedBytes = Buffer.from(source, "utf8");
+      if (!updatedBytes.equals(bytes)) {
+        await fs.writeFile(absolutePath, updatedBytes);
+      }
+      bytes = updatedBytes;
     }
 
     asset.hash = contentHash(bytes);
@@ -389,30 +329,6 @@ async function finaliseAssets(targetRoot, assets) {
   for (const assetPath of [...assets.keys()].sort()) {
     await finalise(assetPath);
   }
-}
-
-function rewriteModuleImports(source, asset, assets) {
-  let rewritten = source;
-  for (const [rawSpecifier, childPath] of asset.moduleImports) {
-    const child = assets.get(childPath);
-    if (!child?.hash) {
-      throw new Error(`Module dependency was not hashed before parent ${asset.path}: ${childPath}`);
-    }
-    const versionedSpecifier = withContentHash(rawSpecifier, child.hash);
-    let replacementCount = 0;
-    for (const pattern of STATIC_IMPORT_PATTERNS) {
-      rewritten = rewritten.replace(new RegExp(pattern.source, pattern.flags), (match, quote, specifier) => {
-        if (specifier !== rawSpecifier) return match;
-        replacementCount += 1;
-        const specifierOffset = match.lastIndexOf(specifier);
-        return `${match.slice(0, specifierOffset)}${versionedSpecifier}${match.slice(specifierOffset + specifier.length)}`;
-      });
-    }
-    if (!replacementCount) {
-      throw new Error(`Module dependency rewrite count changed for ${asset.path}: ${rawSpecifier}`);
-    }
-  }
-  return rewritten;
 }
 
 async function rewriteHtmlAssetReferences(targetRoot, htmlPath, html, assets) {

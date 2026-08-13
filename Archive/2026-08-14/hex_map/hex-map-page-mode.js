@@ -1,5 +1,5 @@
 // Authoritative Hex Map page presentation mode: normal map or station chart.
-function initHexMapPageMode(root) {
+(function initHexMapPageMode(root) {
   "use strict";
 
   if (!root?.document || !root.document.body.classList.contains("hex-map-page")) return;
@@ -64,7 +64,4 @@ function initHexMapPageMode(root) {
 
   root.UkAqHexMapPageMode = api;
   render();
-}
-
-initHexMapPageMode(globalThis);
-export default globalThis.UkAqHexMapPageMode;
+})(typeof globalThis !== "undefined" ? globalThis : this);

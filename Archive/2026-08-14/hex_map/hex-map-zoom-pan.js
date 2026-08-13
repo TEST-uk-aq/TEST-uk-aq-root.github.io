@@ -1,4 +1,4 @@
-function initHexMapZoomPan(root) {
+(function(root) {
   "use strict";
 
   const MIN_SCALE = 0.8;
@@ -237,7 +237,7 @@ function initHexMapZoomPan(root) {
   // The Hex Map page mounts once; this controller and its listeners live for the document lifetime.
   let controller = null;
 
-  return Object.freeze({
+  root.UkAqHexMapZoomPan = Object.freeze({
     mount() {
       if (!controller) {
         controller = createHexMapZoomPanController();
@@ -245,7 +245,4 @@ function initHexMapZoomPan(root) {
       return controller;
     },
   });
-}
-
-const zoomPan = initHexMapZoomPan(globalThis);
-export default zoomPan;
+})(typeof window !== "undefined" ? window : globalThis);

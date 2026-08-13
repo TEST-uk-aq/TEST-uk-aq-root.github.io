@@ -1,4 +1,4 @@
-function initHexMapScrollAffordances(root) {
+(function(root) {
   "use strict";
 
   const attachedSensorTables = new WeakMap();
@@ -306,10 +306,7 @@ function initHexMapScrollAffordances(root) {
   }
 
   // Each Hex sensor table attaches once and keeps its affordances for the document lifetime.
-  return Object.freeze({
+  root.UkAqHexMapScrollAffordances = Object.freeze({
     attachSensorTable,
   });
-}
-
-const scrollAffordances = initHexMapScrollAffordances(globalThis);
-export default scrollAffordances;
+})(typeof window !== "undefined" ? window : globalThis);

@@ -1,14 +1,11 @@
 // Sensors page-owned search, table, filtering, and station-selection UI.
-import pollutantDomain from "../shared/domain/pollutants-module.js";
-import adapterModule from "./sensor-station-chart-adapter-module.js";
-
-let sensorsPage = null;
-
-function initSensorsPage(root) {
+(function (root) {
   "use strict";
 
   function installSensorsPage() {
-    if (!root.document?.body?.classList.contains("sensors-page") || sensorsPage) return null;
+    if (!root.document?.body?.classList.contains("sensors-page") || root.ukAqSensorsPage) return null;
+    const pollutantDomain = root.UkAqPollutants;
+    const adapterModule = root.UkAqSensorStationChartAdapter;
     if (!pollutantDomain?.normalizeSupportedLabel || !adapterModule?.createSensorStationChartAdapter) {
       throw new Error("Sensors page dependencies are missing");
     }
@@ -308,7 +305,7 @@ function initSensorsPage(root) {
     }
 
     const api = Object.freeze({ mount, loadData, runStationSearch, chartAdapter });
-    sensorsPage = api;
+    root.ukAqSensorsPage = api;
     void mount();
     return api;
   }
@@ -318,7 +315,4 @@ function initSensorsPage(root) {
   } else if (root.document) {
     queueMicrotask(installSensorsPage);
   }
-}
-
-initSensorsPage(globalThis);
-export { initSensorsPage };
+})(typeof globalThis !== "undefined" ? globalThis : this);

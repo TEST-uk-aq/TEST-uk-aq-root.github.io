@@ -1,17 +1,12 @@
-import pollutantDomain from "../shared/domain/pollutants-module.js";
-import networkDomain from "../shared/domain/networks-module.js";
-import coordinator from "./hex-map-coordinator.js";
-import networkController from "./hex-map-network-controller.js";
-import summary from "./hex-map-summary.js";
-import scrollAffordances from "./hex-map-scroll-affordances.js";
-import "./hex-map-station-chart-adapter-module.js";
-import search from "./hex-map-search.js";
-
-function initHexMapUkController(root) {
+(function initHexMapUkController(root) {
       "use strict";
 
       if (!root?.document || !document.body.classList.contains("hex-map-page")) return;
 
+      const pollutantDomain = root.UkAqPollutants;
+      const networkDomain = root.UkAqNetworks;
+      const networkController = root.UkAqHexMapNetworkController;
+      const coordinator = root.UkAqHexMapCoordinator;
       if (!pollutantDomain?.definitions || !networkDomain?.resolveCode || !networkController?.loadCatalog || !coordinator?.registerMap) {
         throw new Error("UK AQ shared domain/data modules must load before the Hex Map.");
       }
@@ -321,7 +316,7 @@ function initHexMapUkController(root) {
       const SENSOR_TABLE_HEADER_HEIGHT = 44;
       const SENSOR_PANEL_ROW_HEIGHT = 46;
       const SENSOR_PANEL_MAX_VISIBLE_ROWS = 4;
-      const detailScrollAffordances = scrollAffordances?.attachSensorTable?.(detailsTableWrap, {
+      const detailScrollAffordances = window.UkAqHexMapScrollAffordances?.attachSensorTable?.(detailsTableWrap, {
         contentEl: detailsTableBody,
         isScrollbarHidden: () => !detailsTableWrap?.classList.contains("is-scroll-forced"),
         trackOffsetTop: SENSOR_TABLE_HEADER_HEIGHT,
@@ -2115,7 +2110,7 @@ function initHexMapUkController(root) {
           sensorShareBars.render(summary.shareData || []);
         }
         // ── Top summary boxes ──
-        if (summary?.updateSummary) {
+        if (window.UkAqHexMapSummary?.updateSummary) {
           const pollutantLabel = getPollutantLabel(activePollutant);
           const pollutantUnits = getPollutantUnits(activePollutant);
           const capValue = getLegendCapValue();
@@ -2138,7 +2133,7 @@ function initHexMapUkController(root) {
             highestSensor = resolveStationName(h.row);
             highestNetwork = resolvePrimaryNetworkLabel(h.row) || "Unknown network";
           }
-          summary.updateSummary({
+          window.UkAqHexMapSummary.updateSummary({
             totalSensors: totalSensorsForTopSummary,
             pconCovered: summary.pconCovered,
             pconTotal: summary.pconTotal,
@@ -4159,6 +4154,7 @@ function initHexMapUkController(root) {
           return colorScale(value);
         },
       });
+      root.UkAqHexMapUkController = ukController;
       root.ukMap = Object.freeze(Object.fromEntries(
         Object.keys(ukController)
           .filter((methodName) => methodName !== "clearPinnedTooltip")
@@ -4177,13 +4173,9 @@ function initHexMapUkController(root) {
         activate: () => {
           ukController.render();
           ukController.restoreNetworks();
-          search?.preloadInactiveMap?.("uk");
+          root.UkAqHexMapSearch?.preloadInactiveMap?.("uk");
           ukController.markBootstrapReady();
         },
       });
       networkController.registerScope("uk", () => applyNetworkFilters());
-      return ukController;
-}
-
-const ukController = initHexMapUkController(globalThis);
-export default ukController;
+})(typeof window !== "undefined" ? window : globalThis);

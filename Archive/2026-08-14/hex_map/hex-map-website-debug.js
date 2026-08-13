@@ -1,5 +1,5 @@
 // Hex Map site-wide diagnostic upload support; intentionally separate from station-chart diagnostics.
-function initHexMapWebsiteDebug(root) {
+(function (root) {
   "use strict";
   if (root.__ukAqWebsiteDebugInitialised) return;
   root.__ukAqWebsiteDebugInitialised = true;
@@ -582,7 +582,4 @@ function initHexMapWebsiteDebug(root) {
     parseBodyJson: summarizeDebugBodyJson,
     preparePayloadForUpload: prepareWebsiteDebugPayloadForUpload,
   };
-}
-
-initHexMapWebsiteDebug(globalThis);
-export default globalThis.ukAqWebsiteDebugLog;
+})(typeof globalThis !== "undefined" ? globalThis : this);

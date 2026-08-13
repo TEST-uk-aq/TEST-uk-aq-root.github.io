@@ -7,7 +7,6 @@ import historyLoaderModule from "../shared/station-chart/station-history-loader.
 
 const page = fs.readFileSync(new URL("../hex_map/index.html", import.meta.url), "utf8");
 const adapter = fs.readFileSync(new URL("../hex_map/hex-map-station-chart-adapter.js", import.meta.url), "utf8");
-const networkControls = fs.readFileSync(new URL("../hex_map/hex-map-network-controls.js", import.meta.url), "utf8");
 const controllerSource = fs.readFileSync(new URL("../shared/station-chart/station-chart-controller.js", import.meta.url), "utf8");
 const rendererSource = fs.readFileSync(new URL("../shared/station-chart/station-chart-renderer.js", import.meta.url), "utf8");
 const calculatedClientSource = fs.readFileSync(new URL("../shared/station-chart/station-history-client.js", import.meta.url), "utf8");
@@ -25,10 +24,10 @@ for (const script of [
   "station-chart-renderer.js",
   "station-chart-controller.js",
 ]) {
-  assert.match(page, new RegExp(`<script src="/shared/station-chart/${script.replaceAll(".", "\\.")}"></script>`));
+  assert.doesNotMatch(page, new RegExp(`<script src="/shared/station-chart/${script.replaceAll(".", "\\.")}"></script>`));
 }
 assert.match(page, /<link rel="stylesheet" href="\/shared\/station-chart\/station-chart\.css">/);
-assert.match(page, /<script src="\/hex_map\/hex-map-website-debug\.js"><\/script>/);
+assert.match(page, /<script type="module" src="\/hex_map\/hex-map-bootstrap\.js"><\/script>/);
 assert.doesNotMatch(page, /async function loadStationHistoryChartData|async function loadLegacyChartData|function renderAqiBands|function updateChart\(|const stationHistoryCache|window\.hexChartMode\s*=/);
 
 for (const source of [calculatedClientSource, compatibilityClientSource]) {
@@ -53,8 +52,6 @@ assert.match(rendererSource, /const endY = observationDomain\(state\)/);
 assert.match(rendererSource, /startY\[0\] \+ \(endY\[0\] - startY\[0\]\) \* eased/);
 assert.match(rendererSource, /pendingDomainState = retainNewestState/);
 
-assert.match(networkControls, /installNetworkScopeDropdownGuard/);
-assert.match(networkControls, /guardedEnsureSearchDataLoaded/);
 assert.doesNotMatch(adapter, /installNetworkScopeDropdownGuard|guardedEnsureSearchDataLoaded/);
 assert.doesNotMatch(adapter, /\bd3\.|fetchStation|fetchAqi|stationHistoryCache|aqiBandCache|seriesDataCache/);
 

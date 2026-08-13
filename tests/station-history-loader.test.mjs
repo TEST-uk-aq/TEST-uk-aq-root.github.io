@@ -497,10 +497,10 @@ for (const script of [
   "station-chart-controller.js",
   "pollutant-context-controller.js",
 ]) {
-  assert.match(page, new RegExp(`<script src="/shared/station-chart/${script.replaceAll(".", "\\.")}"></script>`));
+  assert.doesNotMatch(page, new RegExp(`<script src="/shared/station-chart/${script.replaceAll(".", "\\.")}"></script>`));
 }
-assert.match(page, /<script src="\/sensors\/sensor-station-chart-adapter\.js"><\/script>/);
-assert.match(page, /<script src="\/sensors\/sensors-page\.js"><\/script>/);
+assert.match(page, /<script type="module" src="\/sensors\/sensors-bootstrap\.js"><\/script>/);
+assert.doesNotMatch(page, /<script src="\/sensors\/(?:sensor-station-chart-adapter|sensors-page)\.js"><\/script>/);
 assert.match(page, /<link rel="stylesheet" href="\/shared\/station-chart\/station-chart\.css">/);
 assert.doesNotMatch(page, /function loadSeriesData|function renderAqiBands|stationHistoryCacheByKey|chartLoadingSvg|d3\.select/,
   "the Sensors inline chart architecture is no longer active");

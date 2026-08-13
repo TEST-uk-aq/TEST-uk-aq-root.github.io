@@ -1,15 +1,12 @@
-import coordinator from "./hex-map-coordinator.js";
-import networkController from "./hex-map-network-controller.js";
-import urlState from "./hex-map-url-state.js";
-import crController from "./hex-map-cr-controller.js";
-import search from "./hex-map-search.js";
-
-function initHexMapToolbarController(root) {
+(function initHexMapToolbarController(root) {
   "use strict";
 
   if (!root?.document || !root.document.body.classList.contains("hex-map-page")) return;
   if (root.UkAqHexMapToolbarController) return;
 
+  const coordinator = root.UkAqHexMapCoordinator;
+  const urlState = root.UkAqHexMapUrlState;
+  const networkController = root.UkAqHexMapNetworkController;
   if (!coordinator?.getActiveMap
       || !coordinator?.getMapSettings
       || !coordinator?.registerActiveMapPresenter
@@ -165,6 +162,7 @@ function initHexMapToolbarController(root) {
   }
 
   function getCurrentRegion() {
+    const crController = root.UkAqHexMapCrController || root.crMap;
     return crController?.getRegion?.() || null;
   }
 
@@ -208,7 +206,7 @@ function initHexMapToolbarController(root) {
   function presentActiveMap(mapKey) {
     if (mapKey !== "uk" && mapKey !== "cr") return;
     const isUk = mapKey === "uk";
-    search?.syncActiveTabInput?.(mapKey);
+    root.UkAqHexMapSearch?.syncActiveTabInput?.(mapKey);
     tabUk?.setAttribute("aria-selected", isUk ? "true" : "false");
     tabCr?.setAttribute("aria-selected", isUk ? "false" : "true");
 
@@ -327,10 +325,4 @@ function initHexMapToolbarController(root) {
   });
 
   root.UkAqHexMapToolbarController = api;
-}
-
-initHexMapToolbarController(globalThis);
-if (!crController || !search || !globalThis.UkAqHexMapToolbarController?.mount) {
-  throw new Error("Hex Map toolbar controller failed to initialise.");
-}
-export default globalThis.UkAqHexMapToolbarController;
+})(typeof globalThis !== "undefined" ? globalThis : this);

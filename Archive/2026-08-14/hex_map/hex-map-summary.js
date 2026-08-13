@@ -1,5 +1,5 @@
 // Hex Map-owned presentation for the UK and CR top summary cards.
-function initHexMapSummary(root) {
+(function (root) {
   "use strict";
 
   function formatTimestamp(value) {
@@ -81,8 +81,5 @@ function initHexMapSummary(root) {
     if (oldestElement) oldestElement.textContent = formatTimestamp(data.oldestReadingISO);
   }
 
-  return Object.freeze({ updateSummary });
-}
-
-const summary = initHexMapSummary(globalThis);
-export default summary;
+  root.UkAqHexMapSummary = Object.freeze({ updateSummary });
+})(typeof globalThis !== "undefined" ? globalThis : this);

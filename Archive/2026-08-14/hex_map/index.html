@@ -1383,14 +1383,46 @@
     </div>
 
     <script src="https://cdn.jsdelivr.net/npm/d3@7.9.0/dist/d3.min.js" crossorigin="anonymous"></script>
+    <script src="/shared/domain/pollutants.js"></script>
+    <script src="/shared/domain/networks.js"></script>
+    <script src="/shared/data/network-catalog.js"></script>
+    <script src="/shared/station-chart/timeseries-client.js"></script>
     <script src="/chart-core.js"></script>
+    <script src="/shared/station-chart/station-chart-domain.js"></script>
+    <script src="/shared/station-chart/station-chart-cache.js"></script>
+    <script src="/shared/station-chart/station-chart-diagnostics.js"></script>
+    <script src="/shared/station-chart/aqi-source-controller.js"></script>
+    <script src="/shared/station-chart/pollutant-context-controller.js"></script>
+    <script src="/hex_map/hex-map-network-controller.js"></script>
+    <script src="/hex_map/hex-map-url-state.js"></script>
+    <script src="/hex_map/hex-map-coordinator.js"></script>
+    <script src="/hex_map/hex-map-page-mode.js"></script>
+    <script src="/hex_map/hex-map-station-chart-adapter.js"></script>
+    <script src="/shared/station-chart/station-history-loader.js"></script>
+    <script src="/shared/station-chart/station-history-client.js"></script>
+    <script src="/shared/station-chart/station-history-compatibility-client.js"></script>
+    <script src="/shared/station-chart/station-chart-renderer.js"></script>
+    <script src="/shared/station-chart/station-chart-controller.js"></script>
+    <script src="/hex_map/hex-map-summary.js"></script>
+    <script src="/hex_map/hex-map-scroll-affordances.js"></script>
     <script src="/js/uk-aq-cache-auth.js"></script>
     <script>
       const PROJECT_REF_PLACEHOLDER = "zztjgmdiftqtdcrlfpvc";
       const ANON_KEY_PLACEHOLDER = "sb_publishable_Cru7ACLoK8kKQdID5jPaDw_3RHvQNxO";
       const TURNSTILE_SITE_KEY_PLACEHOLDER = "0x4AAAAAADvk69amXC9V2nNx";
     </script>
-    <script type="module" src="/hex_map/hex-map-bootstrap.js"></script>
+    <script src="/hex_map/hex-map-uk-controller.js"></script>
+    <script src="/hex_map/hex-map-cr-controller.js"></script>
+    <script src="/hex_map/hex-map-website-debug.js"></script>
+    <script src="/hex_map/hex-map-search.js"></script>
+    <script src="/hex_map/hex-map-toolbar-controller.js"></script>
+    <script>
+      window.UkAqHexMapToolbarController.mount();
+      window.UkAqHexMapUrlState.bootstrap();
+    </script>
+    <script>window.UkAqHexMapSearch?.mount?.();</script>
+    <script src="/hex_map/hex-map-zoom-pan.js"></script>
+    <script>window.UkAqHexMapZoomPan?.mount?.();</script>
     <script src="/beta-notice.js"></script>
 </body>
 </html>

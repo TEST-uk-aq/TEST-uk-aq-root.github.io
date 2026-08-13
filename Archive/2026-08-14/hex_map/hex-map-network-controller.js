@@ -1,11 +1,9 @@
-import networkCatalog from "../shared/data/network-catalog-module.js";
-
-function initHexMapNetworkController(root) {
+(function initHexMapNetworkController(root) {
   "use strict";
 
   if (!root?.document || !document.body.classList.contains("hex-map-page")) return;
 
-  const catalogClient = networkCatalog;
+  const catalogClient = root.UkAqNetworkCatalog;
   if (!catalogClient?.load) {
     throw new Error("The shared UK AQ network catalogue loader must load before the Hex network controller.");
   }
@@ -636,7 +634,7 @@ function initHexMapNetworkController(root) {
   syncSelectionUi();
   setPanelPinned(false);
 
-  return Object.freeze({
+  root.UkAqHexMapNetworkController = Object.freeze({
     loadCatalog,
     getCatalog,
     getCatalogByCode,
@@ -650,7 +648,4 @@ function initHexMapNetworkController(root) {
     closePanel: () => setPanelOpen(false),
     syncPanelForActiveScope,
   });
-}
-
-const networkController = initHexMapNetworkController(globalThis);
-export default networkController;
+})(typeof globalThis !== "undefined" ? globalThis : this);

@@ -1,12 +1,11 @@
-import pollutantDomain from "../shared/domain/pollutants-module.js";
-import networkController from "./hex-map-network-controller.js";
-import urlState from "./hex-map-url-state.js";
-
-function initHexMapCoordinator(root) {
+(function initHexMapCoordinator(root) {
   "use strict";
 
   if (!root?.document || !document.body.classList.contains("hex-map-page")) return;
 
+  const pollutantDomain = root.UkAqPollutants;
+  const networkController = root.UkAqHexMapNetworkController;
+  const urlState = root.UkAqHexMapUrlState;
   if (!pollutantDomain?.normalize || !networkController?.setActiveScope || !urlState?.getInitialState) {
     throw new Error("Hex coordinator dependencies must load before the coordinator.");
   }
@@ -138,7 +137,10 @@ function initHexMapCoordinator(root) {
   });
 
   root.UkAqHexMapCoordinator = api;
-}
-
-initHexMapCoordinator(globalThis);
-export default globalThis.UkAqHexMapCoordinator;
+  Object.defineProperty(root, "mapSettingsState", {
+    configurable: true,
+    enumerable: true,
+    get: mapSettingsSnapshot,
+  });
+  root.updateMapSettings = (partial, source) => api.updateMapSettings(partial, { source });
+})(typeof globalThis !== "undefined" ? globalThis : this);

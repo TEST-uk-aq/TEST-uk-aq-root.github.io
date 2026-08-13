@@ -1394,6 +1394,7 @@
     <script src="/shared/station-chart/aqi-source-controller.js"></script>
     <script src="/shared/station-chart/pollutant-context-controller.js"></script>
     <script src="/hex_map/hex-map-network-controller.js"></script>
+    <script src="/hex_map/hex-map-coordinator.js"></script>
     <script src="/hex_map/hex-map-station-chart-adapter.js"></script>
     <script src="/shared/station-chart/station-history-loader.js"></script>
     <script src="/shared/station-chart/station-history-client.js"></script>
@@ -1407,7 +1408,8 @@
       const pollutantDomain = window.UkAqPollutants;
       const networkDomain = window.UkAqNetworks;
       const networkController = window.UkAqHexMapNetworkController;
-      if (!pollutantDomain?.definitions || !networkDomain?.resolveCode || !networkController?.loadCatalog) {
+      const coordinator = window.UkAqHexMapCoordinator;
+      if (!pollutantDomain?.definitions || !networkDomain?.resolveCode || !networkController?.loadCatalog || !coordinator?.registerMap) {
         throw new Error("UK AQ shared domain/data modules must load before the Hex Map.");
       }
       const PROJECT_REF_PLACEHOLDER = "zztjgmdiftqtdcrlfpvc";
@@ -1418,58 +1420,9 @@
       const cacheBaseParam = params.get("cache_base");
       const cacheBaseUrl = resolveCacheBaseUrl(cacheBaseParam);
       const cacheSessionParam = params.get("cache_session_url");
-      const metricParam = params.get("metric");
-      const colorScaleParam = params.get("color_scale");
-      const pollutantParam = params.get("pollutant");
       const mapDateParam = params.get("map_date");
       const pconVersionParam = params.get("pcon_version");
-      const sharedSettings = (window.mapSettingsState = window.mapSettingsState || {});
-      const initialMetric = (metricParam === "mean" || metricParam === "median")
-        ? metricParam
-        : (sharedSettings.metric || "mean");
-      const initialColorScale = (colorScaleParam === "linear" || colorScaleParam === "power")
-        ? colorScaleParam
-        : (sharedSettings.colorScale || "power");
-      const initialWindow = sharedSettings.window || "6h";
-      sharedSettings.metric = initialMetric;
-      sharedSettings.colorScale = initialColorScale;
-      sharedSettings.window = initialWindow;
-      window.updateMapSettings = (partial, source) => {
-        if (!partial) {
-          return;
-        }
-        const nextMetric = (partial.metric === "mean" || partial.metric === "median")
-          ? partial.metric
-          : sharedSettings.metric;
-        const nextColorScale = (partial.colorScale === "linear" || partial.colorScale === "power")
-          ? partial.colorScale
-          : sharedSettings.colorScale;
-        const nextWindow = (partial.window && partial.window in WINDOW_OPTIONS)
-          ? partial.window
-          : sharedSettings.window;
-        const hasChanged = nextMetric !== sharedSettings.metric
-          || nextColorScale !== sharedSettings.colorScale
-          || nextWindow !== sharedSettings.window;
-        sharedSettings.metric = nextMetric;
-        sharedSettings.colorScale = nextColorScale;
-        sharedSettings.window = nextWindow;
-        if (partial.metric) {
-          setQueryParam("metric", sharedSettings.metric);
-        }
-        if (partial.colorScale) {
-          setQueryParam("color_scale", sharedSettings.colorScale);
-        }
-        if (hasChanged) {
-          window.dispatchEvent(new CustomEvent("mapsettingschange", {
-            detail: {
-              metric: sharedSettings.metric,
-              colorScale: sharedSettings.colorScale,
-              window: sharedSettings.window,
-              source,
-            },
-          }));
-        }
-      };
+      const initialMapSettings = coordinator.getMapSettings();
       const inferredProjectRef = inferProjectRefFromHost();
       const projectRef = PROJECT_REF_PLACEHOLDER.includes("__SUPABASE_PROJECT_REF__")
         ? (projectRefParam || inferredProjectRef || "")
@@ -1501,7 +1454,7 @@
       const POPULATION_URL = projectRef
         ? `https://${projectRef}.supabase.co/functions/v1/uk_aq_population`
         : "";
-      let activePollutant = normalizePollutantKey(pollutantParam) || "pm25";
+      let activePollutant = coordinator.getPollutant();
       const POLLUTANT_CACHE_TTL = 60 * 1000;
       const pollutantCache = new Map();
       const latestSinceByKey = new Map();
@@ -1903,9 +1856,9 @@
         });
       }
 
-      let currentMetric = initialMetric;
-      let currentColorScale = initialColorScale;
-      let currentWindow = initialWindow;
+      let currentMetric = initialMapSettings.metric;
+      let currentColorScale = initialMapSettings.colorScale;
+      let currentWindow = initialMapSettings.window;
       let sortKey = "pm25";
       let sortDir = "desc";
       let hexData = null;
@@ -2552,11 +2505,12 @@
           syncWindowInputs();
           return;
         }
+        if (!options.coordinated) {
+          coordinator.updateMapSettings({ window: normalized }, { source: "uk" });
+          return;
+        }
         currentWindow = normalized;
         syncWindowInputs();
-        if (!options.silent) {
-          window.updateMapSettings?.({ window: currentWindow }, "uk");
-        }
         if (!isUkMapVisible()) {
           return;
         }
@@ -2810,12 +2764,14 @@
           updatePollutantLabels();
           return;
         }
+        if (!options.coordinated) {
+          coordinator.setPollutant(normalized, { source: coordinator.getActiveMap() });
+          return;
+        }
         activePollutant = normalized;
         chartDataStatus = "loading";
         updatePollutantLabels();
         syncPollutantButtons();
-        setQueryParam("pollutant", activePollutant);
-        window.dispatchEvent(new CustomEvent("pollutantchange", { detail: { pollutant: activePollutant } }));
         if (options.deferFetch) {
           return;
         }
@@ -2869,16 +2825,6 @@
         return timestamp.getTime() >= cutoff;
       }
 
-      function setQueryParam(key, value) {
-        const url = new URL(window.location.href);
-        if (value === null || value === undefined || value === "") {
-          url.searchParams.delete(key);
-        } else {
-          url.searchParams.set(key, value);
-        }
-        window.history.replaceState({}, "", url);
-      }
-
       function getDefaultSortDir(key) {
         return SORT_DEFAULTS[key] || "asc";
       }
@@ -2925,15 +2871,16 @@
           syncColorScaleInputs();
           return;
         }
+        if (!options.coordinated) {
+          coordinator.updateMapSettings({ colorScale: nextScale }, { source: "uk" });
+          return;
+        }
         currentColorScale = nextScale;
         syncColorScaleInputs();
         updateLegendScaleDescription();
         renderMap();
         updateDetailsPanel();
         updateSummary();
-        if (!options.silent) {
-          window.updateMapSettings?.({ colorScale: currentColorScale }, "uk");
-        }
       }
 
       function getLegendCapValue() {
@@ -4427,13 +4374,14 @@
           applyMetricState();
           return;
         }
+        if (!options.coordinated) {
+          coordinator.updateMapSettings({ metric: nextMetric }, { source: "uk" });
+          return;
+        }
         currentMetric = nextMetric;
         applyMetricState();
         renderMap();
         updateDetailsPanel();
-        if (!options.silent) {
-          window.updateMapSettings?.({ metric: currentMetric }, "uk");
-        }
       }
 
       function getMetricValue(row) {
@@ -5284,22 +5232,6 @@
         closeSettingsPanel();
       });
 
-      window.addEventListener("mapsettingschange", (event) => {
-        const detail = event.detail || {};
-        if (detail.source === "uk") {
-          return;
-        }
-        if (detail.metric) {
-          setMetric(detail.metric, { silent: true });
-        }
-        if (detail.colorScale) {
-          setColorScale(detail.colorScale, { silent: true });
-        }
-        if (detail.window) {
-          setWindow(detail.window, { silent: true });
-        }
-      });
-
       window.addEventListener("hexchartselectionchange", (event) => {
         const detail = event.detail || {};
         if (detail.mapKey && detail.mapKey !== "uk") {
@@ -5397,7 +5329,7 @@
       applyMetricState();
       syncPollutantButtons();
       updatePollutantLabels();
-      currentWindow = normalizeWindowKey(sharedSettings.window || currentWindow);
+      currentWindow = normalizeWindowKey(coordinator.getMapSettings().window || currentWindow);
       syncWindowInputs();
       syncSettingsPanelWidth();
       syncColorScaleInputs();
@@ -5559,7 +5491,6 @@
           syncSettingsPanelWidth();
         },
         restoreNetworks: () => {
-          networkController.setActiveScope("uk");
           applyNetworkFilters();
         },
         markBootstrapReady: () => {
@@ -5623,6 +5554,20 @@
           return colorScale(value);
         },
       };
+      coordinator.registerMap("uk", {
+        setPollutant: (pollutant) => setActivePollutant(pollutant, { coordinated: true }),
+        setMapSettings: (settings) => {
+          setMetric(settings.metric, { coordinated: true });
+          setColorScale(settings.colorScale, { coordinated: true });
+          setWindow(settings.window, { coordinated: true });
+        },
+        activate: () => {
+          window.ukMap.render();
+          window.ukMap.restoreNetworks();
+          window.UkAqHexMapSearch?.preloadInactiveMap?.("uk");
+          window.ukMap.markBootstrapReady();
+        },
+      });
       networkController.registerScope("uk", () => applyNetworkFilters());
     </script>
     <script>
@@ -5644,21 +5589,8 @@
 		      const cacheBaseParam = params.get("cache_base");
 		      const cacheBaseUrl = resolveCacheBaseUrl(cacheBaseParam);
 		      const cacheSessionParam = params.get("cache_session_url");
-		      const metricParam = params.get("metric");
-	      const colorScaleParam = params.get("color_scale");
-	      const pollutantParam = params.get("pollutant");
 	      const mapDateParam = params.get("map_date");
 	      const laVersionParam = params.get("la_version");
-      const sharedSettings = (window.mapSettingsState = window.mapSettingsState || {});
-      if (!sharedSettings.metric) {
-        sharedSettings.metric = (metricParam === "mean" || metricParam === "median") ? metricParam : "mean";
-      }
-      if (!sharedSettings.colorScale) {
-        sharedSettings.colorScale = (colorScaleParam === "linear" || colorScaleParam === "power") ? colorScaleParam : "power";
-      }
-      if (!sharedSettings.window) {
-        sharedSettings.window = "6h";
-      }
       const inferredProjectRef = inferProjectRefFromHost();
       const projectRef = PROJECT_REF_PLACEHOLDER.includes("__SUPABASE_PROJECT_REF__")
         ? (projectRefParam || inferredProjectRef || "")
@@ -5689,7 +5621,7 @@
       const POPULATION_URL = projectRef
         ? `https://${projectRef}.supabase.co/functions/v1/uk_aq_population`
         : "";
-      let activePollutant = normalizePollutantKey(pollutantParam) || "pm25";
+      let activePollutant = coordinator.getPollutant();
       const POLLUTANT_CACHE_TTL = 60 * 1000;
       const pollutantCache = new Map();
       const latestSinceByKey = new Map();
@@ -6131,9 +6063,10 @@
         });
       }
 
-      let currentMetric = sharedSettings.metric;
-      let currentColorScale = sharedSettings.colorScale;
-      let currentWindow = sharedSettings.window;
+      const initialMapSettings = coordinator.getMapSettings();
+      let currentMetric = initialMapSettings.metric;
+      let currentColorScale = initialMapSettings.colorScale;
+      let currentWindow = initialMapSettings.window;
       let sortKey = "pm25";
       let sortDir = "desc";
       let hexData = null;
@@ -6514,11 +6447,12 @@
           syncWindowInputs();
           return;
         }
+        if (!options.coordinated) {
+          coordinator.updateMapSettings({ window: normalized }, { source: "cr" });
+          return;
+        }
         currentWindow = normalized;
         syncWindowInputs();
-        if (!options.silent) {
-          window.updateMapSettings?.({ window: currentWindow }, "cr");
-        }
         if (!isCrMapVisible()) {
           return;
         }
@@ -6763,6 +6697,10 @@
           updatePollutantLabels();
           return;
         }
+        if (!options.coordinated) {
+          coordinator.setPollutant(normalized, { source: "cr" });
+          return;
+        }
         activePollutant = normalized;
         chartDataStatus = "loading";
         updatePollutantLabels();
@@ -6797,16 +6735,6 @@
         return timestamp.getTime() >= cutoff;
       }
 
-      function setQueryParam(key, value) {
-        const url = new URL(window.location.href);
-        if (value === null || value === undefined || value === "") {
-          url.searchParams.delete(key);
-        } else {
-          url.searchParams.set(key, value);
-        }
-        window.history.replaceState({}, "", url);
-      }
-
       function syncColorScaleInputs() {
         colorScaleInputs.forEach((input) => {
           input.checked = input.value === currentColorScale;
@@ -6830,15 +6758,16 @@
           syncColorScaleInputs();
           return;
         }
+        if (!options.coordinated) {
+          coordinator.updateMapSettings({ colorScale: nextScale }, { source: "cr" });
+          return;
+        }
         currentColorScale = nextScale;
         syncColorScaleInputs();
         updateLegendScaleDescription();
         renderMap();
         updateDetailsPanel();
         updateSummary();
-        if (!options.silent) {
-          window.updateMapSettings?.({ colorScale: currentColorScale }, "cr");
-        }
       }
 
       function getLegendCapValue() {
@@ -8778,13 +8707,14 @@
           applyMetricState();
           return;
         }
+        if (!options.coordinated) {
+          coordinator.updateMapSettings({ metric: nextMetric }, { source: "cr" });
+          return;
+        }
         currentMetric = nextMetric;
         applyMetricState();
         renderMap();
         updateDetailsPanel();
-        if (!options.silent) {
-          window.updateMapSettings?.({ metric: currentMetric }, "cr");
-        }
       }
 
       function getMetricValue(row) {
@@ -9731,35 +9661,6 @@
         setSelectedCell(null);
       });
 
-      window.addEventListener("pollutantchange", (event) => {
-        const nextPollutant = normalizePollutantKey(event.detail?.pollutant);
-        if (!nextPollutant) {
-          return;
-        }
-        setActivePollutant(nextPollutant);
-      });
-
-      window.addEventListener("mapsettingschange", (event) => {
-        const detail = event.detail || {};
-        if (detail.source === "cr") {
-          return;
-        }
-        if (detail.metric === "mean" || detail.metric === "median") {
-          if (detail.metric !== currentMetric) {
-            currentMetric = detail.metric;
-            applyMetricState();
-            renderMap();
-            updateDetailsPanel();
-          }
-        }
-        if (detail.colorScale) {
-          setColorScale(detail.colorScale, { silent: true });
-        }
-        if (detail.window) {
-          setWindow(detail.window, { silent: true });
-        }
-      });
-
       window.addEventListener("hexchartselectionchange", (event) => {
         const detail = event.detail || {};
         if (detail.mapKey && detail.mapKey !== "cr") {
@@ -9814,7 +9715,7 @@
       });
       applyMetricState();
       updatePollutantLabels();
-      currentWindow = normalizeWindowKey(sharedSettings.window || currentWindow);
+      currentWindow = normalizeWindowKey(coordinator.getMapSettings().window || currentWindow);
 	      syncWindowInputs();
 	      syncSettingsPanelWidth();
 	      syncColorScaleInputs();
@@ -10026,7 +9927,6 @@
           syncSettingsPanelWidth();
         },
         restoreNetworks: () => {
-          networkController.setActiveScope("cr");
           applyNetworkFilters();
         },
         markBootstrapReady: () => {
@@ -10101,6 +10001,20 @@
           return colorScale(value);
         },
 	      };
+      coordinator.registerMap("cr", {
+        setPollutant: (pollutant) => setActivePollutant(pollutant, { coordinated: true }),
+        setMapSettings: (settings) => {
+          setMetric(settings.metric, { coordinated: true });
+          setColorScale(settings.colorScale, { coordinated: true });
+          setWindow(settings.window, { coordinated: true });
+        },
+        activate: () => {
+          window.crMap.render();
+          window.crMap.restoreNetworks();
+          window.UkAqHexMapSearch?.preloadInactiveMap?.("cr");
+          window.crMap.markBootstrapReady();
+        },
+      });
       networkController.registerScope("cr", () => applyNetworkFilters());
 })();
 
@@ -10180,7 +10094,7 @@
     cr: document.getElementById("cr-toolbar-slot"),
   };
 
-  function setActiveTab(tabKey) {
+  function presentActiveTab(tabKey) {
     const isUk = tabKey === "uk";
     window.UkAqHexMapSearch?.syncActiveTabInput?.(tabKey);
     tabUk.setAttribute("aria-selected", isUk ? "true" : "false");
@@ -10195,27 +10109,14 @@
     }
     panelUk.hidden = !isUk;
     panelCr.hidden = isUk;
-    window.UkAqHexMapNetworkController?.setActiveScope?.(tabKey);
-    if (isUk) {
-      window.ukMap?.render();
-      window.ukMap?.restoreNetworks();
-      window.UkAqHexMapSearch?.preloadInactiveMap?.(tabKey);
-    } else {
-      window.crMap?.render();
-      window.crMap?.restoreNetworks();
-      window.UkAqHexMapSearch?.preloadInactiveMap?.(tabKey);
-    }
     window.syncToolbar?.(tabKey);
-    if (isUk) {
-      window.ukMap?.markBootstrapReady?.();
-    } else {
-      window.crMap?.markBootstrapReady?.();
-    }
   }
+
+  coordinator.registerActiveMapPresenter(presentActiveTab);
 
   function applyMap(mapValue, options = {}) {
     if (mapValue === "UK") {
-      setActiveTab("uk");
+      coordinator.setActiveMap("uk", { source: options.source || "map" });
       if (options.updateUrl) {
         updateMapParam("UK", { push: options.push });
       }
@@ -10223,7 +10124,7 @@
     }
     const normalized = normalizeMap(mapValue) || DEFAULT_CR_MAP;
     mapState.lastCrMap = normalized;
-    setActiveTab("cr");
+    coordinator.setActiveMap("cr", { source: options.source || "map" });
     if (window.crMap) {
       window.crMap.setRegion(normalized, { updateUrl: false });
     }
@@ -10233,7 +10134,7 @@
   }
 
   window.mapTabController = {
-    getActiveTab: () => (tabUk.getAttribute("aria-selected") === "true" ? "uk" : "cr"),
+    getActiveTab: () => coordinator.getActiveMap(),
     switchToUk: (options = {}) => {
       applyMap("UK", {
         updateUrl: options.updateUrl !== false,
@@ -10272,6 +10173,7 @@
     </script>
     <script>
 (() => {
+  const coordinator = window.UkAqHexMapCoordinator;
   const toolbarTabUk = document.getElementById("toolbar-tab-uk");
   const toolbarTabCr = document.getElementById("toolbar-tab-cr");
   const windowStepper = document.getElementById("window-stepper");
@@ -10312,7 +10214,7 @@
   }
 
   function readSharedWindowKey() {
-    return normalizeWindowKey(window.mapSettingsState?.window);
+    return normalizeWindowKey(coordinator.getMapSettings().window);
   }
 
   function setStepperButtons(windowKey) {
@@ -10412,7 +10314,7 @@
     if (nextKey === currentKey) {
       return;
     }
-    window.updateMapSettings?.({ window: nextKey }, "window-stepper");
+    coordinator.updateMapSettings({ window: nextKey }, { source: "window-stepper" });
   });
 
   window.addEventListener("mapsettingschange", (event) => {
@@ -10511,7 +10413,7 @@
     }
   }
 
-  // Called by setActiveTab whenever the active tab changes
+  // Called by the coordinator's active-map presenter whenever the active tab changes
   window.syncToolbar = function (tabKey) {
     const isUk = tabKey === "uk";
     toolbarTabUk?.classList.toggle("active", isUk);
@@ -10528,8 +10430,8 @@
     }
   };
 
-  // Sync toolbar to the tab state that was already set before this script ran
-  const initialTabKey = tabUk?.getAttribute("aria-selected") === "true" ? "uk" : "cr";
+  // Sync toolbar to the coordinator state that was already set before this script ran
+  const initialTabKey = coordinator.getActiveMap();
   window.syncToolbar(initialTabKey);
   renderWindowStepper({ force: true });
 })();

@@ -216,8 +216,7 @@
     if (window.mapTabController?.getActiveTab) {
       return window.mapTabController.getActiveTab();
     }
-    const tabUk = document.getElementById("tab-uk");
-    return tabUk?.getAttribute("aria-selected") === "true" ? "uk" : "cr";
+    return window.UkAqHexMapCoordinator?.getActiveMap?.() || "uk";
   }
 
   function switchToUkTab() {

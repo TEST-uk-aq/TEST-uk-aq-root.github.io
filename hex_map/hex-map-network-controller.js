@@ -26,7 +26,7 @@
   let catalogByCode = new Map();
   let catalogLoad = null;
   let selectedCodes = initialLegacySelection;
-  let activeScope = readActiveScope();
+  let activeScope = "uk";
   let renderedKey = "";
   let panelPinned = false;
   let panelAnchorPill = null;
@@ -101,10 +101,6 @@
       console.warn("Unable to restore Hex network selection", error);
     }
     return null;
-  }
-
-  function readActiveScope() {
-    return document.getElementById("tab-uk")?.getAttribute("aria-selected") === "true" ? "uk" : "cr";
   }
 
   function getCatalog() {
@@ -610,11 +606,7 @@
   }
 
   pills.forEach((pill) => pill.addEventListener("click", () => {
-    const regionMenu = document.getElementById("toolbar-region-menu");
-    const regionTrigger = document.getElementById("toolbar-region-trigger");
-    if (regionMenu) regionMenu.hidden = true;
-    regionTrigger?.classList.remove("open");
-    regionTrigger?.setAttribute("aria-expanded", "false");
+    root.UkAqHexMapToolbarController?.closeRegionPopover?.();
     const isOpen = !(dropdownMenu?.hidden ?? true);
     setPanelOpen(!(isOpen && panelAnchorPill === pill), pill);
     updateDropdownState();

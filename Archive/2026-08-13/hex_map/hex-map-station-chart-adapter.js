@@ -147,10 +147,6 @@
 
   function installHexMapStationChart() {
     if (!root.document?.body?.classList.contains("hex-map-page") || root.hexChartMode) return null;
-    const pageMode = root.UkAqHexMapPageMode;
-    if (!pageMode?.getState || !pageMode?.isChartMode || !pageMode?.enterChart || !pageMode?.exitChart) {
-      throw new Error("UkAqHexMapPageMode is required");
-    }
     const params = new URLSearchParams(root.location.search);
     const baseUrl = cacheBaseUrl(params);
     const scheduler = root.UkAqStationHistoryLoader.createPriorityFetchScheduler(6);
@@ -194,6 +190,7 @@
       const panel = root.document.getElementById(`${key}-hex-chart-mode`);
       return [key, {
         panel,
+        canvasWrap: panel?.closest(".map-canvas-wrap"),
         reading: root.document.getElementById(`${key}-hex-chart-reading`),
         message: root.document.getElementById(`${key}-hex-chart-message`),
         wrap: root.document.getElementById(`${key}-hex-chart-wrap`),
@@ -202,7 +199,8 @@
       }];
     }));
     const state = {
-      lifecycleMounted: false,
+      active: false,
+      mapKey: null,
       sessionIdentity: "",
       rangeLabel: "24h",
       visibleEntries: [],
@@ -215,13 +213,9 @@
       pollutantAdapter: null,
     };
 
-    function chartMapKey() { return pageMode.getState().chartMapKey; }
-    function isLifecycleMounted(mapKey = null) {
-      return Boolean(state.lifecycleMounted && (!mapKey || chartMapKey() === mapKey));
-    }
-    function mapAdapter(mapKey = chartMapKey()) { return mapKey === "cr" ? root.crMap : root.ukMap; }
-    function currentContext(mapKey = chartMapKey()) { return mapAdapter(mapKey)?.getChartModeContext?.() || null; }
-    function dom() { return domByMap[chartMapKey()] || null; }
+    function mapAdapter(mapKey = state.mapKey) { return mapKey === "cr" ? root.crMap : root.ukMap; }
+    function currentContext(mapKey = state.mapKey) { return mapAdapter(mapKey)?.getChartModeContext?.() || null; }
+    function dom() { return domByMap[state.mapKey] || null; }
     function selectedEntries() {
       const visible = new Map(state.visibleEntries.map((entry) => [entry.station_id, entry]));
       return Array.from(state.selectedIds).map((id) => visible.get(id) || state.retainedEntries.get(id)).filter(Boolean);
@@ -275,7 +269,7 @@
         ? load.aqiSourceStationId
         : selected[0]?.station_id || null;
       renderChips(context);
-      syncTable(chartMapKey());
+      syncTable(state.mapKey);
       notifySelection();
     }
 
@@ -303,7 +297,7 @@
       state.pollutantAdapter = createHexMapStationChartAdapter({
         controller: state.pollutantContextController,
         eventTarget: root,
-        isActive: isLifecycleMounted,
+        isActive: (mapKey) => Boolean(state.active && (!mapKey || state.mapKey === mapKey)),
         getSelection: selectionContext,
       });
       state.pollutantAdapter.mount();
@@ -332,14 +326,16 @@
       createPollutantHandoff();
     }
 
-    function syncChartSelectionTables() {
+    function syncPanels() {
+      Object.entries(domByMap).forEach(([key, refs]) => {
+        const active = state.active && state.mapKey === key;
+        if (refs.panel) refs.panel.hidden = !active;
+        refs.canvasWrap?.classList.toggle("chart-mode", active);
+      });
+      root.document.body.classList.toggle("hex-chart-mode", state.active);
+      if (backButton) backButton.hidden = !state.active;
       syncTable("uk");
       syncTable("cr");
-    }
-
-    function renderPageModeAndTables() {
-      pageMode.render();
-      syncChartSelectionTables();
     }
 
     function tableRefs(mapKey) {
@@ -348,7 +344,7 @@
         : { wrap: root.document.getElementById("sensor-table-wrap"), body: root.document.getElementById("sensor-table-body") };
     }
 
-    function orderedVisibleIds(mapKey = chartMapKey()) {
+    function orderedVisibleIds(mapKey = state.mapKey) {
       const table = tableRefs(mapKey).body;
       const visible = new Set(state.visibleEntries.map((entry) => entry.station_id));
       const ordered = Array.from(table?.querySelectorAll(".sensor-name-button[data-station-id]") || [])
@@ -359,7 +355,7 @@
     function syncTable(mapKey) {
       const refs = tableRefs(mapKey);
       if (!refs.wrap || !refs.body) return;
-      const active = pageMode.isChartMode(mapKey) && isLifecycleMounted(mapKey);
+      const active = state.active && state.mapKey === mapKey;
       refs.wrap.classList.toggle("is-chart-select-mode", active);
       const selected = Array.from(state.selectedIds);
       refs.body.querySelectorAll("tr").forEach((row) => {
@@ -409,8 +405,8 @@
 
     function notifySelection() {
       root.dispatchEvent(new CustomEvent("hexchartselectionchange", { detail: {
-        isChartMode: pageMode.isChartMode(),
-        mapKey: chartMapKey(),
+        isChartMode: state.active,
+        mapKey: state.mapKey,
         selectedPrimaryId: Array.from(state.selectedIds)[0] || null,
         selectedAqiSensorId: state.aqiSourceId,
         selectedSensorIds: Array.from(state.selectedIds),
@@ -421,19 +417,19 @@
       selectedEntries().forEach((entry) => state.retainedEntries.set(entry.station_id, entry));
       if (!state.selectedIds.has(state.aqiSourceId)) state.aqiSourceId = Array.from(state.selectedIds)[0] || null;
       renderChips();
-      syncTable(chartMapKey());
+      syncTable(state.mapKey);
       notifySelection();
       return options.reload === false ? Promise.resolve() : state.controller?.setSelection(selectedEntries());
     }
 
     function enter(options = {}) {
       const mapKey = options.mapKey || root.mapTabController?.getActiveTab?.() || "uk";
-      if (mapKey !== "uk" && mapKey !== "cr") return false;
       const context = currentContext(mapKey);
       const identity = contextIdentity(mapKey, context);
       if (!identity) return false;
       exit();
-      state.lifecycleMounted = true;
+      state.active = true;
+      state.mapKey = mapKey;
       state.sessionIdentity = identity;
       state.rangeLabel = "24h";
       state.visibleEntries = (context.entries || []).map((entry) => normalizeEntry(entry, context)).filter(Boolean);
@@ -443,8 +439,7 @@
       state.retainedEntries = new Map(initial ? [[initial.station_id, initial]] : []);
       state.aqiSourceId = initial?.station_id || null;
       if (rangeSelect) rangeSelect.value = state.rangeLabel;
-      pageMode.enterChart(mapKey);
-      syncChartSelectionTables();
+      syncPanels();
       createController(mapKey);
       void state.controller.setRange(resolveRange(state.rangeLabel));
       state.pollutantAdapter.sync({ ...context, entries: state.visibleEntries }, context.dataStatus);
@@ -452,7 +447,7 @@
     }
 
     function exit() {
-      const previousMapKey = chartMapKey();
+      const previousMapKey = state.mapKey;
       state.pollutantAdapter?.destroy?.();
       state.pollutantContextController?.destroy?.();
       state.controller?.destroy?.();
@@ -460,21 +455,21 @@
       state.pollutantContextController = null;
       state.controller = null;
       state.renderer = null;
-      state.lifecycleMounted = false;
+      state.active = false;
+      state.mapKey = null;
       state.sessionIdentity = "";
       state.visibleEntries = [];
       state.selectedIds = new Set();
       state.retainedEntries = new Map();
       state.aqiSourceId = null;
-      pageMode.exitChart();
-      syncChartSelectionTables();
+      syncPanels();
       if (previousMapKey) syncTable(previousMapKey);
       notifySelection();
     }
 
     function selectSensor(stationId, options = {}) {
       const id = String(stationId || "").trim();
-      if (!isLifecycleMounted(options.mapKey) || !id) return false;
+      if (!state.active || !id || (options.mapKey && options.mapKey !== state.mapKey)) return false;
       if (!state.visibleEntries.some((entry) => entry.station_id === id)) return false;
       if (options.mode !== "toggle") {
         state.selectedIds = new Set([id]);
@@ -495,15 +490,15 @@
       if (!state.selectedIds.has(stationId) || stationId === state.aqiSourceId) return false;
       state.aqiSourceId = stationId;
       renderChips();
-      syncTable(chartMapKey());
+      syncTable(state.mapKey);
       notifySelection();
       void state.controller.setAqiSource(stationId);
       return true;
     }
 
     function applyHeaderSelectionAction(action, options = {}) {
-      if (!isLifecycleMounted(options.mapKey)) return false;
-      const ordered = orderedVisibleIds(chartMapKey());
+      if (!state.active || (options.mapKey && options.mapKey !== state.mapKey)) return false;
+      const ordered = orderedVisibleIds(state.mapKey);
       if (action === "keep-top" && ordered[0]) {
         state.selectedIds = new Set([ordered[0]]);
         state.aqiSourceId = ordered[0];
@@ -517,11 +512,11 @@
       return true;
     }
 
-    function syncFromMap(mapKey = chartMapKey(), options = {}) {
-      if (!isLifecycleMounted(mapKey)) return false;
+    function syncFromMap(mapKey = state.mapKey, options = {}) {
+      if (!state.active || mapKey !== state.mapKey) return false;
       const context = currentContext(mapKey);
       if (contextIdentity(mapKey, context) !== state.sessionIdentity) {
-        if (options.preserveChartMode) { renderPageModeAndTables(); return false; }
+        if (options.preserveChartMode) { syncPanels(); return false; }
         exit();
         return false;
       }
@@ -548,7 +543,7 @@
     }
 
     async function refresh() {
-      if (!isLifecycleMounted()) return;
+      if (!state.active) return;
       await mapAdapter()?.refreshForChartMode?.();
       const pollutant = domain.normalizePollutant(currentContext()?.pollutant);
       if (pollutant && pollutant === state.pollutantContextController?.renderedPollutant) {
@@ -557,14 +552,14 @@
     }
 
     rangeSelect?.addEventListener("change", () => {
-      if (!isLifecycleMounted()) return;
+      if (!state.active) return;
       state.rangeLabel = normalizeRangeLabel(rangeSelect.value);
       rangeSelect.value = state.rangeLabel;
       void state.controller?.setRange(resolveRange(state.rangeLabel));
     });
     backButton?.addEventListener("click", exit);
     root.addEventListener("resize", () => {
-      if (isLifecycleMounted()) state.controller?.resize({});
+      if (state.active) state.controller?.resize({});
     });
     Object.values(domByMap).forEach((refs) => {
       refs.panel?.addEventListener("click", (event) => event.stopPropagation());
@@ -586,10 +581,10 @@
       syncFromMap,
       applyHeaderSelectionAction,
       selectSensor,
-      isActive: (mapKey = null) => pageMode.isChartMode(mapKey),
-      isSensorSelected: (mapKey = null, id = "") => Boolean(pageMode.isChartMode(mapKey) && isLifecycleMounted(mapKey) && state.selectedIds.has(String(id))),
-      getSelectedSensorIds: (mapKey = null) => pageMode.isChartMode(mapKey) && isLifecycleMounted(mapKey) ? Array.from(state.selectedIds) : [],
-      getSelectedSensorIndex: (mapKey = null, id = "") => pageMode.isChartMode(mapKey) && isLifecycleMounted(mapKey) ? Array.from(state.selectedIds).indexOf(String(id)) : -1,
+      isActive: (mapKey = null) => Boolean(state.active && (!mapKey || state.mapKey === mapKey)),
+      isSensorSelected: (mapKey = null, id = "") => Boolean(state.active && (!mapKey || state.mapKey === mapKey) && state.selectedIds.has(String(id))),
+      getSelectedSensorIds: (mapKey = null) => state.active && (!mapKey || state.mapKey === mapKey) ? Array.from(state.selectedIds) : [],
+      getSelectedSensorIndex: (mapKey = null, id = "") => state.active && (!mapKey || state.mapKey === mapKey) ? Array.from(state.selectedIds).indexOf(String(id)) : -1,
     });
     return root.hexChartMode;
   }

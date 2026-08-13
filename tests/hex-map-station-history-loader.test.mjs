@@ -4,6 +4,7 @@ import controllerModule from "../shared/station-chart/station-chart-controller.j
 import sourceModule from "../shared/station-chart/aqi-source-controller.js";
 import cacheModule from "../shared/station-chart/station-chart-cache.js";
 import historyLoaderModule from "../shared/station-chart/station-history-loader.js";
+import rendererModule from "../shared/station-chart/station-chart-renderer.js";
 
 const page = fs.readFileSync(new URL("../hex_map/index.html", import.meta.url), "utf8");
 const adapter = fs.readFileSync(new URL("../hex_map/hex-map-station-chart-adapter.js", import.meta.url), "utf8");
@@ -51,6 +52,40 @@ assert.match(rendererSource, /function replacePollutantContext/);
 assert.match(rendererSource, /const endY = observationDomain\(state\)/);
 assert.match(rendererSource, /startY\[0\] \+ \(endY\[0\] - startY\[0\]\) \* eased/);
 assert.match(rendererSource, /pendingDomainState = retainNewestState/);
+assert.match(rendererSource, /classed\("is-hovered"/);
+assert.match(rendererSource, /classed\("is-dimmed"/);
+
+const hoverStart = Date.parse("2026-08-12T00:00:00.000Z");
+const stationA = [
+  { date: new Date(hoverStart), value: 10 },
+  { date: new Date(hoverStart + 60 * 60 * 1000), value: 20 },
+];
+const stationB = [
+  { date: new Date(hoverStart), value: 70 },
+  { date: new Date(hoverStart + 60 * 60 * 1000), value: 80 },
+];
+const hoverObservations = new Map([["a", stationA], ["b", stationB]]);
+const nearestSeries = rendererModule.findNearestSeriesAtPointer(
+  [{ station_id: "a" }, { station_id: "b" }],
+  hoverObservations,
+  new Date(hoverStart + 30 * 60 * 1000),
+  76,
+  (value) => value,
+  (points) => [points],
+);
+assert.equal(nearestSeries.entry.station_id, "b", "pointer Y, not equal timestamp or selection order, owns hover");
+
+const gapRight = { date: new Date(hoverStart + 10 * 60 * 60 * 1000), value: 100 };
+const gapPoints = [...stationA, gapRight];
+assert.equal(
+  rendererModule.getSeriesValueAtDate(
+    gapPoints,
+    [stationA, [gapRight]],
+    new Date(hoverStart + 5 * 60 * 60 * 1000),
+  ),
+  20,
+  "hover geometry uses the nearest segment endpoint instead of interpolating an invisible bridge",
+);
 
 assert.doesNotMatch(adapter, /installNetworkScopeDropdownGuard|guardedEnsureSearchDataLoaded/);
 assert.doesNotMatch(adapter, /\bd3\.|fetchStation|fetchAqi|stationHistoryCache|aqiBandCache|seriesDataCache/);

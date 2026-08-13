@@ -1,0 +1,4490 @@
+(function initHexMapCrController() {
+  if (typeof window === "undefined" || !window.document || !document.body.classList.contains("hex-map-page")) return;
+
+  const root = document.getElementById("tab-panel-cr");
+  if (!root) {
+    return;
+  }
+  const pollutantDomain = window.UkAqPollutants;
+  const networkDomain = window.UkAqNetworks;
+  const networkController = window.UkAqHexMapNetworkController;
+  const coordinator = window.UkAqHexMapCoordinator;
+  if (!pollutantDomain?.definitions || !networkDomain?.resolveCode || !networkController?.loadCatalog || !coordinator?.registerMap) {
+    throw new Error("UK AQ shared domain/data modules must load before the C&R Hex Map.");
+  }
+  const ID_PREFIX = "cr-";
+  const byId = (id) => document.getElementById(`${ID_PREFIX}${id}`);
+  const query = (selector) => root.querySelector(selector);
+  const queryAll = (selector) => Array.from(root.querySelectorAll(selector));
+
+  const SORT_DEFAULTS = {
+    sensor: "asc",
+    network: "asc",
+    pm25: "desc",
+    updated: "desc",
+  };
+
+  function getDefaultSortDir(key) {
+    return SORT_DEFAULTS[key] || "asc";
+  }
+
+  function getSortDirection(columnKey, activeKey, activeDir) {
+    return columnKey === activeKey ? activeDir : getDefaultSortDir(columnKey);
+  }
+
+  function renderSortIcon(columnKey, activeKey, activeDir) {
+    const direction = getSortDirection(columnKey, activeKey, activeDir);
+    return direction === "asc" ? "↑" : "↓";
+  }
+
+  function getSortTooltip(columnKey, activeKey, activeDir) {
+    const isActive = columnKey === activeKey;
+    if (!isActive) {
+      if (columnKey === "sensor" || columnKey === "network") return "Click to sort A to Z";
+      if (columnKey === "pm25") return "Click to sort high to low";
+      return "Click to sort newest first";
+    }
+    return "";
+  }
+
+		      const params = new URLSearchParams(window.location.search);
+		      const projectRefParam = params.get("project_ref");
+		      const anonKeyParam = params.get("anon_key");
+		      const cacheBaseParam = params.get("cache_base");
+		      const cacheBaseUrl = resolveCacheBaseUrl(cacheBaseParam);
+		      const cacheSessionParam = params.get("cache_session_url");
+	      const mapDateParam = params.get("map_date");
+	      const laVersionParam = params.get("la_version");
+      const inferredProjectRef = inferProjectRefFromHost();
+      const projectRef = PROJECT_REF_PLACEHOLDER.includes("__SUPABASE_PROJECT_REF__")
+        ? (projectRefParam || inferredProjectRef || "")
+        : PROJECT_REF_PLACEHOLDER;
+	      const anonKey = ANON_KEY_PLACEHOLDER.includes("__SB_PUBLISHABLE_DEFAULT_KEY__")
+	        ? (anonKeyParam || "")
+	        : ANON_KEY_PLACEHOLDER;
+	      const cacheOrigin = cacheBaseUrl ? new URL(cacheBaseUrl).origin : "";
+	      const defaultCacheSessionUrl = cacheOrigin ? `${cacheOrigin}/api/aq/session/start` : "";
+	      const cacheSessionUrl = (cacheSessionParam || defaultCacheSessionUrl || "").trim();
+		      const REST_URL = cacheBaseUrl
+		        ? `${cacheBaseUrl}/la-hex`
+		        : "";
+      const LATEST_SNAPSHOT_URL = cacheBaseUrl
+        ? `${cacheBaseUrl}/latest-snapshot`
+        : "";
+      const LATEST_LEGACY_URL = cacheBaseUrl
+        ? `${cacheBaseUrl}/latest`
+        : "";
+      const SNAPSHOT_WINDOWS = new Set(["3h", "6h", "1d", "7d", "all"]);
+      function resolveLatestUrl(windowLabel) {
+        const normalizedWindow = String(windowLabel || "").trim().toLowerCase();
+        if (LATEST_SNAPSHOT_URL && SNAPSHOT_WINDOWS.has(normalizedWindow)) {
+          return LATEST_SNAPSHOT_URL;
+        }
+        return LATEST_LEGACY_URL || LATEST_SNAPSHOT_URL;
+      }
+      const POPULATION_URL = projectRef
+        ? `https://${projectRef}.supabase.co/functions/v1/uk_aq_population`
+        : "";
+      let activePollutant = coordinator.getPollutant();
+      const POLLUTANT_CACHE_TTL = 60 * 1000;
+      const pollutantCache = new Map();
+      const latestSinceByKey = new Map();
+      const latestSinceIdByKey = new Map();
+      const latestEtagByKey = new Map();
+      const laEtagByKey = new Map();
+      const laSinceByKey = new Map();
+      let latestLoadId = 0;
+      // Postcode lookup uses ONSPD Feb 2026 lad25cd (LAD 2025 codes).
+      // The hex map must therefore use LAD 2025 codes. Barnsley and Sheffield
+      // received new GSS codes in the 2025 boundary revision:
+      //   Barnsley: E08000016 → E08000038
+      //   Sheffield: E08000019 → E08000039
+      // uk_aq_la_hex_2025.geojson uses the same cartogram layout as the 2023 file
+      // but with updated LA identifiers. Validate with: npm run validate:hexmap:2025
+      //
+      // Wales and Scotland use region-only GeoJSON files because their cartogram
+      // layouts have been manually adjusted; the full UK LAD GeoJSON is used for
+      // all other Countries & Regions selections.
+      const LA_CONFIG = {
+        id: "la25",
+        label: "2025 local authorities",
+        hexUrl: "/data/LAD/uk_aq_la_hex_2025.geojson",
+        regionHexUrls: {
+          Wales: "/data/LAD/uk_aq_la_wales_hex_custom_2025.geojson",
+          Scotland: "/data/LAD/uk_aq_la_scotland_hex_custom_2025.geojson",
+        },
+        version: "2025",
+      };
+      const DEFAULT_REGION = "London";
+      const REGION_OPTIONS = [
+        "Northern Ireland",
+        "Scotland",
+        "Wales",
+        "East Midlands",
+        "East of England",
+        "London",
+        "North East",
+        "North West",
+        "South East",
+        "South West",
+        "West Midlands",
+        "Yorkshire and The Humber",
+      ];
+      const REGION_LOOKUP = new Map(
+        REGION_OPTIONS.map((name) => [name.toLowerCase(), name])
+      );
+      const mapState = (window.mapTabState = window.mapTabState || {});
+      const initialRegion = normalizeRegion(params.get("map"))
+        || normalizeRegion(mapState.lastCrMap)
+        || DEFAULT_REGION;
+      let activeRegion = initialRegion;
+      mapState.lastCrMap = activeRegion;
+      const mapDateKey = normalizeDateKey(mapDateParam);
+      const activeLaVersion = laVersionParam || LA_CONFIG.version;
+      const METRIC_LABELS = {
+        median: "Typical (median)",
+        mean: "Average (mean)",
+      };
+      const MIN_VALID_PM25_VALUE = 0.09;
+      const MAX_VALID_PM25_VALUE = 500;
+      const WINDOW_OPTIONS = {
+        "3h": 3 * 60 * 60 * 1000,
+        "6h": 6 * 60 * 60 * 1000,
+        "1d": 24 * 60 * 60 * 1000,
+        "7d": 7 * 24 * 60 * 60 * 1000,
+        all: null,
+      };
+      const WINDOW_LABELS = {
+        "3h": "3 Hours",
+        "6h": "6 Hours",
+        "1d": "1 Day",
+        "7d": "7 Days",
+        all: "No Limit",
+      };
+      const NETWORK_CATALOG_URL = cacheBaseUrl
+        ? `${cacheBaseUrl}/networks`
+        : "/api/aq/networks";
+      const GOVUK_NETWORK_MATCHERS = ["gov_uk_aurn"];
+      const OPENAQ_NETWORK_MATCHERS = ["openaq"];
+      const BREATHE_LONDON_MATCHERS = ["breathelondon"];
+      const LAQN_NETWORK_MATCHERS = ["laqn"];
+      const SENSOR_COMMUNITY_MATCHERS = ["sensorcommunity"];
+      const AREA_LABEL_PLURAL = "local authorities";
+      const HEAT_STOPS = ["--heat-0", "--heat-1", "--heat-2", "--heat-3", "--heat-4"];
+      const HEAT_STOP_FALLBACKS = ["#00a85a", "#ffd54a", "#ff9b3a", "#e03c3c", "#5b2a86"];
+      const REGION_NAMES = {
+        E12000001: "North East",
+        E12000002: "North West",
+        E12000003: "Yorkshire and The Humber",
+        E12000004: "East Midlands",
+        E12000005: "West Midlands",
+        E12000006: "East of England",
+        E12000007: "London",
+        E12000008: "South East",
+        E12000009: "South West",
+        S92000003: "Scotland",
+        W92000004: "Wales",
+        N92000002: "Northern Ireland",
+      };
+      const AXIAL_DIRECTIONS = [
+        { q: 1, r: 0 },
+        { q: 1, r: -1 },
+        { q: 0, r: -1 },
+        { q: -1, r: 0 },
+        { q: -1, r: 1 },
+        { q: 0, r: 1 },
+      ];
+      const EDGE_DIRECTION_CACHE = new Map();
+      const LA_REGION_OVERRIDES = Object.freeze({
+        // Source data fix: Kingston Upon Hull is Yorkshire and The Humber.
+        E06000010: "Yorkshire and The Humber",
+      });
+      const GEO_ISLAND_COMPACTION_EXCLUDED_REGIONS = new Set([
+        "London",
+        "Yorkshire and The Humber",
+      ]);
+
+      const mapSelect = byId("map-select");
+      const statusEl = byId("status");
+      const statusIndicator = statusEl ? statusEl.closest(".status-indicator") : null;
+      const errorEl = byId("error");
+      const rowCount = byId("row-count");
+      const lastUpdated = byId("last-updated");
+      const endpointHint = byId("endpoint-hint");
+      const mapTitle = byId("map-title");
+      const legendPollutantLabel = byId("legend-pollutant");
+      const legendLabel = byId("legend-label");
+      const legendMin = byId("legend-min");
+      const legendMax = byId("legend-max");
+      const legendScale = byId("legend-scale");
+      requestAnimationFrame(() => {
+        if (!legendLabel) return;
+        const saved = legendLabel.textContent;
+        legendLabel.style.minWidth = "";
+        let maxW = 0;
+        for (const mk of Object.keys(METRIC_LABELS)) {
+          legendLabel.textContent = METRIC_LABELS[mk];
+          maxW = Math.max(maxW, legendLabel.scrollWidth);
+        }
+        legendLabel.textContent = saved;
+        if (maxW > 0) legendLabel.style.minWidth = `${maxW}px`;
+      });
+      const legendTicks = Array.from(queryAll(".legend-tick"));
+      const legendTickLabels = Array.from(queryAll(".legend-tick-label"));
+      const summaryStations = byId("summary-stations");
+      const summaryHighestLabel = byId("summary-highest-label");
+      const summaryLowestLabel = byId("summary-lowest-label");
+      const summaryLowestValue = byId("summary-lowest-value");
+      const summaryLowestDatetime = byId("summary-lowest-datetime");
+      const summaryLowestConnector = byId("summary-lowest-connector");
+      const summaryLowestName = byId("summary-lowest-name");
+      const summaryHighestValue = byId("summary-highest-value");
+      const summaryHighestDatetime = byId("summary-highest-datetime");
+      const summaryHighestConnector = byId("summary-highest-connector");
+      const summaryHighestName = byId("summary-highest-name");
+      const overallSummaryTitle = byId("summary-overall-title");
+      const sensorValueLabel = byId("sensor-value-label");
+      const tooltip = byId("tooltip");
+      const sensorDetailsSection = document.getElementById("cr-sensor-details");
+      const detailsTitle = byId("details-title");
+      const detailsMeta = byId("details-meta");
+      const detailsEmpty = byId("details-empty");
+      const detailsTableWrap = byId("sensor-table-wrap");
+      const detailsTableBody = byId("sensor-table-body");
+      const networkSummary = byId("network-summary");
+      const aurnSensors = byId("network-aurn-sensors");
+      const aurnCoverageValue = byId("network-aurn-coverage-value");
+      const aurnCoverageBar = byId("network-aurn-coverage-bar");
+      const aurnCoverageFill = byId("network-aurn-coverage-fill");
+      const aurnAverage = byId("network-aurn-average");
+      const aurnMedian = byId("network-aurn-median");
+      const aurnHighest = byId("network-aurn-highest");
+      const aurnLowest = byId("network-aurn-lowest");
+      const aurnLatest = byId("network-aurn-latest");
+      const openaqSensors = byId("network-openaq-sensors");
+      const openaqCoverageValue = byId("network-openaq-coverage-value");
+      const openaqCoverageBar = byId("network-openaq-coverage-bar");
+      const openaqCoverageFill = byId("network-openaq-coverage-fill");
+      const openaqAverage = byId("network-openaq-average");
+      const openaqMedian = byId("network-openaq-median");
+      const openaqHighest = byId("network-openaq-highest");
+      const openaqLowest = byId("network-openaq-lowest");
+      const openaqLatest = byId("network-openaq-latest");
+      const breatheSensors = byId("network-breathe-sensors");
+      const breatheCoverageValue = byId("network-breathe-coverage-value");
+      const breatheCoverageBar = byId("network-breathe-coverage-bar");
+      const breatheCoverageFill = byId("network-breathe-coverage-fill");
+      const breatheAverage = byId("network-breathe-average");
+      const breatheMedian = byId("network-breathe-median");
+      const breatheHighest = byId("network-breathe-highest");
+      const breatheLowest = byId("network-breathe-lowest");
+      const breatheLatest = byId("network-breathe-latest");
+      const laqnSensors = byId("network-laqn-sensors");
+      const laqnCoverageValue = byId("network-laqn-coverage-value");
+      const laqnCoverageBar = byId("network-laqn-coverage-bar");
+      const laqnCoverageFill = byId("network-laqn-coverage-fill");
+      const laqnAverage = byId("network-laqn-average");
+      const laqnMedian = byId("network-laqn-median");
+      const laqnHighest = byId("network-laqn-highest");
+      const laqnLowest = byId("network-laqn-lowest");
+      const laqnLatest = byId("network-laqn-latest");
+      const scSensors = byId("network-sc-sensors");
+      const scCoverageValue = byId("network-sc-coverage-value");
+      const scCoverageBar = byId("network-sc-coverage-bar");
+      const scCoverageFill = byId("network-sc-coverage-fill");
+      const scAverage = byId("network-sc-average");
+      const scMedian = byId("network-sc-median");
+      const scHighest = byId("network-sc-highest");
+      const scLowest = byId("network-sc-lowest");
+      const scLatest = byId("network-sc-latest");
+      const extraNetworkSummaryDefs = [
+        {
+          key: "breathe-london",
+          matchers: BREATHE_LONDON_MATCHERS,
+          elements: {
+            sensors: breatheSensors,
+            coverageValue: breatheCoverageValue,
+            coverageBar: breatheCoverageBar,
+            coverageFill: breatheCoverageFill,
+            average: breatheAverage,
+            median: breatheMedian,
+            highest: breatheHighest,
+            lowest: breatheLowest,
+            latest: breatheLatest,
+          },
+        },
+        {
+          key: "laqn",
+          matchers: LAQN_NETWORK_MATCHERS,
+          elements: {
+            sensors: laqnSensors,
+            coverageValue: laqnCoverageValue,
+            coverageBar: laqnCoverageBar,
+            coverageFill: laqnCoverageFill,
+            average: laqnAverage,
+            median: laqnMedian,
+            highest: laqnHighest,
+            lowest: laqnLowest,
+            latest: laqnLatest,
+          },
+        },
+        {
+          key: "sensor-community",
+          matchers: SENSOR_COMMUNITY_MATCHERS,
+          elements: {
+            sensors: scSensors,
+            coverageValue: scCoverageValue,
+            coverageBar: scCoverageBar,
+            coverageFill: scCoverageFill,
+            average: scAverage,
+            median: scMedian,
+            highest: scHighest,
+            lowest: scLowest,
+            latest: scLatest,
+          },
+        },
+      ];
+      const mapSvg = byId("hex-map");
+      const svg = d3.select("#cr-hex-map");
+      const mapResizeTarget = svg.node()?.parentElement || svg.node();
+      if (mapResizeTarget && typeof ResizeObserver !== "undefined") {
+        const mapResizeObserver = new ResizeObserver(() => {
+          if (statusEl.textContent === "Live") {
+            renderMapIfReady();
+          }
+        });
+        mapResizeObserver.observe(mapResizeTarget);
+      }
+      const mapSettingsButton = query(".map-settings");
+      const mapSettingsPanel = byId("map-settings-panel");
+      const mapSettingsClose = byId("map-settings-close");
+      const mapWrap = query(".map-wrap");
+      const windowInputs = Array.from(queryAll("input[name='cr-averagingWindow']"));
+      const metricInputs = Array.from(queryAll("input[name='cr-metricSelect']"));
+      const metricGroup = query(".metric-group");
+      const metricToggle = metricGroup ? metricGroup.querySelector(".metric-toggle") : null;
+      const colorScaleInputs = Array.from(queryAll("input[name='cr-colourScale']"));
+      const colorScaleGroup = query(".colour-scale-group");
+      const colorScaleToggle = colorScaleGroup ? colorScaleGroup.querySelector(".colour-scale-toggle") : null;
+      const networkPanel = query(".network-panel");
+      // Shared toolbar dropdown controls (single DOM instance moved between UK/CR tabs).
+      const sortHeaders = detailsTableWrap
+        ? Array.from(detailsTableWrap.querySelectorAll("th[data-sort-key]"))
+        : [];
+      const sortHeaderButtons = sortHeaders
+        .map((header) => header.querySelector("button[data-sort-key]"))
+        .filter(Boolean);
+      const mapCanvasWrap = byId("map-inline-sensor-panel")?.closest(".map-canvas-wrap") || null;
+      const inlinePanelClose = byId("sensor-panel-close");
+      const inlinePanelWindowLabel = byId("sensor-panel-window-label");
+      const inlinePanelTitle = byId("sensor-panel-title");
+      const inlinePanelTitleLaunch = query("#tab-panel-cr .sensor-panel-title-launch");
+      const inlinePanelLaunchButton = query("#tab-panel-cr .sensor-title-icon-button");
+      const inlinePanelReading = byId("sensor-panel-reading");
+      const inlinePanelNetworkLabel = byId("sensor-panel-network-label");
+      const inlinePanelCount = byId("sensor-panel-count");
+      const inlinePanelHexIcon = byId("sensor-panel-hex-icon");
+      const inlinePanelBody = byId("sensor-panel-body");
+      const SENSOR_PANEL_EMPTY_HEIGHT = 116;
+      const SENSOR_PANEL_HEADER_HEIGHT = 62;
+      const SENSOR_TABLE_HEADER_HEIGHT = 44;
+      const SENSOR_PANEL_ROW_HEIGHT = 46;
+      const SENSOR_PANEL_MAX_VISIBLE_ROWS = 4;
+      const detailScrollAffordances = window.UkAqHexMapScrollAffordances?.attachSensorTable?.(detailsTableWrap, {
+        contentEl: detailsTableBody,
+        isScrollbarHidden: () => !detailsTableWrap?.classList.contains("is-scroll-forced"),
+        trackOffsetTop: SENSOR_TABLE_HEADER_HEIGHT,
+      });
+      const restoreDetailsScrollPosition = (nextKey, previousScrollTop) => {
+        detailScrollAffordances?.restorePosition?.(nextKey, previousScrollTop);
+      };
+      let chartLaunchAvailable = false;
+      const formatSelectedAreaSensorCount = (inWindowCount, outsideWindowCount) => {
+        const inWindow = Math.max(0, Number(inWindowCount) || 0);
+        const outside = Math.max(0, Number(outsideWindowCount) || 0);
+        return outside > 0
+          ? `${formatSensorCount(inWindow)} (+${formatNumber(outside)} outside window)`
+          : `${formatSensorCount(inWindow)} (0 outside window)`;
+      };
+      const syncInlinePanelTitleInteractivity = () => {
+        if (!inlinePanelTitle) {
+          return;
+        }
+        const isChartModeActive = Boolean(window.hexChartMode?.isActive?.("cr"));
+        const isInteractive = chartLaunchAvailable && !isChartModeActive;
+        inlinePanelTitleLaunch?.setAttribute("data-chart-launch-available", isInteractive ? "true" : "false");
+        if (inlinePanelLaunchButton) {
+          inlinePanelLaunchButton.disabled = !isInteractive;
+        }
+        inlinePanelTitle.setAttribute("aria-disabled", isInteractive ? "false" : "true");
+        if (!isInteractive) {
+          inlinePanelTitle.removeAttribute("role");
+          inlinePanelTitle.removeAttribute("tabindex");
+          return;
+        }
+        inlinePanelTitle.setAttribute("role", "button");
+        inlinePanelTitle.setAttribute("tabindex", "0");
+      };
+      if (inlinePanelClose) {
+        inlinePanelClose.addEventListener("click", () => {
+          if (window.hexChartMode?.isActive?.("cr")) {
+            window.hexChartMode?.exit?.();
+          }
+          setSelectedCell(null);
+        });
+      }
+      const openSelectedAreaChartMode = () => {
+        if (!chartLaunchAvailable || !selectedAreaCode || window.hexChartMode?.isActive?.("cr")) {
+          return;
+        }
+        window.hexChartMode?.enter?.({ mapKey: "cr" });
+      };
+      inlinePanelLaunchButton?.addEventListener("click", (event) => {
+        event.stopPropagation();
+        openSelectedAreaChartMode();
+      });
+      inlinePanelTitle?.addEventListener("click", (event) => {
+        if (!chartLaunchAvailable || window.hexChartMode?.isActive?.("cr")) {
+          return;
+        }
+        event.stopPropagation();
+        openSelectedAreaChartMode();
+      });
+      inlinePanelTitle?.addEventListener("keydown", (event) => {
+        if (!chartLaunchAvailable || window.hexChartMode?.isActive?.("cr")) {
+          return;
+        }
+        if (event.key === "Enter" || event.key === " ") {
+          event.preventDefault();
+          openSelectedAreaChartMode();
+        }
+      });
+      syncInlinePanelTitleInteractivity();
+      if (detailsTableWrap) {
+        detailsTableWrap.addEventListener("click", (event) => {
+          const launchButton = event.target instanceof Element
+            ? event.target.closest(".sensor-chart-launch[data-station-id]")
+            : null;
+          if (launchButton && detailsTableWrap.contains(launchButton)) {
+            event.stopPropagation();
+            const stationId = String(launchButton.dataset.stationId || "").trim();
+            if (!stationId || window.hexChartMode?.isActive?.("cr")) {
+              return;
+            }
+            window.hexChartMode?.enter?.({
+              mapKey: "cr",
+              initialSensorId: stationId,
+            });
+            return;
+          }
+          const selectorHeaderButton = event.target instanceof Element
+            ? event.target.closest(".hex-chart-selector[data-chart-header-action]")
+            : null;
+          if (selectorHeaderButton && detailsTableWrap.contains(selectorHeaderButton)) {
+            event.stopPropagation();
+            const action = String(selectorHeaderButton.getAttribute("data-chart-header-action") || "").trim();
+            if (!action) {
+              return;
+            }
+            if (window.hexChartMode?.isActive?.("cr")) {
+              window.hexChartMode?.applyHeaderSelectionAction?.(action, { mapKey: "cr" });
+            }
+            return;
+          }
+          const selectorButton = event.target instanceof Element
+            ? event.target.closest(".hex-chart-selector[data-station-id]")
+            : null;
+          if (selectorButton && detailsTableWrap.contains(selectorButton)) {
+            event.stopPropagation();
+            const stationId = String(selectorButton.dataset.stationId || "").trim();
+            if (!stationId) {
+              return;
+            }
+            if (window.hexChartMode?.isActive?.("cr")) {
+              window.hexChartMode?.selectSensor?.(stationId, { mapKey: "cr", mode: "toggle" });
+            }
+            return;
+          }
+          const button = event.target instanceof Element
+            ? event.target.closest(".sensor-name-button[data-station-id]")
+            : null;
+          if (!button || !detailsTableWrap.contains(button)) {
+            return;
+          }
+          event.stopPropagation();
+          const stationId = String(button.dataset.stationId || "").trim();
+          if (!stationId) {
+            return;
+          }
+          if (window.hexChartMode?.isActive?.("cr")) {
+            window.hexChartMode?.selectSensor?.(stationId, { mapKey: "cr", mode: "single" });
+            return;
+          }
+          window.hexChartMode?.enter?.({
+            mapKey: "cr",
+            initialSensorId: stationId,
+          });
+        });
+      }
+
+      const initialMapSettings = coordinator.getMapSettings();
+      let currentMetric = initialMapSettings.metric;
+      let currentColorScale = initialMapSettings.colorScale;
+      let currentWindow = initialMapSettings.window;
+      let sortKey = "pm25";
+      let sortDir = "desc";
+      let hexData = null;
+      let hexCells = [];
+      let hexBounds = null;
+      let hexSide = null;
+      let hexLayout = "odd-r";
+      let hasRendered = false;
+      let lastRenderWidth = 0;
+      let lastRenderHeight = 0;
+      let basePconRows = [];
+      let basePconLookup = new Map();
+      let pconRows = [];
+      let pconLookup = new Map();
+      let pconCodes = new Set();
+      let boundaryPaths = [];
+      let baseLatestRows = [];
+      let baseLatestRowsAllWindow = [];
+      let scopedLatestRows = [];
+      let scopedLatestRowsAllWindow = [];
+      let latestRows = [];
+      let latestPollutant = null;
+      let chartDataStatus = "loading";
+      let allRegionsMetricLookup = new Map();
+      let allRegionsFetchState = "idle"; // "idle" | "fetching" | "done"
+      let allRegionsFetchPollutant = null;
+      let crRefreshTimer = null;
+      let crWasHidden = true;
+      let crBootstrapReady = false;
+      let populationLookup = new Map();
+	      let selectedAreaCode = null;
+	      let selectedCell = null;
+	      let pendingSelectedAreaCode = null;
+	      let areaRegionLookup = new Map();
+	      let crSearchPreloadPromise = null;
+      let colorScale = null;
+      let currentDomainMax = null;
+      function setStatus(value) {
+        if (!statusEl) {
+          return;
+        }
+        statusEl.textContent = value;
+        if (statusIndicator) {
+          const isLive = value === "Live";
+          statusIndicator.dataset.state = isLive ? "live" : "idle";
+        }
+      }
+
+      function updateEndpointHint() {
+        if (!endpointHint) {
+          return;
+        }
+        if (!REST_URL) {
+          endpointHint.textContent = "Missing cache endpoint base URL. Add ?cache_base=... to the URL.";
+          return;
+        }
+        const regionSuffix = activeRegion ? ` · ${activeRegion}` : "";
+        endpointHint.textContent = `Endpoint: ${REST_URL} (${LA_CONFIG.label}${regionSuffix})`;
+      }
+      updateEndpointHint();
+
+      function resolveCacheBaseUrl(rawValue) {
+        const explicit = typeof rawValue === "string" ? rawValue.trim() : "";
+        if (explicit) {
+          return explicit.replace(/\/+$/, "");
+        }
+        if (window.location.protocol === "http:" || window.location.protocol === "https:") {
+          return `${window.location.origin.replace(/\/$/, "")}/api/aq`;
+        }
+        return "https://cic-test.chronicillnesschannel.co.uk/api/aq";
+      }
+
+      async function fetchCacheApi(input, init = {}, retryOnAuthFailure = true) {
+        const timingId = nextHexMapTimingId();
+        const requestLabel = getHexMapRequestLabel(input);
+        markHexMapTiming(timingId, `fetch:${requestLabel}:start`);
+        try {
+          return await window.ukAqSharedAuth.fetchCacheApi(input, init, retryOnAuthFailure);
+        } finally {
+          markHexMapTiming(timingId, `fetch:${requestLabel}:end`);
+          measureHexMapTiming(
+            timingId,
+            `fetch:${requestLabel}`,
+            `fetch:${requestLabel}:start`,
+            `fetch:${requestLabel}:end`,
+          );
+        }
+      }
+      window.ukAqFetchCacheApi = fetchCacheApi;
+
+      const ACCESS_LOGIN_REDIRECT_KEY = "uk_aq_access_login_redirect_ts";
+      const HEX_MAP_TIMING_PREFIX = "uk-aq-hex-map";
+      const MAP_TIMING_KEY = "cr";
+      let hexMapTimingSequence = 0;
+
+      function nextHexMapTimingId() {
+        hexMapTimingSequence += 1;
+        return hexMapTimingSequence;
+      }
+
+      function getHexMapTimingMarkName(timingId, stage) {
+        return `${HEX_MAP_TIMING_PREFIX}:${MAP_TIMING_KEY}:${timingId}:${stage}`;
+      }
+
+      function getHexMapRequestLabel(input) {
+        try {
+          const requestUrl = input instanceof Request
+            ? new URL(input.url)
+            : new URL(String(input), window.location.href);
+          return requestUrl.pathname.replace(/^\/+/, "").replace(/\//g, ":") || "request";
+        } catch (_err) {
+          return "request";
+        }
+      }
+
+      function markHexMapTiming(timingId, stage) {
+        if (typeof performance === "undefined" || typeof performance.mark !== "function") {
+          return;
+        }
+        performance.mark(getHexMapTimingMarkName(timingId, stage));
+      }
+
+      function measureHexMapTiming(timingId, measureName, startStage, endStage) {
+        if (typeof performance === "undefined" || typeof performance.measure !== "function") {
+          return;
+        }
+        try {
+          performance.measure(
+            `${HEX_MAP_TIMING_PREFIX}:${MAP_TIMING_KEY}:${timingId}:${measureName}`,
+            getHexMapTimingMarkName(timingId, startStage),
+            getHexMapTimingMarkName(timingId, endStage),
+          );
+        } catch (_err) {
+          // Ignore missing-mark errors when a load aborts before completion.
+        }
+      }
+
+      function isLikelyAccessFetchFailure(error) {
+        if (!(error instanceof TypeError)) {
+          return false;
+        }
+	        const message = String(error.message || "").toLowerCase();
+	        return message.includes("failed to fetch") || message.includes("networkerror");
+	      }
+
+	      function buildAccessLoginUrl() {
+	        const host = window.location.hostname || "";
+	        if (!host) {
+	          return null;
+	        }
+	        const appSlug = host.split(".")[0];
+	        if (!appSlug) {
+	          return null;
+	        }
+	        const loginOrigin = `https://${appSlug}.cloudflareaccess.com`;
+	        const redirectPath = `${window.location.pathname}${window.location.search}${window.location.hash}`;
+	        return `${loginOrigin}/cdn-cgi/access/login/${host}?redirect_url=${encodeURIComponent(redirectPath)}`;
+	      }
+
+	      function maybeRedirectToAccessLogin(error) {
+	        if (!cacheOrigin || !cacheSessionUrl || !isLikelyAccessFetchFailure(error)) {
+	          return false;
+	        }
+	        if ((window.location.hostname || "").endsWith(".cloudflareaccess.com")) {
+	          return false;
+	        }
+	        const loginUrl = buildAccessLoginUrl();
+	        if (!loginUrl) {
+	          return false;
+	        }
+	        try {
+	          const now = Date.now();
+	          const last = Number(sessionStorage.getItem(ACCESS_LOGIN_REDIRECT_KEY) || "0");
+	          if (Number.isFinite(last) && now - last < 10000) {
+	            return false;
+	          }
+	          sessionStorage.setItem(ACCESS_LOGIN_REDIRECT_KEY, String(now));
+	        } catch (_err) {
+	          // Ignore storage failures and continue with redirect.
+	        }
+	        window.location.assign(loginUrl);
+	        return true;
+	      }
+
+	      if (mapSelect) {
+	        mapSelect.value = activeRegion;
+        mapSelect.addEventListener("change", () => {
+          const nextRegion = normalizeRegion(mapSelect.value);
+          if (!nextRegion) {
+            return;
+          }
+          setActiveRegion(nextRegion, { updateUrl: true });
+        });
+      }
+
+      function inferProjectRefFromHost() {
+        const host = window.location.hostname || "";
+        if (host.endsWith(".supabase.co")) {
+          return host.split(".")[0];
+        }
+        return null;
+      }
+
+      function normalizeDateKey(value) {
+        if (!value) {
+          return null;
+        }
+        const trimmed = value.trim();
+        if (!/^\d{4}-\d{2}-\d{2}$/.test(trimmed)) {
+          return null;
+        }
+        return trimmed;
+      }
+
+      function normalizeRegion(value) {
+        if (!value) {
+          return null;
+        }
+        const trimmed = value.trim();
+        if (!trimmed) {
+          return null;
+        }
+        const lower = trimmed.toLowerCase();
+        if (lower === "uk") {
+          return null;
+        }
+        return REGION_LOOKUP.get(lower) || null;
+      }
+
+      function getHexUrlForRegion(region) {
+        return LA_CONFIG.regionHexUrls?.[region] || LA_CONFIG.hexUrl;
+      }
+
+
+      function normalizeNumber(value) {
+        if (value === null || value === undefined) {
+          return null;
+        }
+        const numeric = Number(value);
+        return Number.isFinite(numeric) ? numeric : null;
+      }
+
+      function clampValue(value, pollutantKey) {
+        const numeric = normalizeNumber(value);
+        if (numeric === null) {
+          return null;
+        }
+        if (pollutantKey === "pm25" && numeric > MAX_VALID_PM25_VALUE) {
+          return null;
+        }
+        return numeric;
+      }
+
+      function formatNumber(value) {
+        if (value === null || value === undefined || Number.isNaN(value)) {
+          return "-";
+        }
+        return value.toLocaleString();
+      }
+
+      function formatSensorCount(value) {
+        const count = Number.isFinite(value) ? value : 0;
+        const label = count === 1 ? "Sensor" : "Sensors";
+        return `${formatNumber(count)} ${label}`;
+      }
+
+      function formatCoveragePercent(covered, total) {
+        if (!total) {
+          return "0%";
+        }
+        const percent = (covered / total) * 100;
+        return `${Math.round(percent)}%`;
+      }
+
+      function formatCoverageValue(covered, total) {
+        return `${formatCoveragePercent(covered, total)} (${formatNumber(covered)} / ${formatNumber(total)})`;
+      }
+
+      function updateCoverageElements(valueEl, fillEl, barEl, covered, total, areaLabel) {
+        if (!valueEl || !fillEl || !barEl) {
+          return;
+        }
+        const percentRaw = total ? (covered / total) * 100 : 0;
+        const percent = Math.max(0, Math.min(100, percentRaw));
+        const coverageLabel = formatCoverageValue(covered, total);
+        valueEl.textContent = coverageLabel;
+        fillEl.style.width = `${percent}%`;
+        const areaSuffix = areaLabel ? ` ${areaLabel}` : "";
+        const ariaLabel = `Coverage ${coverageLabel}${areaSuffix}`;
+        barEl.setAttribute("aria-label", ariaLabel);
+        barEl.title = ariaLabel;
+      }
+
+      function formatValue(value) {
+        const numeric = normalizeNumber(value);
+        if (numeric === null) {
+          return "-";
+        }
+        return numeric.toFixed(1);
+      }
+
+      function escapeHtmlLocal(value) {
+        return String(value ?? "")
+          .replace(/&/g, "&amp;")
+          .replace(/</g, "&lt;")
+          .replace(/>/g, "&gt;")
+          .replace(/"/g, "&quot;")
+          .replace(/'/g, "&#39;");
+      }
+
+      function formatTimestamp(value) {
+        if (!value) {
+          return "unknown";
+        }
+        const parsed = new Date(value);
+        if (Number.isNaN(parsed.getTime())) {
+          return "unknown";
+        }
+        return parsed.toLocaleString();
+      }
+
+      function formatShortTimestamp(value) {
+        if (!value) {
+          return "-";
+        }
+        const parsed = value instanceof Date ? value : new Date(value);
+        if (Number.isNaN(parsed.getTime())) {
+          return "-";
+        }
+        const day = String(parsed.getDate()).padStart(2, "0");
+        const month = String(parsed.getMonth() + 1).padStart(2, "0");
+        const year = String(parsed.getFullYear()).slice(-2);
+        const hours = String(parsed.getHours()).padStart(2, "0");
+        const minutes = String(parsed.getMinutes()).padStart(2, "0");
+        return `${day}/${month}/${year} ${hours}:${minutes}`;
+      }
+
+      function formatSummaryTimestamp(value) {
+        if (!value) {
+          return "-";
+        }
+        const parsed = value instanceof Date ? value : new Date(value);
+        if (Number.isNaN(parsed.getTime())) {
+          return "-";
+        }
+        const day = String(parsed.getDate()).padStart(2, "0");
+        const month = String(parsed.getMonth() + 1).padStart(2, "0");
+        const year = String(parsed.getFullYear());
+        const hours = String(parsed.getHours()).padStart(2, "0");
+        const minutes = String(parsed.getMinutes()).padStart(2, "0");
+        return `${day}/${month}/${year} ${hours}:${minutes}`;
+      }
+
+      function parseDate(value) {
+        if (!value) {
+          return null;
+        }
+        const parsed = new Date(value);
+        if (Number.isNaN(parsed.getTime())) {
+          return null;
+        }
+        return parsed;
+      }
+
+      function normalizeWindowKey(value) {
+        if (!value || !(value in WINDOW_OPTIONS)) {
+          return "all";
+        }
+        return value;
+      }
+
+      function setWindow(nextWindow, options = {}) {
+        const normalized = normalizeWindowKey(nextWindow);
+        if (!normalized) {
+          return;
+        }
+        if (normalized === currentWindow) {
+          syncWindowInputs();
+          return;
+        }
+        if (!options.coordinated) {
+          coordinator.updateMapSettings({ window: normalized }, { source: "cr" });
+          return;
+        }
+        currentWindow = normalized;
+        syncWindowInputs();
+        if (!isCrMapVisible()) {
+          return;
+        }
+        setMapLoading(true);
+        const latestCacheKey = getLatestCacheKey(activePollutant, currentWindow, activeRegion);
+        // Window switches must compare like-for-like snapshots. Drop incremental
+        // state for the target window so we always fetch a fresh full window.
+        latestSinceByKey.delete(latestCacheKey);
+        latestSinceIdByKey.delete(latestCacheKey);
+        latestEtagByKey.delete(latestCacheKey);
+        pollutantCache.delete(latestCacheKey);
+        loadMapData();
+      }
+
+      function getPollutantLabel(key) {
+        return pollutantDomain.get(key)?.label || "PM2.5";
+      }
+
+      function getPollutantUnits(key) {
+        return pollutantDomain.get(key)?.unit || "µg/m³";
+      }
+
+      function getNonZeroThreshold() {
+        return activePollutant === "pm25" ? MIN_VALID_PM25_VALUE : 0;
+      }
+
+      function updatePollutantLabels() {
+        const pollutantLabel = getPollutantLabel(activePollutant);
+        const pollutantUnits = getPollutantUnits(activePollutant);
+        if (mapTitle) {
+          mapTitle.textContent = `Latest ${pollutantLabel} by local authority`;
+        }
+        if (legendPollutantLabel) {
+          legendPollutantLabel.textContent = `${pollutantLabel} (${pollutantUnits})`;
+        }
+        if (overallSummaryTitle) {
+          overallSummaryTitle.textContent = `${pollutantLabel} summary`;
+        }
+        if (summaryHighestLabel) {
+          summaryHighestLabel.textContent = `Highest ${pollutantLabel}`;
+        }
+        if (summaryLowestLabel) {
+          summaryLowestLabel.textContent = `Lowest ${pollutantLabel} (Non-zero)`;
+        }
+        if (sensorValueLabel) {
+          sensorValueLabel.textContent = pollutantLabel;
+        }
+        if (mapSvg) {
+          mapSvg.setAttribute("aria-label", `Hex cartogram of ${pollutantLabel} by local authority`);
+        }
+      }
+
+      let crInitialLoad = true;
+
+      function setMapLoading(isLoading) {
+        if (!mapWrap) {
+          return;
+        }
+        if (!isLoading) {
+          if (crInitialLoad) {
+            crInitialLoad = false;
+            mapWrap.classList.remove("is-initial");
+          }
+          const dataHexes = mapWrap.querySelectorAll(".hex.has-data");
+          mapWrap.classList.remove("is-loading");
+          requestAnimationFrame(() => {
+            requestAnimationFrame(() => {
+              dataHexes.forEach((el) => {
+                const targetFill = el.getAttribute("data-fill");
+                if (targetFill) el.style.fill = targetFill;
+              });
+            });
+          });
+        } else {
+          mapWrap.classList.add("is-loading");
+        }
+        if (isLoading && tooltip) {
+          tooltip.classList.remove("visible");
+        }
+      }
+
+      function isCrMapVisible() {
+        return !document.hidden && !root?.hidden;
+      }
+
+      function clearCrRefreshTimer() {
+        if (crRefreshTimer) {
+          clearInterval(crRefreshTimer);
+          crRefreshTimer = null;
+        }
+      }
+
+      function startCrRefreshTimer() {
+        clearCrRefreshTimer();
+        if (!isCrMapVisible()) {
+          return;
+        }
+        crRefreshTimer = setInterval(() => {
+          if (isCrMapVisible()) {
+            if (window.hexChartMode?.isActive?.("cr")) {
+              window.hexChartMode.refresh?.();
+            } else {
+              loadMapData();
+            }
+          }
+        }, 60 * 1000);
+      }
+
+      function syncCrPollingOnVisibility() {
+        if (!isCrMapVisible()) {
+          clearCrRefreshTimer();
+          crWasHidden = true;
+          return;
+        }
+        if (!crBootstrapReady) {
+          return;
+        }
+        startCrRefreshTimer();
+        if (crWasHidden) {
+          loadMapData();
+          crWasHidden = false;
+        }
+      }
+
+      function getLatestCacheKey(
+        pollutantKey = activePollutant,
+        windowKey = currentWindow,
+        regionKey = activeRegion
+      ) {
+        return `${pollutantKey || "all"}::${windowKey || "all"}::${regionKey || "all"}`;
+      }
+
+      function normalizeIsoTimestamp(value) {
+        if (!value) {
+          return null;
+        }
+        const parsed = new Date(value);
+        if (Number.isNaN(parsed.getTime())) {
+          return null;
+        }
+        return parsed.toISOString();
+      }
+
+      function normalizeCursorId(value) {
+        if (value === null || value === undefined || value === "") {
+          return null;
+        }
+        const parsed = Number(value);
+        if (!Number.isFinite(parsed) || parsed < 0) {
+          return null;
+        }
+        return Math.trunc(parsed);
+      }
+
+      function resolveLatestRowKey(row) {
+        const stationId = row?.station_id ?? row?.station?.id ?? null;
+        const pollutantKey = getPollutantKeyFromRow(row);
+        if (stationId !== null && stationId !== undefined && pollutantKey) {
+          return `${stationId}::${pollutantKey}`;
+        }
+        return row?.id
+          ?? row?.timeseries_id
+          ?? row?.timeseries_ref
+          ?? null;
+      }
+
+      function mergeLatestRows(existingRows, incomingRows) {
+        const merged = new Map();
+        const extras = [];
+        const upsert = (row) => {
+          const key = resolveLatestRowKey(row);
+          if (key === null || key === undefined || key === "") {
+            extras.push(row);
+            return;
+          }
+          merged.set(String(key), row);
+        };
+        existingRows.forEach(upsert);
+        incomingRows.forEach(upsert);
+        return [...merged.values(), ...extras];
+      }
+
+      function mergePconRows(existingRows, incomingRows) {
+        const merged = new Map();
+        const extras = [];
+        const upsert = (row) => {
+          const key = resolveAreaCode(row);
+          if (!key) {
+            extras.push(row);
+            return;
+          }
+          merged.set(String(key), row);
+        };
+        existingRows.forEach(upsert);
+        incomingRows.forEach(upsert);
+        return [...merged.values(), ...extras];
+      }
+
+      function getPollutantCache(key) {
+        const cached = pollutantCache.get(key);
+        if (!cached) {
+          return null;
+        }
+        if (Date.now() - cached.timestamp > POLLUTANT_CACHE_TTL) {
+          return null;
+        }
+        return cached;
+      }
+
+      function applyCachedPollutant(key) {
+        const cached = getPollutantCache(key);
+        if (!cached) {
+          return false;
+        }
+        baseLatestRows = cached.latestRows;
+        const cachedAllRows = getPollutantCache(getLatestCacheKey(activePollutant, "all", activeRegion));
+        baseLatestRowsAllWindow = cachedAllRows?.latestRows || cached.latestRows || [];
+        latestPollutant = cached.latestPollutant || activePollutant;
+        chartDataStatus = latestPollutant === activePollutant ? "ready" : "loading";
+        const networkRowsForWindow = getNetworkRowsForWindow();
+        const windowNetworkDefs = buildNetworkDefs(networkRowsForWindow);
+        const coverageByCode = buildNetworkCoverageByCode(networkRowsForWindow);
+        renderNetworkFiltersIfNeeded(
+          windowNetworkDefs,
+          coverageByCode,
+          pconCodes.size || 0,
+          AREA_LABEL_PLURAL,
+        );
+        applyNetworkFilters();
+        requestAnimationFrame(() => {
+          setMapLoading(false);
+        });
+        return true;
+      }
+
+      function setActivePollutant(nextPollutant, options = {}) {
+        if (!nextPollutant) {
+          return;
+        }
+        const normalized = normalizePollutantKey(nextPollutant);
+        if (!normalized || normalized === activePollutant) {
+          updatePollutantLabels();
+          return;
+        }
+        if (!options.coordinated) {
+          coordinator.setPollutant(normalized, { source: "cr" });
+          return;
+        }
+        activePollutant = normalized;
+        chartDataStatus = "loading";
+        updatePollutantLabels();
+        if (options.deferFetch) {
+          return;
+        }
+        if (!isCrMapVisible()) {
+          return;
+        }
+        setMapLoading(true);
+        if (applyCachedPollutant(getLatestCacheKey(activePollutant, currentWindow, activeRegion))) {
+          return;
+        }
+        loadMapData();
+      }
+
+      function getWindowCutoff() {
+        const windowMs = WINDOW_OPTIONS[currentWindow];
+        if (!windowMs) {
+          return null;
+        }
+        return Date.now() - windowMs;
+      }
+
+      function isTimestampInWindow(timestamp, cutoff) {
+        if (!cutoff) {
+          return true;
+        }
+        if (!timestamp) {
+          return false;
+        }
+        return timestamp.getTime() >= cutoff;
+      }
+
+      function syncColorScaleInputs() {
+        colorScaleInputs.forEach((input) => {
+          input.checked = input.value === currentColorScale;
+        });
+        if (colorScaleGroup) {
+          colorScaleGroup.dataset.active = currentColorScale;
+        }
+      }
+
+      function syncWindowInputs() {
+        windowInputs.forEach((input) => {
+          input.checked = input.value === currentWindow;
+        });
+      }
+
+      function setColorScale(nextScale, options = {}) {
+        if (!nextScale) {
+          return;
+        }
+        if (nextScale === currentColorScale) {
+          syncColorScaleInputs();
+          return;
+        }
+        if (!options.coordinated) {
+          coordinator.updateMapSettings({ colorScale: nextScale }, { source: "cr" });
+          return;
+        }
+        currentColorScale = nextScale;
+        syncColorScaleInputs();
+        updateLegendScaleDescription();
+        renderMap();
+        updateDetailsPanel();
+        updateSummary();
+      }
+
+      function getLegendCapValue() {
+        return activePollutant === "no2" ? 100 : 50;
+      }
+
+      function updateLegendScaleDescription() {
+        if (!legendScale) {
+          return;
+        }
+        const capValue = getLegendCapValue();
+        const description = currentColorScale === "linear"
+          ? `Linear colour scale: values map directly; values above ${capValue} are shown as ${capValue}+.`
+          : `Power-eased colour scale: pulls low values toward mid-range; values above ${capValue} are shown as ${capValue}+.`;
+        legendScale.title = description;
+        legendScale.setAttribute("aria-label", description);
+      }
+
+      function openSettingsPanel() {
+        if (!mapSettingsPanel || !mapSettingsButton) {
+          return;
+        }
+        syncSettingsPanelWidth();
+        mapSettingsPanel.classList.add("open");
+        positionSettingsPanel();
+        mapSettingsButton.setAttribute("aria-expanded", "true");
+      }
+
+      function closeSettingsPanel() {
+        if (!mapSettingsPanel || !mapSettingsButton) {
+          return;
+        }
+        mapSettingsPanel.classList.remove("open");
+        mapSettingsButton.setAttribute("aria-expanded", "false");
+      }
+
+      function toggleSettingsPanel() {
+        if (!mapSettingsPanel) {
+          return;
+        }
+        if (mapSettingsPanel.classList.contains("open")) {
+          closeSettingsPanel();
+        } else {
+          openSettingsPanel();
+        }
+      }
+
+      function syncSettingsPanelWidth() {
+        if (!mapSettingsPanel) {
+          return;
+        }
+        const panelWidth = networkPanel?.getBoundingClientRect().width || 0;
+        if (panelWidth > 0) {
+          mapSettingsPanel.style.width = `${panelWidth}px`;
+        } else {
+          mapSettingsPanel.style.removeProperty("width");
+        }
+      }
+
+      function positionSettingsPanel() {
+        if (!mapSettingsPanel || !mapSettingsButton || !mapCanvasWrap) {
+          return;
+        }
+        const gap = 8;
+        mapSettingsPanel.style.top = "0px";
+        mapSettingsPanel.style.bottom = "auto";
+        const canvasRect = mapCanvasWrap.getBoundingClientRect();
+        const buttonRect = mapSettingsButton.getBoundingClientRect();
+        const panelHeight = mapSettingsPanel.getBoundingClientRect().height || mapSettingsPanel.scrollHeight || 0;
+        const buttonTop = buttonRect.top - canvasRect.top;
+        const buttonBottom = buttonRect.bottom - canvasRect.top;
+        const belowTop = buttonBottom + gap;
+        const aboveTop = buttonTop - panelHeight - gap;
+        const hasSpaceAbove = aboveTop >= gap;
+        const maxBelowTop = Math.max(gap, canvasRect.height - panelHeight - gap);
+        const top = hasSpaceAbove ? aboveTop : Math.min(belowTop, maxBelowTop);
+        mapSettingsPanel.style.left = `${buttonRect.left - canvasRect.left}px`;
+        mapSettingsPanel.style.top = `${Math.max(gap, top)}px`;
+        mapSettingsPanel.style.bottom = "auto";
+      }
+
+      function resolveCssColor(name, fallback) {
+        const value = getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+        return value || fallback;
+      }
+
+      function resolveNetworkId(row) {
+        return networkDomain.resolveId(row);
+      }
+
+      function resolveNetworkCode(row) {
+        return networkDomain.resolveCode(row);
+      }
+
+      function getCatalogNetworkByCode(code) {
+        return networkController.getCatalogByCode(code);
+      }
+
+      function resolveNetworkLabel(row) {
+        return networkDomain.resolveLabel(row, networkController.getCatalogByCodeMap());
+      }
+
+      async function fetchNetworkCatalog() {
+        return networkController.loadCatalog({
+          url: NETWORK_CATALOG_URL,
+          fetchApi: fetchCacheApi,
+        });
+      }
+
+      function resolveStationName(row) {
+        return row?.display_name
+          || row?.station?.display_name
+          || "Unknown sensor";
+      }
+
+      function resolveConnectorCode(row) {
+        return row?.connector_code
+          || row?.connector?.connector_code
+          || row?.station?.connector_code
+          || row?.station?.connector?.connector_code
+          || null;
+      }
+
+      function resolveConnectorLabel(row) {
+        const label = row?.connector_label
+          || row?.connector?.label
+          || row?.station?.connector_label
+          || row?.station?.connector?.label
+          || null;
+        if (label) {
+          return label;
+        }
+        const code = resolveConnectorCode(row);
+        return code || "Unknown network";
+      }
+
+      function resolvePrimaryNetworkEntry(row) {
+        const code = resolveNetworkCode(row);
+        const label = resolveNetworkLabel(row);
+        if (!code || !label) {
+          return null;
+        }
+        return {
+          id: resolveNetworkId(row) || getCatalogNetworkByCode(code)?.id || null,
+          code,
+          label,
+        };
+      }
+
+      function resolvePrimaryNetworkLabel(row) {
+        return resolveNetworkLabel(row);
+      }
+
+      function resolveSecondaryNetworkLabels(row) {
+        return [];
+      }
+
+      function collectNetworkEntries(row) {
+        const code = resolveNetworkCode(row);
+        const label = resolveNetworkLabel(row);
+        if (!code || !label) {
+          return [];
+        }
+        return [{
+          id: resolveNetworkId(row) || getCatalogNetworkByCode(code)?.id || null,
+          code,
+          label,
+        }];
+      }
+
+      function buildNetworkDefs(rows) {
+        const byCode = new Map(
+          networkController.getCatalog().map((def) => [
+            def.code,
+            { ...def, count: 0 },
+          ])
+        );
+        const seenStationsByCode = new Map();
+        rows.forEach((row) => {
+          const entry = resolvePrimaryNetworkEntry(row);
+          if (!entry || !byCode.has(entry.code)) return;
+          const stationKey = resolveStationKey(row)
+            || `${resolveStationName(row)}::${resolveCoordinatePair(row).lat ?? ""}::${resolveCoordinatePair(row).lon ?? ""}`;
+          if (!seenStationsByCode.has(entry.code)) {
+            seenStationsByCode.set(entry.code, new Set());
+          }
+          const seenStations = seenStationsByCode.get(entry.code);
+          if (seenStations.has(stationKey)) {
+            return;
+          }
+          seenStations.add(stationKey);
+          byCode.get(entry.code).count++;
+        });
+        return Array.from(byCode.values()).sort((a, b) => a.label.localeCompare(b.label));
+      }
+
+      function getNetworkRowsForWindow() {
+        const windowed = filterRowsByWindow(baseLatestRows);
+        return getRowsForActivePollutant(windowed);
+      }
+
+      function buildNetworkCoverageByCode(rows) {
+        const coverageByCode = new Map();
+        rows.forEach((row) => {
+          const areaCode = resolveAreaCode(row);
+          if (!areaCode) {
+            return;
+          }
+          const seenCodes = new Set();
+          collectNetworkEntries(row).forEach((entry) => {
+            const code = String(entry?.code || "").trim();
+            if (!code || seenCodes.has(code)) {
+              return;
+            }
+            seenCodes.add(code);
+            if (!coverageByCode.has(code)) {
+              coverageByCode.set(code, new Set());
+            }
+            coverageByCode.get(code).add(areaCode);
+          });
+        });
+        return coverageByCode;
+      }
+
+      function renderNetworkFiltersIfNeeded(defs, coverageByCode, coverageTotal, coverageAreaLabel) {
+        return networkController.updateScope("cr", {
+          definitions: defs,
+          coverageByCode,
+          coverageTotal,
+          coverageAreaLabel,
+        });
+      }
+
+      function resolveNetworkCodes(row) {
+        const code = resolveNetworkCode(row);
+        return code ? [code] : [];
+      }
+
+      function resolveAreaCode(row) {
+        return row?.area_code
+          || row?.la_code
+          || row?.lad_code
+          || row?.la
+          || row?.lad
+          || row?.local_authority_code
+          || row?.local_authority
+          || row?.pcon_code
+          || row?.station?.la_code
+          || row?.station?.lad_code
+          || row?.station?.la
+          || row?.station?.lad
+          || row?.station?.local_authority_code
+          || row?.station?.local_authority
+          || row?.station?.pcon_code
+          || null;
+      }
+
+      function resolvePconCode(row) {
+        return row?.pcon_code
+          || row?.station?.pcon_code
+          || null;
+      }
+
+      function resolveAreaName(row) {
+        return row?.area_name
+          || row?.la_name
+          || row?.pcon_name
+          || row?.local_authority_name
+          || row?.station?.la_name
+          || row?.station?.local_authority_name
+          || row?.station?.pcon_name
+          || null;
+      }
+
+      function resolveCellAreaCode(cell) {
+        return cell?.area_code || cell?.pcon_code || null;
+      }
+
+      function resolveCellAreaName(cell) {
+        return cell?.area_name || cell?.pcon_name || null;
+      }
+
+      // Backward-compatible alias used by existing helpers.
+      function resolvePconCode(row) {
+        return resolveAreaCode(row);
+      }
+
+      function resolveStationKey(row) {
+        return row?.station_id
+          || row?.station?.id
+          || row?.station_ref
+          || row?.station?.station_ref
+          || row?.station?.ref
+          || row?.display_name
+          || row?.station?.display_name
+          || null;
+      }
+
+      function resolveLatestValue(row) {
+        const raw = row?.last_value
+          ?? row?.latest_value
+          ?? row?.value
+          ?? row?.observed_value
+          ?? row?.lastValue
+          ?? row?.latestValue;
+        const pollutantKey = getPollutantKeyFromRow(row) || activePollutant;
+        return clampValue(raw, pollutantKey);
+      }
+
+      function resolveLatestTimestamp(row) {
+        return parseDate(row?.last_value_at || row?.observed_at || row?.latest_value_at);
+      }
+
+      function resolveCoordinatePair(row) {
+        const candidates = [
+          [row?.latitude, row?.longitude],
+          [row?.lat, row?.lon],
+          [row?.lat, row?.lng],
+          [row?.station?.latitude, row?.station?.longitude],
+          [row?.station?.lat, row?.station?.lon],
+          [row?.station?.lat, row?.station?.lng],
+        ];
+        for (const candidate of candidates) {
+          const lat = normalizeNumber(candidate?.[0]);
+          const lon = normalizeNumber(candidate?.[1]);
+          if (Number.isFinite(lat) && Number.isFinite(lon)) {
+            return { lat, lon };
+          }
+        }
+        return { lat: null, lon: null };
+      }
+
+      function filterRowsByWindow(rows) {
+        const cutoff = getWindowCutoff();
+        if (!cutoff) {
+          return rows;
+        }
+        return rows.filter((row) => {
+          const timestamp = resolveLatestTimestamp(row);
+          return isTimestampInWindow(timestamp, cutoff);
+        });
+      }
+
+      function extractPollutantText(row) {
+        return [
+          row?.pollutant,
+          row?.pollutant_label,
+          row?.phenomenon_label,
+          row?.phenomenon?.pollutant_label,
+          row?.phenomenon?.notation,
+          row?.phenomenon?.label,
+        ].filter(Boolean).join(" ").trim().toLowerCase();
+      }
+
+      function getPollutantKeyFromText(value) {
+        return pollutantDomain.matchText(value);
+      }
+
+      function getPollutantKeyFromRow(row) {
+        return getPollutantKeyFromText(extractPollutantText(row));
+      }
+
+      function normalizePollutantKey(value) {
+        if (!value) {
+          return null;
+        }
+        const trimmed = String(value).trim().toLowerCase();
+        if (!trimmed) {
+          return null;
+        }
+        return getPollutantKeyFromText(trimmed);
+      }
+
+      function isPm25Row(row) {
+        return getPollutantKeyFromRow(row) === "pm25";
+      }
+
+      function rowMatchesPollutant(row, pollutantKey) {
+        if (!pollutantKey) {
+          return false;
+        }
+        const key = getPollutantKeyFromRow(row);
+        return key === pollutantKey;
+      }
+
+      function getRowsForActivePollutant(rows) {
+        if (!rows.length) {
+          return rows;
+        }
+        const hintKey = latestPollutant;
+        if (hintKey && hintKey === activePollutant) {
+          return rows;
+        }
+        const hasLabels = rows.some((row) => extractPollutantText(row));
+        if (!hintKey && !hasLabels) {
+          return rows;
+        }
+        return rows.filter((row) => rowMatchesPollutant(row, activePollutant));
+      }
+
+
+
+      function collectStationEntries(rows, pconCode) {
+        const stationMap = new Map();
+        rows.forEach((item, index) => {
+          if (resolvePconCode(item) !== pconCode) {
+            return;
+          }
+          const stationKey = resolveStationKey(item) || `${pconCode}-${index}`;
+          const timestamp = resolveLatestTimestamp(item);
+          const value = resolveLatestValue(item);
+          const normalizedValue = Number.isFinite(value) ? value : null;
+          const existing = stationMap.get(stationKey);
+          if (!existing) {
+            stationMap.set(stationKey, { row: item, value: normalizedValue, timestamp });
+            return;
+          }
+          if (timestamp && (!existing.timestamp || timestamp > existing.timestamp)) {
+            stationMap.set(stationKey, { row: item, value: normalizedValue, timestamp });
+            return;
+          }
+          if (!existing.timestamp && !timestamp && existing.value === null && normalizedValue !== null) {
+            stationMap.set(stationKey, { row: item, value: normalizedValue, timestamp });
+          }
+        });
+        return Array.from(stationMap.values());
+      }
+
+      function countStationsByNetwork(entries) {
+        const counts = new Map();
+        entries.forEach((entry) => {
+          const label = resolvePrimaryNetworkLabel(entry.row) || "Unknown network";
+          counts.set(label, (counts.get(label) || 0) + 1);
+        });
+        return Array.from(counts.entries())
+          .map(([label, count]) => ({ label, count }))
+          .sort((a, b) => a.label.localeCompare(b.label));
+      }
+
+      function rowMatchesNetwork(row, matchers) {
+        const entries = collectNetworkEntries(row);
+        return entries.some((entry) => {
+          const label = `${entry.code || ""} ${entry.label || ""}`.toLowerCase();
+          return matchers.some((token) => label.includes(token));
+        });
+      }
+
+      function collectNetworkEntriesByMatcher(rows, matchers) {
+        const stationMap = new Map();
+        rows.forEach((item, index) => {
+          if (!rowMatchesNetwork(item, matchers)) {
+            return;
+          }
+          const value = resolveLatestValue(item);
+          if (!Number.isFinite(value)) {
+            return;
+          }
+          const stationKey = resolveStationKey(item) || `network-${index}`;
+          const timestamp = resolveLatestTimestamp(item);
+          const existing = stationMap.get(stationKey);
+          if (!existing || (timestamp && (!existing.timestamp || timestamp > existing.timestamp))) {
+            stationMap.set(stationKey, { row: item, value, timestamp });
+          }
+        });
+        return Array.from(stationMap.values());
+      }
+
+      function computeNetworkSummary(rows, matchers) {
+        const scopedRows = getRowsForActivePollutant(rows);
+        const entries = collectNetworkEntriesByMatcher(scopedRows, matchers);
+        const totalCount = entries.length;
+        const cutoff = getWindowCutoff();
+        const reportingEntries = entries.filter((entry) => entry.timestamp
+          && isTimestampInWindow(entry.timestamp, cutoff));
+        const values = reportingEntries.map((entry) => entry.value).filter((value) => Number.isFinite(value));
+        if (!values.length) {
+          return {
+            totalCount,
+            windowCount: reportingEntries.length,
+            mean: null,
+            median: null,
+            highest: null,
+            lowest: null,
+            coverage: 0,
+            latestTimestamp: null,
+          };
+        }
+        const sorted = [...values].sort((a, b) => a - b);
+        const midpoint = Math.floor(sorted.length / 2);
+        const median = sorted.length % 2 === 0
+          ? (sorted[midpoint - 1] + sorted[midpoint]) / 2
+          : sorted[midpoint];
+        const mean = values.reduce((sum, value) => sum + value, 0) / values.length;
+        let highest = reportingEntries[0];
+        let lowest = reportingEntries[0];
+        reportingEntries.forEach((entry) => {
+          if (entry.value > highest.value) {
+            highest = entry;
+          }
+          if (entry.value < lowest.value) {
+            lowest = entry;
+          }
+        });
+        const coverage = new Set(
+          reportingEntries
+            .map((entry) => resolvePconCode(entry.row))
+            .filter(Boolean)
+        ).size;
+        const latestTimestamp = reportingEntries.reduce((latest, entry) => {
+          if (!entry.timestamp) {
+            return latest;
+          }
+          if (!latest || entry.timestamp > latest) {
+            return entry.timestamp;
+          }
+          return latest;
+        }, null);
+        return {
+          totalCount,
+          windowCount: reportingEntries.length,
+          mean,
+          median,
+          highest,
+          lowest,
+          coverage,
+          latestTimestamp,
+        };
+      }
+
+      function updateExtraNetworkSummaries() {
+        if (!extraNetworkSummaryDefs.length) {
+          return;
+        }
+        const pollutantUnits = getPollutantUnits(activePollutant);
+        const total = pconCodes.size || 0;
+        extraNetworkSummaryDefs.forEach((def) => {
+          const summary = computeNetworkSummary(scopedLatestRows, def.matchers);
+          const sensorLabel = summary.totalCount
+            ? (currentWindow === "all"
+              ? formatNumber(summary.totalCount)
+              : `${formatNumber(summary.windowCount)} in window / ${formatNumber(summary.totalCount)} total`)
+            : "0";
+          if (def.elements.sensors) {
+            def.elements.sensors.textContent = sensorLabel;
+          }
+          updateCoverageElements(
+            def.elements.coverageValue,
+            def.elements.coverageFill,
+            def.elements.coverageBar,
+            summary.coverage,
+            total,
+            AREA_LABEL_PLURAL
+          );
+          if (def.elements.average) {
+            def.elements.average.textContent = Number.isFinite(summary.mean)
+              ? `${formatValue(summary.mean)} ${pollutantUnits}`
+              : "-";
+          }
+          if (def.elements.median) {
+            def.elements.median.textContent = Number.isFinite(summary.median)
+              ? `${formatValue(summary.median)} ${pollutantUnits}`
+              : "-";
+          }
+          if (def.elements.highest) {
+            def.elements.highest.textContent = summary.highest
+              ? `${formatValue(summary.highest.value)} ${pollutantUnits} · ${formatSummaryTimestamp(summary.highest.timestamp)}`
+              : "-";
+          }
+          if (def.elements.lowest) {
+            def.elements.lowest.textContent = summary.lowest
+              ? `${formatValue(summary.lowest.value)} ${pollutantUnits} · ${formatSummaryTimestamp(summary.lowest.timestamp)}`
+              : "-";
+          }
+          if (def.elements.latest) {
+            def.elements.latest.textContent = summary.latestTimestamp
+              ? formatSummaryTimestamp(summary.latestTimestamp)
+              : "-";
+          }
+        });
+      }
+
+      function updateSummary() {
+        const pollutantLabel = getPollutantLabel(activePollutant);
+        const pollutantUnits = getPollutantUnits(activePollutant);
+        updatePollutantLabels();
+        const totalStations = pconRows.reduce((total, row) => {
+          const count = normalizeNumber(row.station_count);
+          return total + (count ?? 0);
+        }, 0);
+        if (!pconRows.length) {
+          summaryStations.textContent = "-";
+        } else {
+          summaryStations.textContent = formatNumber(totalStations);
+        }
+
+        const summaryBaseRows = filterRowsByWindow(scopedLatestRows);
+        const rowsForSummary = getRowsForActivePollutant(summaryBaseRows);
+        const rowsWithPcon = rowsForSummary.filter((row) => resolvePconCode(row));
+        let candidates = rowsWithPcon
+          .map((row) => {
+            const value = resolveLatestValue(row);
+            if (!Number.isFinite(value)) {
+              return null;
+            }
+            return { row, value };
+          })
+          .filter(Boolean);
+
+        if (!candidates.length) {
+          summaryLowestValue.textContent = "-";
+          summaryLowestDatetime.textContent = "-";
+          summaryLowestConnector.textContent = "-";
+          summaryLowestName.textContent = `No ${pollutantLabel} data`;
+          summaryHighestValue.textContent = "-";
+          summaryHighestDatetime.textContent = "-";
+          summaryHighestConnector.textContent = "-";
+          summaryHighestName.textContent = `No ${pollutantLabel} data`;
+          // ── Top summary boxes (no-data state) ──
+          if (window.UkAqHexMapSummary?.updateSummary) {
+            window.UkAqHexMapSummary.updateSummary({
+              totalSensors: totalStations,
+              pconCovered: 0,
+              pconTotal: pconCodes.size,
+              areaLabel: AREA_LABEL_PLURAL,
+              pollutantLabel,
+              pollutantUnits,
+              highestValue: null,
+              highestColor: null,
+              highestSensor: '—',
+              highestNetwork: '—',
+              newestReadingISO: null,
+              oldestReadingISO: null,
+            }, 'cr-top');
+          }
+          return;
+        }
+
+        const nonZeroThreshold = getNonZeroThreshold();
+        const candidatesForLowest = candidates.filter(({ value }) => value > nonZeroThreshold);
+        const lowestPool = candidatesForLowest.length ? candidatesForLowest : candidates;
+
+        let lowest = lowestPool[0];
+        for (const candidate of lowestPool) {
+          if (candidate.value < lowest.value) {
+            lowest = candidate;
+          }
+        }
+
+        let highest = candidates[0];
+        for (const candidate of candidates) {
+          if (candidate.value > highest.value) {
+            highest = candidate;
+          }
+        }
+
+        summaryLowestValue.textContent = `${formatValue(lowest.value)} ${pollutantUnits}`;
+        summaryLowestDatetime.textContent = formatSummaryTimestamp(resolveLatestTimestamp(lowest.row));
+        summaryLowestConnector.textContent = resolveConnectorLabel(lowest.row);
+        summaryLowestName.textContent = resolveStationName(lowest.row);
+        summaryHighestValue.textContent = `${formatValue(highest.value)} ${pollutantUnits}`;
+        summaryHighestDatetime.textContent = formatSummaryTimestamp(resolveLatestTimestamp(highest.row));
+        summaryHighestConnector.textContent = resolveConnectorLabel(highest.row);
+        summaryHighestName.textContent = resolveStationName(highest.row);
+
+        // ── Top summary boxes ──
+        if (window.UkAqHexMapSummary?.updateSummary) {
+          const capValue = getLegendCapValue();
+          const coveredPcons = new Set(rowsWithPcon.map((row) => resolvePconCode(row)).filter(Boolean));
+          let newest = null, oldest = null;
+          candidates.forEach(({ row }) => {
+            const ts = resolveLatestTimestamp(row);
+            if (ts) {
+              if (!newest || ts > newest) newest = ts;
+              if (!oldest || ts < oldest) oldest = ts;
+            }
+          });
+          const palette = HEAT_STOPS.map((n, i) => resolveCssColor(n, HEAT_STOP_FALLBACKS[i]));
+          const highestColor = d3.interpolateRgbBasis(palette)(mapValueToT(highest.value, capValue));
+          window.UkAqHexMapSummary.updateSummary({
+            totalSensors: totalStations,
+            pconCovered: coveredPcons.size,
+            pconTotal: pconCodes.size,
+            areaLabel: AREA_LABEL_PLURAL,
+            pollutantLabel,
+            pollutantUnits,
+            highestValue: highest.value,
+            highestColor,
+            highestSensor: resolveStationName(highest.row),
+            highestNetwork: resolvePrimaryNetworkLabel(highest.row) || "Unknown network",
+            newestReadingISO: newest ? (newest.toISOString?.() || newest) : null,
+            oldestReadingISO: oldest ? (oldest.toISOString?.() || oldest) : null,
+          }, 'cr-top');
+        }
+      }
+
+      function updateRowCountText() {
+        if (!rowCount) {
+          return;
+        }
+        const withData = pconRows.filter((row) => getStationCount(row) > 0);
+        const pollutantLabel = getPollutantLabel(activePollutant);
+        rowCount.textContent = `${formatNumber(withData.length)} of ${formatNumber(pconCodes.size)} local authorities with ${pollutantLabel} data`;
+      }
+
+      function updateLegend(minValue, maxValue, capValue) {
+        legendLabel.textContent = METRIC_LABELS[currentMetric];
+        if (minValue === null || maxValue === null || capValue === null) {
+          legendMin.textContent = "-";
+          legendMax.textContent = "-";
+          return;
+        }
+        legendMin.textContent = String(Math.round(minValue));
+        legendMax.textContent = `${Math.round(capValue)}+`;
+      }
+
+      function mapValueToT(value, capValue) {
+        if (!Number.isFinite(value) || !Number.isFinite(capValue) || capValue <= 0) {
+          return 0;
+        }
+        const clamped = Math.max(0, Math.min(capValue, value));
+        const ratio = clamped / capValue;
+        if (currentColorScale === "linear") {
+          return Math.max(0, Math.min(1, ratio));
+        }
+        const exponent = 0.8;
+        const base = Math.pow(ratio, exponent);
+        const boosted = base + 0.05 * base * base; // small top boost to keep 40 near ~87%
+        return Math.max(0, Math.min(1, boosted));
+      }
+
+      function updateLegendTicks(capValue) {
+        if (!legendTicks.length || !legendTickLabels.length) {
+          return;
+        }
+        const tickValues = capValue >= 100 ? [20, 40, 60, 80] : [10, 20, 30, 40];
+        legendTicks.forEach((element, index) => {
+          const value = tickValues[index] ?? null;
+          if (value === null) {
+            return;
+          }
+          element.dataset.value = String(value);
+        });
+        legendTickLabels.forEach((element, index) => {
+          const value = tickValues[index] ?? null;
+          if (value === null) {
+            return;
+          }
+          element.dataset.value = String(value);
+          element.textContent = String(value);
+        });
+        const updatePosition = (element) => {
+          const value = Number(element.dataset.value);
+          if (!Number.isFinite(value)) {
+            return;
+          }
+          const t = mapValueToT(value, capValue);
+          element.style.left = `${(t * 100).toFixed(1)}%`;
+        };
+        legendTicks.forEach(updatePosition);
+        legendTickLabels.forEach(updatePosition);
+        if (legendScale) {
+          legendScale.classList.add("is-ready");
+        }
+      }
+
+      function updateSelectedHexStyles() {
+        const hexes = svg.selectAll(".hex");
+        if (!hexes.size()) {
+          return;
+        }
+        if (!selectedAreaCode) {
+          hexes.classed("is-selected", false).classed("is-dimmed", false);
+          return;
+        }
+        hexes
+          .classed("is-selected", (cell) => resolveCellAreaCode(cell) === selectedAreaCode)
+          .classed("is-dimmed", (cell) => resolveCellAreaCode(cell) !== selectedAreaCode);
+      }
+
+      function setSelectedCell(cell) {
+        selectedCell = cell || null;
+        selectedAreaCode = resolveCellAreaCode(cell);
+        if (mapCanvasWrap) mapCanvasWrap.classList.toggle("hex-selected", !!cell);
+        window.UkAqHexMapUkController?.clearPinnedTooltip?.();
+        if (tooltip) {
+          tooltip.classList.remove("visible");
+        }
+        updateSelectedHexStyles();
+        updateSummary();
+        updateDetailsPanel();
+        updateSelectedHexViewportShift();
+      }
+
+      function updateSelectedHexViewportShift() {
+        if (!mapCanvasWrap) {
+          return;
+        }
+        if (!selectedAreaCode) {
+          mapCanvasWrap.style.removeProperty("--selected-hex-shift-y");
+          return;
+        }
+        window.requestAnimationFrame(() => {
+          if (!selectedAreaCode || !mapCanvasWrap) {
+            return;
+          }
+          mapCanvasWrap.style.setProperty("--selected-hex-shift-y", "0px");
+          const selectedHex = svg.node()?.querySelector(".hex.is-selected");
+          const viewport = mapCanvasWrap.querySelector(".map-svg-viewport");
+          if (!selectedHex || !viewport) {
+            return;
+          }
+          const hexRect = selectedHex.getBoundingClientRect();
+          const viewportRect = viewport.getBoundingClientRect();
+          const panelHeight = Number.parseFloat(getComputedStyle(mapCanvasWrap).getPropertyValue("--sensor-panel-height")) || 240;
+          const visibleHeight = Math.max(120, viewportRect.height - panelHeight);
+          const targetY = viewportRect.top + (visibleHeight / 2);
+          const hexY = hexRect.top + (hexRect.height / 2);
+          const maxShiftY = Math.max(panelHeight * 0.3, viewportRect.height * 0.35);
+          const shiftY = Math.max(-maxShiftY, Math.min(maxShiftY, targetY - hexY));
+          mapCanvasWrap.style.setProperty("--selected-hex-shift-y", `${shiftY.toFixed(1)}px`);
+        });
+      }
+
+      // Defensive alias map: maps retired 2023 codes → current 2025 codes so
+      // that any stale URLs or cached data using old codes still resolve.
+      const LA_CODE_ALIASES = {
+        E08000016: "E08000038", // Barnsley 2023 → 2025
+        E08000019: "E08000039", // Sheffield 2023 → 2025
+        E08000038: "E08000038",
+        E08000039: "E08000039",
+      };
+
+      function selectAreaByCode(code, { allowRegionSwitch = true, updateUrl = true } = {}) {
+        const normalized = typeof code === "string" ? code.trim().toUpperCase() : "";
+        if (!normalized) {
+          return false;
+        }
+        const resolved = LA_CODE_ALIASES[normalized] || normalized;
+        const match = hexCells.find((cell) => {
+          const cellCode = resolveCellAreaCode(cell);
+          return typeof cellCode === "string" && cellCode.trim().toUpperCase() === resolved;
+        }) || null;
+        if (match) {
+          setSelectedCell(match);
+          if (tooltip) {
+            tooltip.classList.remove("visible");
+          }
+          return true;
+        }
+        if (!allowRegionSwitch) {
+          if (resolved !== normalized) {
+            console.warn(`[uk-aq] selectAreaByCode: alias resolved ${normalized} → ${resolved} but no hex feature found`);
+          } else {
+            console.warn(`[uk-aq] selectAreaByCode: no hex feature found for code ${normalized}`);
+          }
+          return false;
+        }
+        const targetRegion = areaRegionLookup.get(resolved) || null;
+        if (targetRegion && targetRegion !== activeRegion) {
+          pendingSelectedAreaCode = resolved;
+          setActiveRegion(targetRegion, { updateUrl });
+          return true;
+        }
+        if (targetRegion && targetRegion === activeRegion && statusEl?.textContent === "Loading...") {
+          pendingSelectedAreaCode = resolved;
+          return true;
+        }
+        console.warn(`[uk-aq] selectAreaByCode: no region mapping found for code ${normalized}${resolved !== normalized ? ` (alias: ${resolved})` : ""}`);
+        return false;
+      }
+
+      function applyPendingAreaSelection() {
+        if (!pendingSelectedAreaCode) {
+          return false;
+        }
+        const code = pendingSelectedAreaCode;
+        pendingSelectedAreaCode = null;
+        return selectAreaByCode(code, { allowRegionSwitch: false, updateUrl: false });
+      }
+
+      function compareTextValues(a, b) {
+        const left = a ? String(a) : "";
+        const right = b ? String(b) : "";
+        if (!left && !right) {
+          return 0;
+        }
+        if (!left) {
+          return 1;
+        }
+        if (!right) {
+          return -1;
+        }
+        return left.localeCompare(right, undefined, { sensitivity: "base" });
+      }
+
+      function compareNumericValues(a, b) {
+        const left = Number.isFinite(a) ? a : null;
+        const right = Number.isFinite(b) ? b : null;
+        if (left === null && right === null) {
+          return 0;
+        }
+        if (left === null) {
+          return 1;
+        }
+        if (right === null) {
+          return -1;
+        }
+        return left - right;
+      }
+
+      function getEntrySortValue(entry, key) {
+        if (key === "sensor") {
+          return resolveStationName(entry.row) || "";
+        }
+        if (key === "network") {
+          return resolvePrimaryNetworkLabel(entry.row) || "Unknown network";
+        }
+        if (key === "pm25") {
+          return entry.value;
+        }
+        if (key === "updated") {
+          return entry.timestamp instanceof Date ? entry.timestamp.getTime() : null;
+        }
+        return "";
+      }
+
+      function compareEntries(a, b, key) {
+        const left = getEntrySortValue(a, key);
+        const right = getEntrySortValue(b, key);
+        if (key === "sensor" || key === "network") {
+          return compareTextValues(left, right);
+        }
+        return compareNumericValues(left, right);
+      }
+
+      function sortDetailEntries(entries) {
+        const activeKey = sortKey;
+        const direction = sortDir;
+        entries.sort((a, b) => {
+          if (a.inWindow !== b.inWindow) {
+            return a.inWindow ? -1 : 1;
+          }
+          const cmp = compareEntries(a, b, activeKey);
+          if (cmp !== 0) {
+            return direction === "asc" ? cmp : -cmp;
+          }
+          return compareTextValues(
+            getEntrySortValue(a, "sensor"),
+            getEntrySortValue(b, "sensor")
+          );
+        });
+      }
+
+      function syncSortHeaders() {
+        const ACTIVE_ARIA = {
+          sensor: { asc: "Sensor, sorted A to Z. Click to sort Z to A.", desc: "Sensor, sorted Z to A. Click to sort A to Z." },
+          network: { asc: "Network, sorted A to Z. Click to sort Z to A.", desc: "Network, sorted Z to A. Click to sort A to Z." },
+          pm25: { asc: "PM2.5, sorted low to high. Click to sort high to low.", desc: "PM2.5, sorted high to low. Click to sort low to high." },
+          updated: { asc: "Updated, sorted oldest first. Click to sort newest first.", desc: "Updated, sorted newest first. Click to sort oldest first." },
+        };
+        const sortingHidden = detailsTableWrap?.classList.contains("sensor-list-sort-hidden") === true;
+        sortHeaderButtons.forEach((button) => {
+          const key = button.dataset.sortKey;
+          const isActive = key === sortKey;
+          const direction = getSortDirection(key, sortKey, sortDir);
+          const th = button.closest("th");
+          button.classList.toggle("is-active", isActive && !sortingHidden);
+          button.disabled = sortingHidden;
+          button.tabIndex = sortingHidden ? -1 : 0;
+          if (th) th.setAttribute("aria-sort", !sortingHidden && isActive ? (sortDir === "asc" ? "ascending" : "descending") : "none");
+          const icon = button.querySelector(".sort-icon,.sort-arrow");
+          if (icon) {
+            icon.textContent = sortingHidden ? "" : renderSortIcon(key, sortKey, sortDir);
+          }
+          if (sortingHidden) {
+            button.setAttribute("aria-label", "");
+            button.title = "";
+          } else if (isActive) {
+            button.setAttribute("aria-label", ACTIVE_ARIA[key]?.[sortDir] || "");
+            button.title = "";
+          } else {
+            button.setAttribute("aria-label", "");
+            button.title = getSortTooltip(key, sortKey, sortDir);
+          }
+        });
+      }
+
+      function updateInlinePanelHeight(sensorCount, extraRowCount = 0) {
+        if (!mapCanvasWrap) {
+          return;
+        }
+        const count = Math.max(0, Number(sensorCount) || 0);
+        const totalRows = count + Math.max(0, Number(extraRowCount) || 0);
+        const hasOverflowByCount = totalRows > SENSOR_PANEL_MAX_VISIBLE_ROWS;
+        const visibleRows = Math.min(totalRows, SENSOR_PANEL_MAX_VISIBLE_ROWS);
+        const effectiveRowHeight = SENSOR_PANEL_ROW_HEIGHT;
+        const tableWrapMaxHeight = SENSOR_TABLE_HEADER_HEIGHT + (visibleRows * effectiveRowHeight);
+        const panelHeight = count
+          ? SENSOR_PANEL_HEADER_HEIGHT
+            + SENSOR_TABLE_HEADER_HEIGHT
+            + (visibleRows * effectiveRowHeight)
+          : SENSOR_PANEL_EMPTY_HEIGHT;
+        mapCanvasWrap.style.setProperty("--sensor-panel-height", `${panelHeight}px`);
+        if (inlinePanelBody) {
+          inlinePanelBody.classList.toggle("is-scroll-forced", hasOverflowByCount);
+        }
+        if (detailsTableWrap) {
+          detailsTableWrap.style.maxHeight = `${tableWrapMaxHeight}px`;
+          const hasOverflowByContent = detailsTableWrap.scrollHeight > (tableWrapMaxHeight + 1);
+          const hasOverflow = hasOverflowByCount || hasOverflowByContent;
+          detailsTableWrap.style.overflowY = hasOverflow ? "scroll" : "hidden";
+          detailsTableWrap.classList.toggle("is-scroll-forced", hasOverflow);
+          inlinePanelBody?.classList.toggle("is-scroll-forced", hasOverflow);
+        }
+        detailScrollAffordances?.update?.();
+      }
+
+      function updateDetailsPanel() {
+        if (!detailsTitle || !detailsMeta || !detailsEmpty || !detailsTableWrap || !detailsTableBody) {
+          return;
+        }
+        const pollutantUnits = getPollutantUnits(activePollutant);
+        const previousScrollTop = detailsTableWrap.scrollTop;
+        if (!selectedAreaCode) {
+          chartLaunchAvailable = false;
+          syncInlinePanelTitleInteractivity();
+          if (sensorDetailsSection) sensorDetailsSection.hidden = true;
+          detailsTitle.textContent = "Local authority sensors";
+          detailsMeta.textContent = "Click a hex to view sensors.";
+          if (inlinePanelWindowLabel) inlinePanelWindowLabel.textContent = "Select a hex";
+          if (inlinePanelTitle) inlinePanelTitle.textContent = "";
+          if (inlinePanelReading) inlinePanelReading.textContent = "";
+          if (inlinePanelNetworkLabel) inlinePanelNetworkLabel.textContent = "";
+          if (inlinePanelCount) inlinePanelCount.textContent = "";
+          detailsEmpty.hidden = true;
+          detailsTableWrap.hidden = true;
+          detailsTableWrap.classList.add("sensor-list-sort-hidden");
+          detailsTableWrap.classList.remove("is-chart-select-mode");
+          syncSortHeaders();
+          updateInlinePanelHeight(0);
+          if (networkSummary) networkSummary.hidden = true;
+          detailsTableBody.innerHTML = "";
+          restoreDetailsScrollPosition("", 0);
+          return;
+        }
+        if (sensorDetailsSection) sensorDetailsSection.hidden = true;
+        if (networkSummary) networkSummary.hidden = true;
+        const row = pconLookup.get(selectedAreaCode);
+        const areaName = resolveCellAreaName(selectedCell) || resolveAreaName(row) || selectedAreaCode;
+        detailsTitle.textContent = areaName;
+        const metricVal = getMetricValue(row);
+        const valueLabel = Number.isFinite(metricVal)
+          ? `${formatValue(metricVal)} ${pollutantUnits}`
+          : "No data";
+        const methodDisplayLabel = currentMetric === "median" ? "Typical (median)" : "Average (mean)";
+        if (inlinePanelWindowLabel) inlinePanelWindowLabel.textContent = "";
+        if (inlinePanelTitle) inlinePanelTitle.textContent = areaName;
+        if (inlinePanelReading) {
+          inlinePanelReading.innerHTML = `<span class="sensor-panel-value">${valueLabel}</span> <span class="sensor-panel-method">${methodDisplayLabel}</span>`;
+        }
+        if (inlinePanelNetworkLabel) inlinePanelNetworkLabel.textContent = "";
+        if (inlinePanelHexIcon) {
+          const iconColor = (colorScale && Number.isFinite(metricVal)) ? colorScale(metricVal) : "var(--ink-soft)";
+          inlinePanelHexIcon.style.color = iconColor;
+        }
+        const detailSourceRows = scopedLatestRowsAllWindow.length ? scopedLatestRowsAllWindow : scopedLatestRows;
+        const scopedRows = getRowsForActivePollutant(detailSourceRows);
+        const stationEntries = collectStationEntries(scopedRows, selectedAreaCode);
+        chartLaunchAvailable = stationEntries.length > 0;
+        syncInlinePanelTitleInteractivity();
+        if (!stationEntries.length) {
+          const zeroCount = formatSelectedAreaSensorCount(0, 0);
+          detailsMeta.textContent = zeroCount;
+          if (inlinePanelCount) inlinePanelCount.textContent = zeroCount;
+          if (inlinePanelReading) inlinePanelReading.textContent = "";
+          if (inlinePanelHexIcon) {
+            inlinePanelHexIcon.style.color = "var(--no-data)";
+            inlinePanelHexIcon.classList.add("sensor-panel-hex-icon--outlined");
+          }
+          detailsEmpty.textContent = "No sensors found for this local authority.";
+          detailsEmpty.hidden = false;
+          detailsTableWrap.hidden = true;
+          detailsTableWrap.classList.add("sensor-list-sort-hidden");
+          detailsTableWrap.classList.remove("is-chart-select-mode");
+          syncSortHeaders();
+          networkSummary.hidden = true;
+          detailsTableBody.innerHTML = "";
+          updateInlinePanelHeight(0);
+          updateSelectedHexViewportShift();
+          restoreDetailsScrollPosition(selectedAreaCode, 0);
+          return;
+        }
+        const cutoff = getWindowCutoff();
+        const entries = stationEntries.map((entry) => ({
+          ...entry,
+          inWindow: isTimestampInWindow(entry.timestamp, cutoff),
+        }));
+        sortDetailEntries(entries);
+        const outsideWindowCount = entries.filter((entry) => !entry.inWindow).length;
+        const inWindowCount = entries.length - outsideWindowCount;
+        const countText = formatSelectedAreaSensorCount(inWindowCount, outsideWindowCount);
+        detailsMeta.textContent = countText;
+        if (inlinePanelCount) {
+          inlinePanelCount.textContent = countText;
+        }
+        if (inlinePanelHexIcon) {
+          inlinePanelHexIcon.classList.remove("sensor-panel-hex-icon--outlined");
+        }
+        const chartModeActive = window.hexChartMode?.isActive?.("cr") === true;
+        detailsEmpty.hidden = true;
+        detailsTableWrap.hidden = false;
+        detailsTableWrap.classList.toggle("sensor-list-sort-hidden", entries.length <= 1);
+        detailsTableWrap.classList.toggle("is-chart-select-mode", chartModeActive);
+        syncSortHeaders();
+        networkSummary.hidden = true;
+        const renderSensorRow = (entry) => {
+          const stationName = resolveStationName(entry.row);
+          const stationId = String(resolveStationKey(entry.row) || stationName || "");
+          const networkLabel = resolvePrimaryNetworkLabel(entry.row) || "Unknown network";
+          const updatedText = formatSummaryTimestamp(entry.timestamp);
+          const chartSelected = window.hexChartMode?.isSensorSelected?.("cr", stationId) === true;
+          const symbolIndex = window.hexChartMode?.getSelectedSensorIndex?.("cr", stationId) ?? -1;
+          const symbolMarkup = symbolIndex >= 0
+              ? (window.ChartCore?.getSymbolSvgMarkup?.(symbolIndex, {
+                className: "hex-chart-symbol-svg chart-mode-sensor-symbol-svg",
+                sizePx: 28,
+                area: 160,
+                fill: "#3C78AC",
+                stroke: "#fff",
+                strokeWidth: 1.2,
+              }) || "")
+            : "";
+          const rowClass = [
+            entry.inWindow ? "" : "sensor-row--excluded",
+            chartSelected ? "sensor-row--chart-selected" : "",
+          ].filter(Boolean).join(" ");
+          const readingColor = colorScale && Number.isFinite(entry.value) ? colorScale(entry.value) : "var(--no-data)";
+          return `
+            <tr class="${rowClass}">
+              <td class="sensor-chart-select-col">${
+                chartModeActive
+                  ? `<button type="button" class="hex-chart-selector" data-station-id="${escapeHtmlLocal(stationId)}" aria-label="${chartSelected ? "Remove" : "Add"} ${escapeHtmlLocal(stationName)} from chart" aria-pressed="${chartSelected ? "true" : "false"}"></button>`
+                  : ""
+              }</td>
+              <td class="sensor-chart-symbol-col">${
+                chartModeActive
+                  ? symbolMarkup
+                  : `<button type="button" class="sensor-chart-launch" data-station-id="${escapeHtmlLocal(stationId)}" aria-label="Open chart for ${escapeHtmlLocal(stationName)}" title="Open chart">
+                      <img src="/images/UK-AQ-Sensor-Buttons-chart.svg" alt="" aria-hidden="true" />
+                    </button>`
+              }</td>
+              <td class="sensor-col-sensor"><button type="button" class="sensor-name-button" data-station-id="${escapeHtmlLocal(stationId)}">${escapeHtmlLocal(stationName)}</button></td>
+              <td class="sensor-col-network">${escapeHtmlLocal(networkLabel)}</td>
+              <td class="sensor-col-value"><span class="sensor-reading-cell"><span class="sensor-reading-dot" style="--sensor-reading-color:${readingColor}"></span><span class="sensor-reading-text">${Number.isFinite(entry.value) ? `${formatValue(entry.value)} ${pollutantUnits}` : "-"}</span></span></td>
+              <td class="sensor-col-updated">${updatedText}</td>
+            </tr>
+          `;
+        };
+        const inWindowEntries = entries.filter((entry) => entry.inWindow);
+        const outsideWindowEntries = entries.filter((entry) => !entry.inWindow);
+        const dividerRow = inWindowEntries.length && outsideWindowEntries.length
+          ? `<tr class="sensor-row-divider" aria-hidden="true"><td colspan="6">↓ OUTSIDE WINDOW ↓</td></tr>`
+          : "";
+        detailsTableBody.innerHTML = [
+          inWindowEntries.map(renderSensorRow).join(""),
+          dividerRow,
+          outsideWindowEntries.map(renderSensorRow).join(""),
+        ].join("");
+        updateInlinePanelHeight(entries.length, dividerRow ? 1 : 0);
+        updateSelectedHexViewportShift();
+        restoreDetailsScrollPosition(selectedAreaCode, previousScrollTop);
+      }
+
+      function updateNetworkSummary() {
+        if (!aurnSensors || !aurnCoverageValue || !aurnCoverageBar || !aurnCoverageFill || !aurnAverage || !aurnMedian || !aurnHighest || !aurnLowest || !aurnLatest) {
+          return;
+        }
+        const pollutantUnits = getPollutantUnits(activePollutant);
+        const summary = computeNetworkSummary(scopedLatestRows, GOVUK_NETWORK_MATCHERS);
+        const sensorLabel = currentWindow === "all"
+          ? formatNumber(summary.totalCount)
+          : `${formatNumber(summary.windowCount)} in window / ${formatNumber(summary.totalCount)} total`;
+        aurnSensors.textContent = summary.totalCount ? sensorLabel : "0";
+        const covered = summary.coverage;
+        const total = pconCodes.size || 0;
+        updateCoverageElements(
+          aurnCoverageValue,
+          aurnCoverageFill,
+          aurnCoverageBar,
+          covered,
+          total,
+          AREA_LABEL_PLURAL
+        );
+        aurnAverage.textContent = Number.isFinite(summary.mean)
+          ? `${formatValue(summary.mean)} ${pollutantUnits}`
+          : "-";
+        aurnMedian.textContent = Number.isFinite(summary.median)
+          ? `${formatValue(summary.median)} ${pollutantUnits}`
+          : "-";
+        aurnHighest.textContent = summary.highest
+          ? `${formatValue(summary.highest.value)} ${pollutantUnits} · ${formatSummaryTimestamp(summary.highest.timestamp)}`
+          : "-";
+        aurnLowest.textContent = summary.lowest
+          ? `${formatValue(summary.lowest.value)} ${pollutantUnits} · ${formatSummaryTimestamp(summary.lowest.timestamp)}`
+          : "-";
+        aurnLatest.textContent = summary.latestTimestamp
+          ? formatSummaryTimestamp(summary.latestTimestamp)
+          : "-";
+
+        if (!openaqSensors || !openaqCoverageValue || !openaqCoverageBar || !openaqCoverageFill
+          || !openaqAverage || !openaqMedian || !openaqHighest || !openaqLowest || !openaqLatest) {
+          return;
+        }
+        const openaqSummary = computeNetworkSummary(scopedLatestRows, OPENAQ_NETWORK_MATCHERS);
+        const openaqSensorLabel = currentWindow === "all"
+          ? formatNumber(openaqSummary.totalCount)
+          : `${formatNumber(openaqSummary.windowCount)} in window / ${formatNumber(openaqSummary.totalCount)} total`;
+        openaqSensors.textContent = openaqSummary.totalCount ? openaqSensorLabel : "0";
+        updateCoverageElements(
+          openaqCoverageValue,
+          openaqCoverageFill,
+          openaqCoverageBar,
+          openaqSummary.coverage,
+          total,
+          AREA_LABEL_PLURAL
+        );
+        openaqAverage.textContent = Number.isFinite(openaqSummary.mean)
+          ? `${formatValue(openaqSummary.mean)} ${pollutantUnits}`
+          : "-";
+        openaqMedian.textContent = Number.isFinite(openaqSummary.median)
+          ? `${formatValue(openaqSummary.median)} ${pollutantUnits}`
+          : "-";
+        openaqHighest.textContent = openaqSummary.highest
+          ? `${formatValue(openaqSummary.highest.value)} ${pollutantUnits} · ${formatSummaryTimestamp(openaqSummary.highest.timestamp)}`
+          : "-";
+        openaqLowest.textContent = openaqSummary.lowest
+          ? `${formatValue(openaqSummary.lowest.value)} ${pollutantUnits} · ${formatSummaryTimestamp(openaqSummary.lowest.timestamp)}`
+          : "-";
+        openaqLatest.textContent = openaqSummary.latestTimestamp
+          ? formatSummaryTimestamp(openaqSummary.latestTimestamp)
+          : "-";
+        updateExtraNetworkSummaries();
+      }
+
+      function clearMap() {
+        svg.selectAll("*").remove();
+      }
+
+      function offsetToPixel(layout, q, r, size) {
+        if (layout === "odd-r") {
+          return {
+            x: size * Math.sqrt(3) * (q + 0.5 * (r & 1)),
+            y: size * 1.5 * r,
+          };
+        }
+        if (layout === "even-r") {
+          return {
+            x: size * Math.sqrt(3) * (q + 0.5 * ((r + 1) & 1)),
+            y: size * 1.5 * r,
+          };
+        }
+        if (layout === "odd-q") {
+          return {
+            x: size * 1.5 * q,
+            y: size * Math.sqrt(3) * (r + 0.5 * (q & 1)),
+          };
+        }
+        if (layout === "even-q") {
+          return {
+            x: size * 1.5 * q,
+            y: size * Math.sqrt(3) * (r + 0.5 * ((q + 1) & 1)),
+          };
+        }
+        return {
+          x: size * Math.sqrt(3) * (q + r / 2),
+          y: size * 1.5 * r,
+        };
+      }
+
+      function computeHexBounds(cells, side) {
+        const dx = (Math.sqrt(3) / 2) * side;
+        const dy = side;
+        let minX = Infinity;
+        let minY = Infinity;
+        let maxX = -Infinity;
+        let maxY = -Infinity;
+        cells.forEach((cell) => {
+          const left = cell.cx - dx;
+          const right = cell.cx + dx;
+          const bottom = cell.cy - dy;
+          const top = cell.cy + dy;
+          if (left < minX) {
+            minX = left;
+          }
+          if (bottom < minY) {
+            minY = bottom;
+          }
+          if (right > maxX) {
+            maxX = right;
+          }
+          if (top > maxY) {
+            maxY = top;
+          }
+        });
+        return { minX, minY, maxX, maxY };
+      }
+
+      function buildHexCellsFromHexjson(hexjson) {
+        const layout = typeof hexjson?.layout === "string" ? hexjson.layout : "odd-r";
+        const entries = Object.entries(hexjson?.hexes || {});
+        const size = 1;
+        const cells = entries.map(([key, value]) => {
+          const q = Number(value?.q ?? value?.col ?? 0);
+          const r = Number(value?.r ?? value?.row ?? 0);
+          const { x, y } = offsetToPixel(layout, q, r, size);
+          return {
+            id: key,
+            cx: x,
+            cy: y,
+            q,
+            r,
+            area_code: key,
+            area_name: value?.n || null,
+            pcon_code: key,
+            pcon_name: value?.n || null,
+            region_code: value?.region || null,
+            region_name: REGION_NAMES[value?.region] || null,
+          };
+        });
+        return { cells, bounds: computeHexBounds(cells, size), side: size, layout };
+      }
+
+      function extractOuterRings(geometry) {
+        if (!geometry) {
+          return [];
+        }
+        if (geometry.type === "Polygon") {
+          return Array.isArray(geometry.coordinates?.[0]) ? [geometry.coordinates[0]] : [];
+        }
+        if (geometry.type === "MultiPolygon") {
+          return (geometry.coordinates || [])
+            .map((polygon) => polygon?.[0])
+            .filter((ring) => Array.isArray(ring));
+        }
+        return [];
+      }
+
+      function computePolygonBounds(cells) {
+        let minX = Infinity;
+        let minY = Infinity;
+        let maxX = -Infinity;
+        let maxY = -Infinity;
+        cells.forEach((cell) => {
+          (cell.paths || []).forEach((ring) => {
+            ring.forEach((point) => {
+              const [x, y] = point;
+              if (x < minX) {
+                minX = x;
+              }
+              if (y < minY) {
+                minY = y;
+              }
+              if (x > maxX) {
+                maxX = x;
+              }
+              if (y > maxY) {
+                maxY = y;
+              }
+            });
+          });
+        });
+        return { minX, minY, maxX, maxY };
+      }
+
+      function canonicalRegionName(value) {
+        if (typeof value !== "string") {
+          return "";
+        }
+        const trimmed = value.trim();
+        if (!trimmed) {
+          return "";
+        }
+        return REGION_LOOKUP.get(trimmed.toLowerCase()) || trimmed;
+      }
+
+      function resolveLaRegionName(laCode, laName, rawRegionName) {
+        const normalizedCode = String(laCode || "").trim().toUpperCase();
+        const normalizedName = String(laName || "").trim().toLowerCase();
+        if (
+          normalizedCode === "E06000010"
+          || normalizedName === "kingston upon hull"
+          || normalizedName === "kingston upon hull, city of"
+        ) {
+          return "Yorkshire and The Humber";
+        }
+        const override = LA_REGION_OVERRIDES[normalizedCode];
+        if (override) {
+          return override;
+        }
+        return canonicalRegionName(rawRegionName);
+      }
+
+      function computeRingBounds(rings) {
+        let minX = Infinity;
+        let minY = Infinity;
+        let maxX = -Infinity;
+        let maxY = -Infinity;
+        (rings || []).forEach((ring) => {
+          (ring || []).forEach((point) => {
+            const [x, y] = point;
+            if (x < minX) {
+              minX = x;
+            }
+            if (y < minY) {
+              minY = y;
+            }
+            if (x > maxX) {
+              maxX = x;
+            }
+            if (y > maxY) {
+              maxY = y;
+            }
+          });
+        });
+        return { minX, minY, maxX, maxY };
+      }
+
+      function mergeBounds(a, b) {
+        return {
+          minX: Math.min(a.minX, b.minX),
+          minY: Math.min(a.minY, b.minY),
+          maxX: Math.max(a.maxX, b.maxX),
+          maxY: Math.max(a.maxY, b.maxY),
+        };
+      }
+
+      function translateBounds(bounds, dx, dy) {
+        return {
+          minX: bounds.minX + dx,
+          minY: bounds.minY + dy,
+          maxX: bounds.maxX + dx,
+          maxY: bounds.maxY + dy,
+        };
+      }
+
+      function boundsCenter(bounds) {
+        return {
+          x: (bounds.minX + bounds.maxX) / 2,
+          y: (bounds.minY + bounds.maxY) / 2,
+        };
+      }
+
+      function boundsTouchOrOverlap(a, b, epsilon = 1e-6) {
+        return (
+          a.minX <= b.maxX + epsilon
+          && a.maxX >= b.minX - epsilon
+          && a.minY <= b.maxY + epsilon
+          && a.maxY >= b.minY - epsilon
+        );
+      }
+
+      function boundsDistance(a, b) {
+        const dx = Math.max(0, Math.max(a.minX - b.maxX, b.minX - a.maxX));
+        const dy = Math.max(0, Math.max(a.minY - b.maxY, b.minY - a.maxY));
+        return Math.hypot(dx, dy);
+      }
+
+      function estimateTypicalCellSpan(cells) {
+        const spans = cells
+          .map((cell) => {
+            const bounds = computeRingBounds(cell.paths || []);
+            return Math.max(bounds.maxX - bounds.minX, bounds.maxY - bounds.minY);
+          })
+          .filter((value) => Number.isFinite(value) && value > 0)
+          .sort((a, b) => a - b);
+        if (!spans.length) {
+          return 1;
+        }
+        return spans[Math.floor(spans.length / 2)];
+      }
+
+      function buildGeoIslandComponents(cells) {
+        const metrics = cells.map((cell, index) => ({
+          index,
+          bounds: computeRingBounds(cell.paths || []),
+        }));
+        const components = [];
+        const visited = new Set();
+        for (let i = 0; i < metrics.length; i += 1) {
+          if (visited.has(i)) {
+            continue;
+          }
+          visited.add(i);
+          const queue = [i];
+          const indices = [];
+          let componentBounds = metrics[i].bounds;
+          while (queue.length) {
+            const current = queue.pop();
+            indices.push(current);
+            const currentBounds = metrics[current].bounds;
+            for (let j = 0; j < metrics.length; j += 1) {
+              if (visited.has(j)) {
+                continue;
+              }
+              if (!boundsTouchOrOverlap(currentBounds, metrics[j].bounds)) {
+                continue;
+              }
+              visited.add(j);
+              queue.push(j);
+            }
+          }
+          indices.forEach((idx) => {
+            componentBounds = mergeBounds(componentBounds, metrics[idx].bounds);
+          });
+          components.push({
+            id: components.length,
+            indices,
+            bounds: componentBounds,
+            center: boundsCenter(componentBounds),
+          });
+        }
+        return components;
+      }
+
+      function compactGeoIslands(cells, regionName) {
+        const canonicalRegion = canonicalRegionName(regionName);
+        if (
+          !canonicalRegion
+          || GEO_ISLAND_COMPACTION_EXCLUDED_REGIONS.has(canonicalRegion)
+          || !Array.isArray(cells)
+          || cells.length < 2
+        ) {
+          return cells;
+        }
+        const components = buildGeoIslandComponents(cells);
+        if (components.length < 2) {
+          return cells;
+        }
+        const anchor = components.reduce((best, candidate) => (
+          candidate.indices.length > best.indices.length ? candidate : best
+        ), components[0]);
+        const anchorCenter = anchor.center;
+        const span = estimateTypicalCellSpan(cells);
+        const stepSize = Math.max(span * 0.2, 0.02);
+        const maxSteps = 700;
+        const placements = new Map();
+        const movedBoundsById = new Map();
+        placements.set(anchor.id, { dx: 0, dy: 0 });
+        movedBoundsById.set(anchor.id, anchor.bounds);
+
+        const movable = components
+          .filter((component) => component.id !== anchor.id)
+          .sort((a, b) => {
+            const aDistance = Math.hypot(a.center.x - anchorCenter.x, a.center.y - anchorCenter.y);
+            const bDistance = Math.hypot(b.center.x - anchorCenter.x, b.center.y - anchorCenter.y);
+            return bDistance - aDistance;
+          });
+
+        movable.forEach((component) => {
+          let directionX = anchorCenter.x - component.center.x;
+          let directionY = anchorCenter.y - component.center.y;
+          const magnitude = Math.hypot(directionX, directionY) || 1;
+          directionX /= magnitude;
+          directionY /= magnitude;
+          let dx = 0;
+          let dy = 0;
+          let movedBounds = component.bounds;
+          for (let step = 0; step < maxSteps; step += 1) {
+            const trialDx = dx + directionX * stepSize;
+            const trialDy = dy + directionY * stepSize;
+            const trialBounds = translateBounds(component.bounds, trialDx, trialDy);
+            const hasCollision = components.some((otherComponent) => {
+              if (otherComponent.id === component.id) {
+                return false;
+              }
+              const otherBounds = movedBoundsById.get(otherComponent.id) || otherComponent.bounds;
+              return boundsTouchOrOverlap(trialBounds, otherBounds, 1e-6);
+            });
+            if (hasCollision) {
+              break;
+            }
+            dx = trialDx;
+            dy = trialDy;
+            movedBounds = trialBounds;
+          }
+          placements.set(component.id, { dx, dy });
+          movedBoundsById.set(component.id, movedBounds);
+        });
+
+        const moveByCellIndex = new Map();
+        components.forEach((component) => {
+          const move = placements.get(component.id) || { dx: 0, dy: 0 };
+          component.indices.forEach((cellIndex) => {
+            moveByCellIndex.set(cellIndex, move);
+          });
+        });
+
+        return cells.map((cell, cellIndex) => {
+          const move = moveByCellIndex.get(cellIndex) || { dx: 0, dy: 0 };
+          if (!move.dx && !move.dy) {
+            return cell;
+          }
+          return {
+            ...cell,
+            paths: (cell.paths || []).map((ring) =>
+              ring.map((point) => [point[0] + move.dx, point[1] + move.dy])
+            ),
+          };
+        });
+      }
+
+      function buildHexCellsFromGeojson(geojson) {
+        const features = Array.isArray(geojson?.features) ? geojson.features : [];
+        const cells = [];
+        features.forEach((feature, index) => {
+          const props = feature?.properties || {};
+          const laCode = typeof props.la_code === "string" ? props.la_code.trim() : "";
+          const laName = typeof props.la_name === "string" ? props.la_name.trim() : "";
+          const regionName = resolveLaRegionName(laCode, laName, props.region_nation);
+          if (activeRegion && regionName !== activeRegion) {
+            return;
+          }
+          const rings = extractOuterRings(feature?.geometry);
+          if (!rings.length) {
+            return;
+          }
+          const code = laCode || laName || `la-${index}`;
+          const name = laName || code;
+          cells.push({
+            id: code,
+            area_code: code || null,
+            area_name: name || null,
+            region_name: regionName || null,
+            paths: rings,
+          });
+        });
+        const compactedCells = compactGeoIslands(cells, activeRegion);
+        return { cells: compactedCells, bounds: computePolygonBounds(compactedCells), side: null, layout: null };
+      }
+
+      function buildAreaRegionLookupFromGeojson(geojson) {
+        const features = Array.isArray(geojson?.features) ? geojson.features : [];
+        const lookup = new Map();
+        features.forEach((feature) => {
+          const props = feature?.properties || {};
+          const laCode = typeof props.la_code === "string" ? props.la_code.trim().toUpperCase() : "";
+          if (!laCode) {
+            return;
+          }
+          const laName = typeof props.la_name === "string" ? props.la_name.trim() : "";
+          const regionName = resolveLaRegionName(laCode, laName, props.region_nation);
+          if (!regionName || lookup.has(laCode)) {
+            return;
+          }
+          lookup.set(laCode, regionName);
+        });
+        return lookup;
+      }
+
+      function offsetToAxial(layout, col, row) {
+        if (layout === "odd-r") {
+          return { q: col - (row - (row & 1)) / 2, r: row };
+        }
+        if (layout === "even-r") {
+          return { q: col - (row + (row & 1)) / 2, r: row };
+        }
+        if (layout === "odd-q") {
+          return { q: col, r: row - (col - (col & 1)) / 2 };
+        }
+        if (layout === "even-q") {
+          return { q: col, r: row - (col + (col & 1)) / 2 };
+        }
+        return { q: col, r: row };
+      }
+
+      function axialToOffset(layout, q, r) {
+        if (layout === "odd-r") {
+          return { col: q + (r - (r & 1)) / 2, row: r };
+        }
+        if (layout === "even-r") {
+          return { col: q + (r + (r & 1)) / 2, row: r };
+        }
+        if (layout === "odd-q") {
+          return { col: q, row: r + (q - (q & 1)) / 2 };
+        }
+        if (layout === "even-q") {
+          return { col: q, row: r + (q + (q & 1)) / 2 };
+        }
+        return { col: q, row: r };
+      }
+
+      function getEdgeDirectionMap(layout) {
+        if (EDGE_DIRECTION_CACHE.has(layout)) {
+          return EDGE_DIRECTION_CACHE.get(layout);
+        }
+        const size = 1;
+        const center = offsetToPixel(layout, 0, 0, size);
+        const points = hexPoints(center.x, center.y, size);
+        const edgeVectors = points.map((point, index) => {
+          const next = points[(index + 1) % 6];
+          return {
+            x: (point[0] + next[0]) / 2 - center.x,
+            y: (point[1] + next[1]) / 2 - center.y,
+          };
+        });
+        const directionVectors = AXIAL_DIRECTIONS.map((dir) => {
+          const offset = axialToOffset(layout, dir.q, dir.r);
+          const neighbor = offsetToPixel(layout, offset.col, offset.row, size);
+          return {
+            x: neighbor.x - center.x,
+            y: neighbor.y - center.y,
+          };
+        });
+        const map = edgeVectors.map((edgeVector) => {
+          let bestIndex = 0;
+          let bestScore = -Infinity;
+          const edgeLength = Math.hypot(edgeVector.x, edgeVector.y) || 1;
+          directionVectors.forEach((directionVector, directionIndex) => {
+            const dirLength = Math.hypot(directionVector.x, directionVector.y) || 1;
+            const score = (edgeVector.x * directionVector.x + edgeVector.y * directionVector.y)
+              / (edgeLength * dirLength);
+            if (score > bestScore) {
+              bestScore = score;
+              bestIndex = directionIndex;
+            }
+          });
+          return bestIndex;
+        });
+        EDGE_DIRECTION_CACHE.set(layout, map);
+        return map;
+      }
+
+      function neighborForEdge(layout, col, row, edgeIndex) {
+        const axial = offsetToAxial(layout, col, row);
+        const directionIndex = getEdgeDirectionMap(layout)[edgeIndex];
+        const direction = AXIAL_DIRECTIONS[directionIndex];
+        const neighborAxial = { q: axial.q + direction.q, r: axial.r + direction.r };
+        return axialToOffset(layout, neighborAxial.q, neighborAxial.r);
+      }
+
+      function buildPathsFromSegments(segments) {
+        const pointKey = (point) => `${point[0].toFixed(6)},${point[1].toFixed(6)}`;
+        const adjacency = new Map();
+        segments.forEach((segment, index) => {
+          const startKey = pointKey(segment.start);
+          const endKey = pointKey(segment.end);
+          if (!adjacency.has(startKey)) {
+            adjacency.set(startKey, []);
+          }
+          if (!adjacency.has(endKey)) {
+            adjacency.set(endKey, []);
+          }
+          adjacency.get(startKey).push(index);
+          adjacency.get(endKey).push(index);
+        });
+        const unused = new Set(segments.map((_, index) => index));
+        const paths = [];
+        const takeSegment = (key) => {
+          const candidates = adjacency.get(key);
+          if (!candidates) {
+            return null;
+          }
+          const nextIndex = candidates.find((index) => unused.has(index));
+          if (nextIndex === undefined) {
+            return null;
+          }
+          unused.delete(nextIndex);
+          return nextIndex;
+        };
+        while (unused.size) {
+          const index = unused.values().next().value;
+          unused.delete(index);
+          const segment = segments[index];
+          const path = [segment.start, segment.end];
+          let startKey = pointKey(segment.start);
+          let endKey = pointKey(segment.end);
+          while (true) {
+            const nextIndex = takeSegment(endKey);
+            if (nextIndex === null) {
+              break;
+            }
+            const nextSegment = segments[nextIndex];
+            const nextPoint = pointKey(nextSegment.start) === endKey
+              ? nextSegment.end
+              : nextSegment.start;
+            path.push(nextPoint);
+            endKey = pointKey(nextPoint);
+          }
+          while (true) {
+            const prevIndex = takeSegment(startKey);
+            if (prevIndex === null) {
+              break;
+            }
+            const prevSegment = segments[prevIndex];
+            const prevPoint = pointKey(prevSegment.start) === startKey
+              ? prevSegment.end
+              : prevSegment.start;
+            path.unshift(prevPoint);
+            startKey = pointKey(prevPoint);
+          }
+          paths.push(path);
+        }
+        return paths;
+      }
+
+      function regionCountry(regionCode) {
+        if (!regionCode) {
+          return null;
+        }
+        return String(regionCode).trim().charAt(0) || null;
+      }
+
+      function boundaryType(regionCode, neighborCode) {
+        const country = regionCountry(regionCode);
+        const neighborCountry = regionCountry(neighborCode) || country;
+        if (!neighborCode) {
+          return null;
+        }
+        if (country && neighborCountry && country !== neighborCountry) {
+          return "country";
+        }
+        return "region";
+      }
+
+      function buildRegionBoundaryPaths(cells, layout) {
+        const cellLookup = new Map(cells.map((cell) => [`${cell.q},${cell.r}`, cell]));
+        const segmentsByType = { region: [], country: [] };
+        cells.forEach((cell) => {
+          const points = hexPoints(cell.cx, cell.cy, 1);
+          for (let edgeIndex = 0; edgeIndex < 6; edgeIndex += 1) {
+            const neighborOffset = neighborForEdge(layout, cell.q, cell.r, edgeIndex);
+            const neighborKey = `${neighborOffset.col},${neighborOffset.row}`;
+            const neighbor = cellLookup.get(neighborKey);
+            if (!neighbor) {
+              continue;
+            }
+            const neighborRegion = neighbor?.region_code || null;
+            if (neighborRegion === cell.region_code) {
+              continue;
+            }
+            if (neighborRegion && cell.region_code && cell.region_code > neighborRegion) {
+              continue;
+            }
+            const type = boundaryType(cell.region_code, neighborRegion);
+            if (!type) {
+              continue;
+            }
+            segmentsByType[type].push({
+              start: points[edgeIndex],
+              end: points[(edgeIndex + 1) % 6],
+            });
+          }
+        });
+        return Object.entries(segmentsByType)
+          .map(([type, segments]) => ({
+            type,
+            paths: buildPathsFromSegments(segments),
+          }))
+          .filter((boundary) => boundary.paths.length);
+      }
+
+      function prepareHexGrid() {
+        if (!hexData) {
+          return;
+        }
+        hexCells = [];
+        hexBounds = null;
+        hexSide = null;
+        hexLayout = "odd-r";
+        boundaryPaths = [];
+        if (hexData?.type === "FeatureCollection") {
+          const { cells, bounds } = buildHexCellsFromGeojson(hexData);
+          hexCells = cells;
+          hexBounds = bounds;
+          hexSide = null;
+          hexLayout = null;
+          boundaryPaths = [];
+          return;
+        }
+        const { cells, bounds, side, layout } = buildHexCellsFromHexjson(hexData);
+        hexCells = cells;
+        hexBounds = bounds;
+        hexSide = side;
+        hexLayout = layout;
+        boundaryPaths = buildRegionBoundaryPaths(cells, layout);
+      }
+
+      function createProjection(bounds, width, height, padding) {
+        const dataWidth = bounds.maxX - bounds.minX;
+        const dataHeight = bounds.maxY - bounds.minY;
+        const scale = Math.min(
+          (width - padding * 2) / dataWidth,
+          (height - padding * 2) / dataHeight,
+        );
+        const extraX = width - padding * 2 - dataWidth * scale;
+        const extraY = height - padding * 2 - dataHeight * scale;
+        return (point) => ([
+          (point[0] - bounds.minX) * scale + padding + extraX / 2,
+          (bounds.maxY - point[1]) * scale + padding + extraY / 2,
+        ]);
+      }
+
+      function hexPoints(cx, cy, side) {
+        const dx = Math.sqrt(3) / 2 * side;
+        const dy = side / 2;
+        return [
+          [cx, cy + side],
+          [cx + dx, cy + dy],
+          [cx + dx, cy - dy],
+          [cx, cy - side],
+          [cx - dx, cy - dy],
+          [cx - dx, cy + dy],
+        ];
+      }
+
+      function buildPathFromRings(rings, projection) {
+        if (!rings || !rings.length) {
+          return "";
+        }
+        return rings.map((ring) => {
+          if (!ring.length) {
+            return "";
+          }
+          const [start, ...rest] = ring;
+          const [startX, startY] = projection(start);
+          const segments = rest.map((point) => {
+            const [x, y] = projection(point);
+            return `L${x},${y}`;
+          }).join("");
+          return `M${startX},${startY}${segments}Z`;
+        }).join("");
+      }
+
+      function applyMetricState() {
+        metricInputs.forEach((input) => {
+          input.checked = input.value === currentMetric;
+        });
+        if (metricGroup) {
+          metricGroup.dataset.active = currentMetric;
+        }
+      }
+
+      function setMetric(nextMetric, options = {}) {
+        if (!nextMetric) {
+          return;
+        }
+        if (nextMetric === currentMetric) {
+          applyMetricState();
+          return;
+        }
+        if (!options.coordinated) {
+          coordinator.updateMapSettings({ metric: nextMetric }, { source: "cr" });
+          return;
+        }
+        currentMetric = nextMetric;
+        applyMetricState();
+        renderMap();
+        updateDetailsPanel();
+      }
+
+      function getMetricValue(row) {
+        if (!row) {
+          return null;
+        }
+        const raw = currentMetric === "mean"
+          ? row.mean_value
+          : row.median_value;
+        return clampValue(raw, activePollutant);
+      }
+
+      function getStationCount(row) {
+        if (!row) {
+          return 0;
+        }
+        const count = normalizeNumber(row.station_count);
+        return count === null ? 0 : count;
+      }
+
+      function getActiveNetworkCodes() {
+        return networkController.getSelection();
+      }
+
+      function getCheckedNetworkEntries() {
+        return networkController.getSelectedEntries();
+      }
+
+      function selectionIncludesMatcher(entries, matchers) {
+        if (!entries.length || !Array.isArray(matchers) || !matchers.length) {
+          return false;
+        }
+        return entries.some((entry) => {
+          if (entry.label) {
+            return matchers.some((token) => entry.label.includes(token));
+          }
+          if (entry.code) {
+            return matchers.some((token) => entry.code.includes(token));
+          }
+          return false;
+        });
+      }
+
+      function updateNetworkSummaryCardVisibility() {
+        if (!networkController.getCatalog().length) {
+          return;
+        }
+        const entries = getCheckedNetworkEntries();
+        const cardDefs = [
+          {
+            card: aurnSensors?.closest(".network-card"),
+            matchers: GOVUK_NETWORK_MATCHERS,
+          },
+          {
+            card: openaqSensors?.closest(".network-card"),
+            matchers: OPENAQ_NETWORK_MATCHERS,
+          },
+          ...extraNetworkSummaryDefs.map((def) => ({
+            card: def.elements?.sensors?.closest(".network-card"),
+            matchers: def.matchers,
+          })),
+        ];
+        cardDefs.forEach((def) => {
+          if (!def.card) {
+            return;
+          }
+          def.card.hidden = !selectionIncludesMatcher(entries, def.matchers);
+        });
+      }
+
+      function filterLatestRowsByNetwork(rows, networkCodes) {
+        if (!rows.length) {
+          return [];
+        }
+        return rows.filter((row) => {
+          const codes = resolveNetworkCodes(row);
+          return codes.some((code) => networkCodes.has(code));
+        });
+      }
+
+      function buildPconRowsFromLatest(rows) {
+        if (!rows.length) {
+          return [];
+        }
+        const groups = new Map();
+        const scopedRows = getRowsForActivePollutant(rows);
+        scopedRows.forEach((row, index) => {
+          const areaCode = resolveAreaCode(row);
+          if (!areaCode) {
+            return;
+          }
+          const value = resolveLatestValue(row);
+          if (!Number.isFinite(value)) {
+            return;
+          }
+          const stationKey = resolveStationKey(row) || `${areaCode}-${index}`;
+          const timestamp = parseDate(row?.last_value_at || row?.observed_at || row?.latest_value_at);
+          const group = groups.get(areaCode) || { stations: new Map(), latestAt: null };
+          const existing = group.stations.get(stationKey);
+          if (!existing || (timestamp && (!existing.timestamp || timestamp > existing.timestamp))) {
+            group.stations.set(stationKey, { value, timestamp });
+          }
+          if (timestamp && (!group.latestAt || timestamp > group.latestAt)) {
+            group.latestAt = timestamp;
+          }
+          groups.set(areaCode, group);
+        });
+
+        const rowsForMap = [];
+        groups.forEach((group, areaCode) => {
+          const values = Array.from(group.stations.values())
+            .map((entry) => entry.value)
+            .filter((value) => Number.isFinite(value));
+          if (!values.length) {
+            return;
+          }
+          const sorted = [...values].sort((a, b) => a - b);
+          const midpoint = Math.floor(sorted.length / 2);
+          const median = sorted.length % 2 === 0
+            ? (sorted[midpoint - 1] + sorted[midpoint]) / 2
+            : sorted[midpoint];
+          const mean = values.reduce((sum, value) => sum + value, 0) / values.length;
+          const baseRow = basePconLookup.get(areaCode) || {};
+          rowsForMap.push({
+            area_code: areaCode,
+            area_name: resolveAreaName(baseRow),
+            pcon_version: baseRow.pcon_version || baseRow.la_version || activeLaVersion,
+            station_count: values.length,
+            single_site: values.length === 1,
+            median_value: median,
+            mean_value: mean,
+            latest_value_at: group.latestAt ? group.latestAt.toISOString() : null,
+          });
+        });
+        return rowsForMap;
+      }
+
+      function applyNetworkFilters() {
+        const networkRowsForWindow = getNetworkRowsForWindow();
+        const windowNetworkDefs = buildNetworkDefs(networkRowsForWindow);
+        const coverageByCode = buildNetworkCoverageByCode(networkRowsForWindow);
+        const coverageTotal = pconCodes.size || 0;
+        renderNetworkFiltersIfNeeded(
+          windowNetworkDefs,
+          coverageByCode,
+          coverageTotal,
+          AREA_LABEL_PLURAL,
+        );
+        updateNetworkSummaryCardVisibility();
+        if (!basePconRows.length && !baseLatestRows.length && !baseLatestRowsAllWindow.length) {
+          scopedLatestRows = [];
+          scopedLatestRowsAllWindow = [];
+          latestRows = [];
+          pconRows = [];
+          pconLookup = new Map();
+          updateRowCountText();
+          updateSummary();
+          renderMap();
+          updateDetailsPanel();
+          window.hexChartMode?.syncFromMap?.("cr", { preserveChartMode: true, updateChart: false });
+          return;
+        }
+        const networkCodes = getActiveNetworkCodes();
+        let filteredLatest = [];
+        if (networkCodes === null) {
+          filteredLatest = baseLatestRows;
+        } else if (networkCodes.size > 0) {
+          filteredLatest = filterLatestRowsByNetwork(baseLatestRows, networkCodes);
+        }
+        let filteredLatestAllWindow = [];
+        if (networkCodes === null) {
+          filteredLatestAllWindow = baseLatestRowsAllWindow;
+        } else if (networkCodes.size > 0) {
+          filteredLatestAllWindow = filterLatestRowsByNetwork(baseLatestRowsAllWindow, networkCodes);
+        }
+        scopedLatestRows = filteredLatest;
+        scopedLatestRowsAllWindow = filteredLatestAllWindow;
+        latestRows = filterRowsByWindow(filteredLatest);
+        const derived = latestRows.length ? buildPconRowsFromLatest(latestRows) : [];
+        pconRows = derived;
+        pconLookup = new Map(pconRows.map((row) => [resolveAreaCode(row), row]));
+        updateRowCountText();
+        updateSummary();
+        renderMap();
+        updateDetailsPanel();
+        window.hexChartMode?.syncFromMap?.("cr", { preserveChartMode: true, updateChart: false });
+      }
+
+      function positionTooltip(event) {
+        const left = event.clientX + window.scrollX + 12;
+        const pointerY = event.clientY + window.scrollY;
+        const viewportTop = window.scrollY;
+        const viewportBottom = window.scrollY + window.innerHeight;
+        const tooltipHeight = tooltip.offsetHeight || 0;
+        let top = pointerY - 12;
+        if (top + tooltipHeight > viewportBottom) {
+          top = pointerY - tooltipHeight - 12;
+        }
+        if (top < viewportTop + 8) {
+          top = viewportTop + 8;
+        }
+        tooltip.style.left = `${left}px`;
+        tooltip.style.top = `${top}px`;
+      }
+
+      function renderMapIfReady() {
+        const width = svg.node().clientWidth;
+        const height = svg.node().clientHeight;
+        if (!width || !height) {
+          return;
+        }
+        if (hasRendered && Math.abs(width - lastRenderWidth) < 1 && Math.abs(height - lastRenderHeight) < 1) {
+          return;
+        }
+        renderMap();
+      }
+
+      function renderMap() {
+        if (!hexData || !hexCells.length || !hexBounds) {
+          return;
+        }
+        const width = svg.node().clientWidth;
+        const height = svg.node().clientHeight;
+        if (!width || !height) {
+          return;
+        }
+        hasRendered = true;
+        lastRenderWidth = width;
+        lastRenderHeight = height;
+        clearMap();
+        const projection = createProjection(hexBounds, width, height, 24);
+        const values = pconRows
+          .map((row) => getMetricValue(row))
+          .filter((value) => Number.isFinite(value));
+        const maxValue = values.length ? d3.max(values) : null;
+        const domainMin = 0;
+        const domainMax = getLegendCapValue();
+        const palette = HEAT_STOPS.map((name, index) =>
+          resolveCssColor(name, HEAT_STOP_FALLBACKS[index])
+        );
+        colorScale = null;
+        currentDomainMax = domainMax;
+        if (maxValue !== null) {
+          const interpolate = d3.interpolateRgbBasis(palette);
+          colorScale = (value) => interpolate(mapValueToT(value, currentDomainMax));
+        }
+        updateLegend(maxValue === null ? null : domainMin, maxValue, domainMax);
+        updateLegendScaleDescription();
+        updateLegendTicks(domainMax);
+
+        const isCurrentlyLoading = mapWrap.classList.contains("is-loading");
+        const noDataColor = getComputedStyle(document.documentElement).getPropertyValue("--no-data").trim() || "#efe6d8";
+
+        const hexGroup = svg.append("g");
+        hexGroup.selectAll("path")
+          .data(hexCells)
+          .join("path")
+          .attr("class", (cell) => {
+            const areaCode = resolveCellAreaCode(cell);
+            const row = areaCode ? pconLookup.get(areaCode) : null;
+            const value = getMetricValue(row);
+            return (colorScale && Number.isFinite(value)) ? "hex has-data" : "hex";
+          })
+          .attr("d", (cell) => {
+            const rings = cell.paths || (hexSide ? [hexPoints(cell.cx, cell.cy, hexSide)] : []);
+            return buildPathFromRings(rings, projection);
+          })
+          .attr("fill", (cell) => {
+            const areaCode = resolveCellAreaCode(cell);
+            const row = areaCode ? pconLookup.get(areaCode) : null;
+            const value = getMetricValue(row);
+            if (!colorScale || !Number.isFinite(value)) return "var(--no-data)";
+            return isCurrentlyLoading ? noDataColor : colorScale(value);
+          })
+          .attr("data-fill", (cell) => {
+            const areaCode = resolveCellAreaCode(cell);
+            const row = areaCode ? pconLookup.get(areaCode) : null;
+            const value = getMetricValue(row);
+            if (!colorScale || !Number.isFinite(value)) return null;
+            return colorScale(value);
+          })
+          .on("click", (event, cell) => {
+            event.stopPropagation();
+            setSelectedCell(cell);
+          })
+          .on("mouseenter", (event, cell) => {
+            const areaCode = resolveCellAreaCode(cell);
+            const row = areaCode ? pconLookup.get(areaCode) : null;
+            const metricValue = getMetricValue(row);
+            const areaName = resolveCellAreaName(cell) || resolveAreaName(row) || areaCode || "Unknown local authority";
+            const regionLabel = cell.region_name || cell.region_code || "Unknown region";
+            const pollutantLabel = getPollutantLabel(activePollutant);
+            const pollutantUnits = getPollutantUnits(activePollutant);
+            const populationEntry = areaCode ? populationLookup.get(areaCode) : null;
+            const populationValue = normalizeNumber(populationEntry?.population_value);
+            const populationDate = parseDate(populationEntry?.reference_date);
+            const populationYear = populationDate ? populationDate.getFullYear() : null;
+            const populationLabel = populationValue === null
+              ? "Population: n/a"
+              : `Population${populationYear ? ` (${populationYear})` : ""}: ${formatNumber(populationValue)}`;
+            const valueLabel = Number.isFinite(metricValue)
+              ? `${formatValue(metricValue)} ${pollutantUnits}`
+              : `No ${pollutantLabel} data`;
+            const rowsForTooltip = getRowsForActivePollutant(latestRows)
+              .filter((item) => resolveAreaCode(item) === areaCode);
+            const stationEntries = collectStationEntries(rowsForTooltip, areaCode);
+            const networkCounts = countStationsByNetwork(stationEntries);
+            const networkLines = stationEntries.length
+              ? networkCounts.map((entry) =>
+                `<div class="tooltip-line"><span class="tooltip-network-name">${entry.label}</span>: ${formatSensorCount(entry.count)}</div>`
+              )
+              : [`<div class="tooltip-line">${formatSensorCount(0)}</div>`];
+            if (stationEntries.length && networkCounts.length >= 2) {
+              networkLines.push(
+                `<div class="tooltip-line">Total: ${formatSensorCount(stationEntries.length)}</div>`
+              );
+            }
+            tooltip.innerHTML = `
+              <div class="tooltip-title">${areaName}</div>
+              <div class="tooltip-line">Region: ${regionLabel}</div>
+              <div class="tooltip-line">${populationLabel}</div>
+              <div class="tooltip-line">${currentMetric === "median" ? "Typical" : "Average"}: ${valueLabel}</div>
+              ${networkLines.join("")}
+            `;
+            tooltip.classList.add("visible");
+            positionTooltip(event);
+          })
+          .on("mousemove", (event) => {
+            positionTooltip(event);
+          })
+          .on("mouseleave", () => {
+            tooltip.classList.remove("visible");
+          });
+
+        const boundaryGroup = svg.append("g").attr("class", "region-boundaries");
+        boundaryGroup.selectAll("path")
+          .data(boundaryPaths)
+          .join("path")
+          .attr("class", (boundary) => `boundary-path boundary-${boundary.type || "region"}`)
+          .attr("d", (boundary) => boundary.paths.map((path) => {
+            const [first, ...rest] = path;
+            const [startX, startY] = projection(first);
+            const lines = rest.map((point) => {
+              const [x, y] = projection(point);
+              return `L${x},${y}`;
+            }).join("");
+            return `M${startX},${startY}${lines}`;
+          }).join(""));
+        updateSelectedHexStyles();
+        updateSelectedHexViewportShift();
+      }
+
+      function requestMapParamUpdate(value, push) {
+        if (typeof window.updateMapParam !== "function") {
+          throw new Error("Hex Map page URL controller is unavailable.");
+        }
+        window.updateMapParam(value, { push: Boolean(push) });
+      }
+
+      function setActiveRegion(nextRegion, { updateUrl = false } = {}) {
+        const normalized = normalizeRegion(nextRegion);
+        if (!normalized) {
+          return;
+        }
+        if (normalized === activeRegion) {
+          if (updateUrl) {
+            requestMapParamUpdate(normalized, true);
+          }
+          return;
+        }
+        activeRegion = normalized;
+        mapState.lastCrMap = normalized;
+        const crSvgNode = svg.node();
+        if (crSvgNode) {
+          crSvgNode.dataset.region = normalized;
+        }
+        if (mapSelect) {
+          mapSelect.value = normalized;
+        }
+        updateEndpointHint();
+        if (updateUrl) {
+          requestMapParamUpdate(normalized, true);
+        }
+        window.dispatchEvent(new CustomEvent("crregionchange", {
+          detail: { region: activeRegion },
+        }));
+        loadMapData();
+      }
+
+      async function loadMapData(options = {}) {
+        const force = Boolean(options?.force);
+        if (!force && !isCrMapVisible()) {
+          return;
+        }
+        const requestPollutant = activePollutant;
+        chartDataStatus = "loading";
+        const requestWindow = currentWindow;
+        const requestRegion = activeRegion;
+        const requestId = ++latestLoadId;
+        const timingId = nextHexMapTimingId();
+        const isStale = () =>
+          requestId !== latestLoadId
+          || requestPollutant !== activePollutant
+          || requestWindow !== currentWindow
+          || requestRegion !== activeRegion;
+        markHexMapTiming(timingId, "load:start");
+        setStatus("Loading...");
+        setMapLoading(true);
+        if (errorEl) {
+          errorEl.textContent = "";
+          errorEl.hidden = true;
+        }
+        latestPollutant = null;
+        populationLookup = new Map();
+	        const hasCredentials = Boolean(REST_URL) && Boolean(cacheSessionUrl);
+	        const canLoadData = hasCredentials;
+	        if (!hasCredentials) {
+	          if (errorEl) {
+	            errorEl.textContent = !REST_URL
+	              ? "Missing cache endpoint base URL. Showing boundaries only."
+	              : "Missing cache session URL. Showing boundaries only.";
+	            errorEl.hidden = false;
+	          }
+	        }
+        try {
+          await fetchNetworkCatalog();
+          if (isStale()) {
+            return;
+          }
+          const hexUrl = getHexUrlForRegion(requestRegion);
+          const hexPromise = fetch(hexUrl);
+          let laPromise = Promise.resolve(null);
+          let laCacheKey = null;
+          let latestPromise = Promise.resolve(null);
+          let populationPromise = Promise.resolve(null);
+          if (canLoadData) {
+            const laUrl = new URL(REST_URL);
+            if (activeLaVersion) {
+              laUrl.searchParams.set("la_version", activeLaVersion);
+            }
+            if (requestRegion) {
+              laUrl.searchParams.set("region", requestRegion);
+            }
+            laCacheKey = laUrl.toString();
+            const laSince = normalizeIsoTimestamp(laSinceByKey.get(laCacheKey));
+            if (laSince) {
+              laUrl.searchParams.set("since", laSince);
+            }
+            const laEtag = laEtagByKey.get(laCacheKey) || null;
+	            const laHeaders = {};
+	            if (laEtag) {
+	              laHeaders["If-None-Match"] = laEtag;
+	            }
+            const latestUrl = new URL(resolveLatestUrl(currentWindow));
+            const latestCacheKey = getLatestCacheKey(requestPollutant, requestWindow, requestRegion);
+            const latestCursorEnabled = !latestUrl.pathname.endsWith("/latest-snapshot");
+            const latestSince = latestCursorEnabled
+              ? (latestSinceByKey.get(latestCacheKey) || null)
+              : null;
+            const latestSinceId = latestCursorEnabled
+              ? normalizeCursorId(latestSinceIdByKey.get(latestCacheKey))
+              : null;
+            const latestEtag = latestEtagByKey.get(latestCacheKey) || null;
+            latestUrl.searchParams.set("pollutant", activePollutant);
+            latestUrl.searchParams.set("window", currentWindow);
+            // Do not apply region filter at uk_aq_latest level for C&R:
+            // some stations have inconsistent region labels, but we always
+            // scope to the selected LA hex codes immediately after fetch.
+            latestUrl.searchParams.set("scope", "all");
+            latestUrl.searchParams.set("limit", "10000");
+            latestUrl.searchParams.set("caller", "hex_map");
+            if (latestCursorEnabled && latestSince) {
+              latestUrl.searchParams.set("since", latestSince);
+              if (latestSinceId !== null) {
+                latestUrl.searchParams.set("since_id", String(latestSinceId));
+              }
+            }
+	            const latestHeaders = {};
+	            if (latestEtag) {
+	              latestHeaders["If-None-Match"] = latestEtag;
+	            }
+            // const populationUrl = POPULATION_URL ? new URL(POPULATION_URL) : null;
+            // if (populationUrl) {
+            //   populationUrl.searchParams.set("geo_type", "LAD");
+            //   if (mapDateKey) {
+            //     populationUrl.searchParams.set("reference_date", mapDateKey);
+            //   }
+            //   populationUrl.searchParams.set("limit", "2000");
+            // }
+	            laPromise = fetchCacheApi(laUrl.toString(), {
+	              headers: laHeaders,
+	            }).catch(() => null);
+            latestPromise = fetchCacheApi(latestUrl.toString(), {
+              headers: latestHeaders,
+            }).catch(() => null);
+            const latestAllCacheKey = getLatestCacheKey(requestPollutant, "all", requestRegion);
+            let latestAllPromise = Promise.resolve(null);
+            if (requestWindow !== "all") {
+              const latestAllUrl = new URL(resolveLatestUrl("all"));
+              latestAllUrl.searchParams.set("pollutant", activePollutant);
+              latestAllUrl.searchParams.set("window", "all");
+              latestAllUrl.searchParams.set("scope", "all");
+              latestAllUrl.searchParams.set("limit", "10000");
+              latestAllUrl.searchParams.set("caller", "hex_map");
+              const latestAllEtag = latestEtagByKey.get(latestAllCacheKey) || null;
+              const latestAllHeaders = {};
+              if (latestAllEtag) {
+                latestAllHeaders["If-None-Match"] = latestAllEtag;
+              }
+              latestAllPromise = fetchCacheApi(latestAllUrl.toString(), {
+                headers: latestAllHeaders,
+              }).catch(() => null);
+            }
+            latestPromise = Promise.all([latestPromise, latestAllPromise]).then(([latest, latestAll]) => ({ latest, latestAll }));
+            // populationPromise = populationUrl
+            //   ? fetch(populationUrl.toString(), {
+            //     headers: {
+            //       Authorization: `Bearer ${anonKey}`,
+            //       apikey: anonKey,
+            //     },
+            //   }).catch(() => null)
+            //   : Promise.resolve(null);
+          }
+          const hexResponse = await hexPromise;
+          if (isStale()) {
+            return;
+          }
+          if (!hexResponse.ok) {
+            throw new Error(`Hex data request failed: ${hexResponse.status}`);
+          }
+          hexData = await hexResponse.json();
+          prepareHexGrid();
+          renderMapIfReady();
+          markHexMapTiming(timingId, "geometry-ready");
+          measureHexMapTiming(timingId, "load-to-geometry-ready", "load:start", "geometry-ready");
+          requestAnimationFrame(() => {
+            if (!isStale()) {
+              renderMapIfReady();
+            }
+          });
+          const [laResponse, latestResult, populationResponse] = await Promise.all([
+            laPromise,
+            latestPromise,
+            populationPromise,
+          ]);
+          const latestResponse = latestResult?.latest || null;
+          const latestAllResponse = latestResult?.latestAll || null;
+          if (isStale()) {
+            return;
+          }
+          pconCodes = new Set(hexCells.map((cell) => resolveCellAreaCode(cell)).filter(Boolean));
+          const laNotModified = Boolean(canLoadData && laResponse && laResponse.status === 304);
+          const laOk = Boolean(canLoadData && laResponse && (laResponse.ok || laNotModified));
+          if (laOk) {
+            if (laCacheKey && laResponse) {
+              const responseEtag = laResponse.headers.get("ETag");
+              if (responseEtag) {
+                laEtagByKey.set(laCacheKey, responseEtag);
+              }
+            }
+            if (laResponse && laResponse.status === 304) {
+              pconRows = basePconRows;
+              pconLookup = new Map(pconRows.map((row) => [resolveAreaCode(row), row]));
+            } else {
+              const payload = await laResponse.json();
+              const laSince = laCacheKey ? normalizeIsoTimestamp(laSinceByKey.get(laCacheKey)) : null;
+              const rawRows = payload?.data || [];
+              const incomingRows = rawRows.map((row) => ({
+                ...row,
+                area_code: row?.area_code || row?.la_code || null,
+                area_name: row?.area_name || row?.la_name || row?.pcon_name || null,
+                region_name: row?.region_name || row?.region_nation || row?.region || null,
+              })).filter((row) => {
+                const code = resolveAreaCode(row);
+                return !pconCodes.size || (code && pconCodes.has(code));
+              });
+              basePconRows = laSince
+                ? mergePconRows(basePconRows, incomingRows)
+                : incomingRows;
+              basePconLookup = new Map(basePconRows.map((row) => [resolveAreaCode(row), row]));
+              pconRows = basePconRows;
+              pconLookup = new Map(pconRows.map((row) => [resolveAreaCode(row), row]));
+              const nextSince = normalizeIsoTimestamp(payload?.next_since) || laSince;
+              if (laCacheKey) {
+                if (nextSince) {
+                  laSinceByKey.set(laCacheKey, nextSince);
+                } else {
+                  laSinceByKey.delete(laCacheKey);
+                }
+              }
+              if (lastUpdated) {
+                if (payload?.last_updated) {
+                  lastUpdated.textContent = `Latest data ${formatTimestamp(payload.last_updated)}`;
+                } else {
+                  lastUpdated.textContent = "Latest data unavailable";
+                }
+              }
+            }
+            const latestCacheKey = getLatestCacheKey(requestPollutant, requestWindow, requestRegion);
+            const latestCursorEnabled = !new URL(resolveLatestUrl(currentWindow)).pathname.endsWith("/latest-snapshot");
+            const latestSince = latestCursorEnabled
+              ? (latestSinceByKey.get(latestCacheKey) || null)
+              : null;
+            const latestSinceId = latestCursorEnabled
+              ? normalizeCursorId(latestSinceIdByKey.get(latestCacheKey))
+              : null;
+            if (latestResponse) {
+              const responseEtag = latestResponse.headers.get("ETag");
+              if (responseEtag) {
+                latestEtagByKey.set(latestCacheKey, responseEtag);
+              }
+            }
+            const latestAllCacheKey = getLatestCacheKey(requestPollutant, "all", requestRegion);
+            if (latestAllResponse) {
+              const responseEtag = latestAllResponse.headers.get("ETag");
+              if (responseEtag) {
+                latestEtagByKey.set(latestAllCacheKey, responseEtag);
+              }
+            }
+            if (latestResponse && latestResponse.status === 304) {
+              const cachedLatest = pollutantCache.get(latestCacheKey);
+              if (cachedLatest) {
+                baseLatestRows = cachedLatest.latestRows || [];
+                latestPollutant = cachedLatest.latestPollutant || requestPollutant;
+                const cachedSince = normalizeIsoTimestamp(cachedLatest.nextSince) || latestSince;
+                const cachedSinceId = normalizeCursorId(cachedLatest.nextSinceId)
+                  ?? latestSinceId
+                  ?? 0;
+                if (cachedSince) {
+                  latestSinceByKey.set(latestCacheKey, cachedSince);
+                  latestSinceIdByKey.set(latestCacheKey, cachedSinceId);
+                }
+              } else {
+                baseLatestRows = [];
+                latestPollutant = requestPollutant;
+              }
+            } else if (latestResponse && latestResponse.ok) {
+              const latestPayload = await latestResponse.json();
+              const latestRaw = latestPayload?.data || [];
+              const cleanedLatest = latestRaw.filter((row) => Number.isFinite(resolveLatestValue(row)));
+              const scopedLatest = cleanedLatest.filter((row) => {
+                const code = resolvePconCode(row);
+                return !pconCodes.size || (code && pconCodes.has(code));
+              });
+              const responsePollutant = normalizePollutantKey(latestPayload?.pollutant) || requestPollutant;
+              const nextSince = latestCursorEnabled
+                ? (normalizeIsoTimestamp(latestPayload?.next_since) || latestSince)
+                : null;
+              const nextSinceId = latestCursorEnabled
+                ? (normalizeCursorId(latestPayload?.next_since_id)
+                  ?? latestSinceId
+                  ?? 0)
+                : 0;
+              const existingLatest = (latestCursorEnabled && latestSince)
+                ? (pollutantCache.get(latestCacheKey)?.latestRows || baseLatestRows)
+                : [];
+              const mergedLatest = (latestCursorEnabled && latestSince)
+                ? mergeLatestRows(existingLatest, scopedLatest)
+                : scopedLatest;
+              if (!isStale()) {
+                baseLatestRows = mergedLatest;
+                latestPollutant = responsePollutant;
+                pollutantCache.set(latestCacheKey, {
+                  timestamp: Date.now(),
+                  latestRows: mergedLatest,
+                  latestPollutant,
+                  nextSince,
+                  nextSinceId,
+                });
+                if (latestCursorEnabled && nextSince) {
+                  latestSinceByKey.set(latestCacheKey, nextSince);
+                  latestSinceIdByKey.set(latestCacheKey, nextSinceId);
+                } else {
+                  latestSinceByKey.delete(latestCacheKey);
+                  latestSinceIdByKey.delete(latestCacheKey);
+                }
+              }
+            } else if (!isStale()) {
+              baseLatestRows = [];
+              latestPollutant = null;
+            }
+            if (latestAllResponse && latestAllResponse.status === 304) {
+              const cachedLatestAll = pollutantCache.get(latestAllCacheKey);
+              if (cachedLatestAll) {
+                baseLatestRowsAllWindow = cachedLatestAll.latestRows || [];
+              } else {
+                baseLatestRowsAllWindow = baseLatestRows;
+              }
+            } else if (latestAllResponse && latestAllResponse.ok) {
+              const latestAllPayload = await latestAllResponse.json();
+              const latestAllRaw = latestAllPayload?.data || [];
+              const cleanedLatestAll = latestAllRaw.filter((row) => Number.isFinite(resolveLatestValue(row)));
+              const scopedLatestAll = cleanedLatestAll.filter((row) => {
+                const code = resolvePconCode(row);
+                return !pconCodes.size || (code && pconCodes.has(code));
+              });
+              baseLatestRowsAllWindow = scopedLatestAll;
+              pollutantCache.set(latestAllCacheKey, {
+                timestamp: Date.now(),
+                latestRows: scopedLatestAll,
+                latestPollutant: normalizePollutantKey(latestAllPayload?.pollutant) || requestPollutant,
+                nextSince: null,
+                nextSinceId: 0,
+              });
+              latestSinceByKey.delete(latestAllCacheKey);
+              latestSinceIdByKey.delete(latestAllCacheKey);
+            } else {
+              baseLatestRowsAllWindow = baseLatestRows;
+            }
+            if (isStale()) {
+              return;
+            }
+            const networkRowsForWindow = getNetworkRowsForWindow();
+            const windowNetworkDefs = buildNetworkDefs(networkRowsForWindow);
+            const coverageByCode = buildNetworkCoverageByCode(networkRowsForWindow);
+            renderNetworkFiltersIfNeeded(
+              windowNetworkDefs,
+              coverageByCode,
+              pconCodes.size || 0,
+              AREA_LABEL_PLURAL,
+            );
+            if (populationResponse && populationResponse.ok) {
+              const populationPayload = await populationResponse.json();
+              const populationRows = Array.isArray(populationPayload)
+                ? populationPayload
+                : populationPayload?.data || [];
+              const lookup = new Map();
+              populationRows.forEach((row) => {
+                const code = row?.geo_code;
+                if (!code || lookup.has(code)) {
+                  return;
+                }
+                lookup.set(code, row);
+              });
+              populationLookup = lookup;
+            } else {
+              populationLookup = new Map();
+            }
+          } else {
+            if (canLoadData) {
+              if (errorEl) {
+                errorEl.textContent = "Local authority data unavailable. Showing boundaries only.";
+                errorEl.hidden = false;
+              }
+            }
+            basePconRows = [];
+            basePconLookup = new Map();
+            pconRows = [];
+            pconLookup = new Map();
+            baseLatestRows = [];
+            baseLatestRowsAllWindow = [];
+            scopedLatestRows = [];
+            scopedLatestRowsAllWindow = [];
+            latestRows = [];
+            latestPollutant = null;
+            populationLookup = new Map();
+            renderNetworkFiltersIfNeeded([], new Map(), 0, AREA_LABEL_PLURAL);
+            if (lastUpdated) {
+              lastUpdated.textContent = "Boundary only (no sensor data yet)";
+            }
+          }
+          markHexMapTiming(timingId, "colored-ready");
+          measureHexMapTiming(timingId, "load-to-colored-ready", "load:start", "colored-ready");
+	          if (isStale()) {
+	            return;
+	          }
+	          chartDataStatus = latestPollutant === requestPollutant ? "ready" : "failed";
+	          applyNetworkFilters();
+	          applyPendingAreaSelection();
+	          setStatus("Live");
+          markHexMapTiming(timingId, "load-complete");
+          measureHexMapTiming(timingId, "load-total", "load:start", "load-complete");
+        } catch (error) {
+          if (isStale()) {
+            return;
+          }
+          chartDataStatus = "failed";
+          window.hexChartMode?.syncFromMap?.("cr", { preserveChartMode: true, dataStatus: "failed" });
+          if (maybeRedirectToAccessLogin(error)) {
+            if (errorEl) {
+              errorEl.textContent = "Cloudflare Access login required. Redirecting...";
+              errorEl.hidden = false;
+            }
+            setStatus("Error");
+            return;
+          }
+          const message = error instanceof Error ? error.message : String(error);
+          console.error("uk_aq CR map load error", error);
+          if (errorEl) {
+            errorEl.textContent = message;
+            errorEl.hidden = false;
+          }
+          setStatus("Error");
+        } finally {
+          if (!isStale()) {
+            setMapLoading(false);
+          }
+        }
+      }
+
+      metricInputs.forEach((input) => {
+        input.addEventListener("change", () => {
+          if (!input.checked) {
+            return;
+          }
+          const metric = input.value;
+          if (!metric) {
+            return;
+          }
+          setMetric(metric);
+        });
+      });
+
+      colorScaleInputs.forEach((input) => {
+        input.addEventListener("change", () => {
+          if (input.checked) {
+            setColorScale(input.value);
+          }
+        });
+      });
+
+      windowInputs.forEach((input) => {
+        input.addEventListener("change", () => {
+          if (!input.checked) {
+            return;
+          }
+          setWindow(input.value);
+        });
+      });
+
+      if (colorScaleToggle) {
+        colorScaleToggle.addEventListener("click", (event) => {
+          event.preventDefault();
+          const nextScale = currentColorScale === "power" ? "linear" : "power";
+          setColorScale(nextScale);
+          const nextInput = colorScaleInputs.find((input) => input.value === nextScale);
+          if (nextInput) {
+            nextInput.focus();
+          }
+        });
+      }
+
+      if (metricToggle) {
+        metricToggle.addEventListener("click", (event) => {
+          event.preventDefault();
+          const nextMetric = currentMetric === "mean" ? "median" : "mean";
+          setMetric(nextMetric);
+          const nextInput = metricInputs.find((input) => input.value === nextMetric);
+          if (nextInput) {
+            nextInput.focus();
+          }
+        });
+      }
+
+      if (colorScaleGroup) {
+        colorScaleGroup.addEventListener("keydown", (event) => {
+          if (event.key !== " " && event.key !== "Spacebar") {
+            return;
+          }
+          const activeElement = document.activeElement;
+          if (!activeElement || !colorScaleInputs.includes(activeElement)) {
+            return;
+          }
+          event.preventDefault();
+          const nextScale = currentColorScale === "power" ? "linear" : "power";
+          setColorScale(nextScale);
+          const nextInput = colorScaleInputs.find((input) => input.value === nextScale);
+          if (nextInput) {
+            nextInput.focus();
+          }
+        });
+      }
+
+      if (metricGroup) {
+        metricGroup.addEventListener("keydown", (event) => {
+          if (event.key !== " " && event.key !== "Spacebar") {
+            return;
+          }
+          const activeElement = document.activeElement;
+          if (!activeElement || !metricInputs.includes(activeElement)) {
+            return;
+          }
+          event.preventDefault();
+          const nextMetric = currentMetric === "mean" ? "median" : "mean";
+          setMetric(nextMetric);
+          const nextInput = metricInputs.find((input) => input.value === nextMetric);
+          if (nextInput) {
+            nextInput.focus();
+          }
+        });
+      }
+
+      if (mapSettingsButton) {
+        mapSettingsButton.addEventListener("click", (event) => {
+          event.stopPropagation();
+          toggleSettingsPanel();
+        });
+      }
+
+      if (mapSettingsClose) {
+        mapSettingsClose.addEventListener("click", (event) => {
+          event.stopPropagation();
+          closeSettingsPanel();
+        });
+      }
+
+      document.addEventListener("click", (event) => {
+        if (!mapSettingsPanel || !mapSettingsPanel.classList.contains("open")) {
+          return;
+        }
+        const target = event.target;
+        if (mapSettingsPanel.contains(target) || (mapSettingsButton && mapSettingsButton.contains(target))) {
+          return;
+        }
+        closeSettingsPanel();
+      });
+
+      document.addEventListener("click", (event) => {
+        if (!selectedAreaCode) {
+          return;
+        }
+        const target = event.target;
+        const targetElement = target instanceof Element ? target : target?.parentElement;
+        if (!targetElement || !mapCanvasWrap || !mapCanvasWrap.contains(targetElement)) {
+          return;
+        }
+        if (targetElement && typeof targetElement.closest === "function" && targetElement.closest(".hex")) {
+          return;
+        }
+        if (targetElement && typeof targetElement.closest === "function" && targetElement.closest(".map-inline-sensor-panel, .map-settings-panel, .map-settings, .map-zoom-controls, .map-topbar, .networks-pill-anchor, .networks-pill, .hex-chart-mode-panel")) {
+          return;
+        }
+        setSelectedCell(null);
+      });
+
+      window.addEventListener("hexchartselectionchange", (event) => {
+        const detail = event.detail || {};
+        if (detail.mapKey && detail.mapKey !== "cr") {
+          return;
+        }
+        syncInlinePanelTitleInteractivity();
+        if (detail.isChartMode) {
+          return;
+        }
+        updateDetailsPanel();
+      });
+
+      sortHeaderButtons.forEach((button) => {
+        button.addEventListener("click", (event) => {
+          event.stopPropagation();
+          const nextKey = button.dataset.sortKey;
+          if (!nextKey) {
+            return;
+          }
+          if (sortKey === nextKey) {
+            sortDir = sortDir === "asc" ? "desc" : "asc";
+          } else {
+            sortKey = nextKey;
+            sortDir = getDefaultSortDir(nextKey);
+          }
+          syncSortHeaders();
+          updateDetailsPanel();
+        });
+      });
+      syncSortHeaders();
+
+      byId("refresh").addEventListener("click", () => {
+        if (window.hexChartMode?.isActive?.("cr")) {
+          window.hexChartMode.refresh?.();
+          return;
+        }
+        loadMapData();
+      });
+      document.addEventListener("visibilitychange", syncCrPollingOnVisibility);
+      if (root && typeof MutationObserver !== "undefined") {
+        const crVisibilityObserver = new MutationObserver(syncCrPollingOnVisibility);
+        crVisibilityObserver.observe(root, { attributes: true, attributeFilter: ["hidden"] });
+      }
+      window.addEventListener("resize", () => {
+        if (statusEl.textContent === "Live") {
+          renderMap();
+        }
+        syncSettingsPanelWidth();
+        if (mapSettingsPanel?.classList.contains("open")) {
+          positionSettingsPanel();
+        }
+      });
+      applyMetricState();
+      updatePollutantLabels();
+      currentWindow = normalizeWindowKey(coordinator.getMapSettings().window || currentWindow);
+	      syncWindowInputs();
+	      syncSettingsPanelWidth();
+	      syncColorScaleInputs();
+	      updateLegendScaleDescription();
+	      syncCrPollingOnVisibility();
+
+      function buildLocalAuthoritySearchRecords() {
+        const records = [];
+        const seenCodes = new Set();
+        if (hexData?.type === "FeatureCollection") {
+          const features = Array.isArray(hexData?.features) ? hexData.features : [];
+          features.forEach((feature, index) => {
+            const props = feature?.properties || {};
+            const rawCode = typeof props.la_code === "string" ? props.la_code.trim() : "";
+            const rawName = typeof props.la_name === "string" ? props.la_name.trim() : "";
+            const regionName = resolveLaRegionName(rawCode, rawName, props.region_nation);
+            const code = (rawCode || `LA-${index}`).toUpperCase();
+            if (!code || seenCodes.has(code)) {
+              return;
+            }
+            seenCodes.add(code);
+            records.push({
+              code,
+              name: rawName || code,
+              region_name: regionName || null,
+            });
+          });
+          return records;
+        }
+        hexCells.forEach((cell) => {
+          const cellCode = resolveCellAreaCode(cell);
+          const rawCode = typeof cellCode === "string" ? cellCode.trim() : "";
+          if (!rawCode) {
+            return;
+          }
+          const code = rawCode.toUpperCase();
+          if (seenCodes.has(code)) {
+            return;
+          }
+          seenCodes.add(code);
+          records.push({
+            code,
+            name: resolveCellAreaName(cell) || code,
+            region_name: cell?.region_name || null,
+          });
+        });
+        return records;
+      }
+
+      function buildSensorSearchRecords() {
+        const rowsForSearch = scopedLatestRowsAllWindow.length
+          ? scopedLatestRowsAllWindow
+          : (scopedLatestRows.length ? scopedLatestRows : baseLatestRowsAllWindow.length ? baseLatestRowsAllWindow : baseLatestRows);
+        const recordsByKey = new Map();
+        rowsForSearch.forEach((row, index) => {
+          const stationId = String(resolveStationKey(row) || `cr:${index}`);
+          const stationName = resolveStationName(row);
+          const networkName = resolvePrimaryNetworkLabel(row) || null;
+          const areaRaw = resolveAreaCode(row);
+          const pconRaw = resolvePconCode(row);
+          const laCode = typeof areaRaw === "string" ? areaRaw.trim().toUpperCase() : null;
+          const pconCode = typeof pconRaw === "string" ? pconRaw.trim().toUpperCase() : null;
+          const { lat, lon } = resolveCoordinatePair(row);
+          const key = `${stationId}::${networkName || ""}`;
+          const existing = recordsByKey.get(key);
+          if (existing) {
+            if (!existing.pcon_code && pconCode) {
+              existing.pcon_code = pconCode;
+            }
+            if (!existing.la_code && laCode) {
+              existing.la_code = laCode;
+            }
+            if (!Number.isFinite(existing.lat) && Number.isFinite(lat)) {
+              existing.lat = lat;
+            }
+            if (!Number.isFinite(existing.lon) && Number.isFinite(lon)) {
+              existing.lon = lon;
+            }
+            return;
+          }
+          recordsByKey.set(key, {
+            station_id: stationId,
+            station_name: stationName,
+            network_label: networkName,
+            pcon_code: pconCode,
+            la_code: laCode,
+            lat,
+            lon,
+          });
+        });
+        return Array.from(recordsByKey.values());
+      }
+
+      function hasCrSearchData() {
+        if (hexData?.type === "FeatureCollection") {
+          return Array.isArray(hexData.features) && hexData.features.length > 0;
+        }
+        return hexCells.length > 0;
+      }
+
+      function ensureCrSearchDataLoaded() {
+        if (hasCrSearchData()) {
+          return Promise.resolve(true);
+        }
+        if (crSearchPreloadPromise) {
+          return crSearchPreloadPromise;
+        }
+        crSearchPreloadPromise = loadMapData({ force: true })
+          .then(() => hasCrSearchData())
+          .catch((error) => {
+            console.warn("uk_aq C&R search preload failed", error);
+            return false;
+          })
+          .finally(() => {
+            crSearchPreloadPromise = null;
+          });
+        return crSearchPreloadPromise;
+      }
+
+      async function fetchAllRegionsForSearch() {
+        if (!LATEST_SNAPSHOT_URL && !LATEST_LEGACY_URL) return;
+        if (allRegionsFetchState === "fetching") return;
+        allRegionsFetchState = "fetching";
+        const fetchPollutant = activePollutant;
+        try {
+          const url = new URL(resolveLatestUrl(currentWindow));
+          url.searchParams.set("pollutant", fetchPollutant);
+          url.searchParams.set("window", currentWindow);
+          url.searchParams.set("scope", "all");
+          url.searchParams.set("limit", "10000");
+          const response = await fetchCacheApi(url.toString(), {});
+          if (!response || !response.ok) return;
+          const payload = await response.json();
+          const rawRows = (payload?.data || []).filter((row) => Number.isFinite(resolveLatestValue(row)));
+          const windowed = filterRowsByWindow(rawRows);
+          const derived = buildPconRowsFromLatest(windowed);
+          allRegionsMetricLookup = new Map(derived.map((row) => [resolveAreaCode(row), row]));
+          allRegionsFetchPollutant = fetchPollutant;
+          allRegionsFetchState = "done";
+        } catch (e) {
+          allRegionsFetchState = "idle";
+        }
+      }
+
+      function normalizeTimeseriesId(value) {
+        if (value === null || value === undefined || value === "") {
+          return null;
+        }
+        const text = String(value).trim();
+        return /^\d+$/.test(text) ? text : null;
+      }
+
+      function resolveTimeseriesId(row) {
+        return normalizeTimeseriesId(row?.timeseries_id)
+          ?? normalizeTimeseriesId(row?.time_series_id)
+          ?? normalizeTimeseriesId(row?.timeseriesId)
+          ?? normalizeTimeseriesId(row?.timeSeriesId)
+          ?? normalizeTimeseriesId(row?.timeseries?.id)
+          ?? normalizeTimeseriesId(row?.timeseries?.timeseries_id)
+          ?? normalizeTimeseriesId(row?.offering?.timeseries_id)
+          ?? normalizeTimeseriesId(row?.id)
+          ?? normalizeTimeseriesId(row?.timeseries_ref);
+      }
+
+      function buildChartModeEntriesForSelectedArea() {
+        if (!selectedAreaCode) {
+          return [];
+        }
+        const detailSourceRows = scopedLatestRowsAllWindow.length ? scopedLatestRowsAllWindow : scopedLatestRows;
+        const scopedRows = getRowsForActivePollutant(detailSourceRows);
+        const cutoff = getWindowCutoff();
+        const entries = collectStationEntries(scopedRows, selectedAreaCode).map((entry) => ({
+          ...entry,
+          inWindow: isTimestampInWindow(entry.timestamp, cutoff),
+        }));
+        sortDetailEntries(entries);
+        return entries.map((entry) => {
+          const stationName = resolveStationName(entry.row);
+          const stationId = String(resolveStationKey(entry.row) || stationName || "");
+          return {
+            stationId,
+            stationName,
+            networkLabel: resolvePrimaryNetworkLabel(entry.row) || "Unknown network",
+            timeseriesId: resolveTimeseriesId(entry.row),
+            value: entry.value,
+            updatedText: formatSummaryTimestamp(entry.timestamp),
+            timestamp: entry.timestamp instanceof Date ? entry.timestamp.toISOString() : null,
+            pollutant: activePollutant,
+            pollutantLabel: getPollutantLabel(activePollutant),
+            units: getPollutantUnits(activePollutant),
+            row: entry.row,
+          };
+        });
+      }
+
+	      const crController = Object.freeze({
+	        render: () => {
+	          if (statusEl.textContent === "Live") {
+	            requestAnimationFrame(() => {
+              renderMap();
+            });
+          }
+          syncSettingsPanelWidth();
+        },
+        renderLayout: () => {
+          requestAnimationFrame(() => {
+            renderMap();
+          });
+          syncSettingsPanelWidth();
+        },
+        restoreNetworks: () => {
+          applyNetworkFilters();
+        },
+        markBootstrapReady: () => {
+          crBootstrapReady = true;
+          syncCrPollingOnVisibility();
+        },
+        reapplyNetworkFilters: () => {
+          applyNetworkFilters();
+        },
+	        setRegion: (region, options) => {
+	          setActiveRegion(region, options);
+	        },
+	        getRegion: () => activeRegion,
+	        selectAreaByCode: (code, options) => selectAreaByCode(code, options),
+	        getActiveAreaCode: () => selectedAreaCode,
+        getChartModeContext: () => {
+          const row = selectedAreaCode ? pconLookup.get(selectedAreaCode) : null;
+          const areaName = resolveCellAreaName(selectedCell) || resolveAreaName(row) || selectedAreaCode || "";
+          const metricValue = getMetricValue(row);
+          return {
+            mapKey: "cr",
+            areaCode: selectedAreaCode,
+            areaName,
+            entries: buildChartModeEntriesForSelectedArea(),
+            sortKey,
+            sortDir,
+            metricValue,
+            metricColor: colorScale && Number.isFinite(metricValue) ? colorScale(metricValue) : "var(--no-data)",
+            methodLabel: currentMetric === "median" ? "Typical (median)" : "Average (mean)",
+            pollutant: activePollutant,
+            loadedPollutant: latestPollutant,
+            dataStatus: chartDataStatus,
+            pollutantLabel: getPollutantLabel(activePollutant),
+            units: getPollutantUnits(activePollutant),
+          };
+        },
+        refreshForChartMode: () => loadMapData({ preserveChartMode: true }),
+	        ensureSearchDataLoaded: () => ensureCrSearchDataLoaded(),
+	        getLocalAuthoritySearchRecords: () => buildLocalAuthoritySearchRecords(),
+	        getSensorSearchRecords: () => buildSensorSearchRecords(),
+        getPollutantLabel: () => getPollutantLabel(activePollutant),
+        getColorForLaCode: (laCode) => {
+          if (!colorScale) return null;
+          const row = pconLookup.get(laCode) || basePconLookup.get(laCode);
+          const value = getMetricValue(row);
+          if (!Number.isFinite(value)) return null;
+          return colorScale(value);
+        },
+        getLaMetricValue: (laCode) => getMetricValue(pconLookup.get(laCode)),
+        getUniversalLaMetricValue: (laCode) => getMetricValue(allRegionsMetricLookup.get(laCode) || pconLookup.get(laCode)),
+        ensureAllRegionsFetched: () => {
+          if (allRegionsFetchState === "idle" || allRegionsFetchPollutant !== activePollutant) {
+            allRegionsFetchState = "idle";
+            fetchAllRegionsForSearch();
+          }
+        },
+        applyColorScale: (value) => colorScale ? colorScale(value) : null,
+        getSensorCurrentColor: (stationId) => {
+          if (!colorScale) return null;
+          const allRows = scopedLatestRows.length ? scopedLatestRows : baseLatestRows;
+          const pollutantRows = getRowsForActivePollutant(allRows);
+          const targetStationId = String(stationId || "");
+          const candidates = pollutantRows.filter((r) => String(resolveStationKey(r) || "") === targetStationId);
+          if (!candidates.length) return null;
+          candidates.sort((a, b) => {
+            const ta = resolveLatestTimestamp(a);
+            const tb = resolveLatestTimestamp(b);
+            return (tb ? tb.getTime() : 0) - (ta ? ta.getTime() : 0);
+          });
+          const value = resolveLatestValue(candidates[0]);
+          if (!Number.isFinite(value)) return null;
+          return colorScale(value);
+        },
+	      });
+      window.UkAqHexMapCrController = crController;
+      window.crMap = Object.freeze(Object.fromEntries(
+        Object.keys(crController).map((methodName) => [
+          methodName,
+          (...args) => crController[methodName](...args),
+        ]),
+      ));
+      coordinator.registerMap("cr", {
+        setPollutant: (pollutant) => setActivePollutant(pollutant, { coordinated: true }),
+        setMapSettings: (settings) => {
+          setMetric(settings.metric, { coordinated: true });
+          setColorScale(settings.colorScale, { coordinated: true });
+          setWindow(settings.window, { coordinated: true });
+        },
+        activate: () => {
+          crController.render();
+          crController.restoreNetworks();
+          window.UkAqHexMapSearch?.preloadInactiveMap?.("cr");
+          crController.markBootstrapReady();
+        },
+      });
+      networkController.registerScope("cr", () => applyNetworkFilters());
+})();

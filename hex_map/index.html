@@ -1394,6 +1394,7 @@
     <script src="/shared/station-chart/aqi-source-controller.js"></script>
     <script src="/shared/station-chart/pollutant-context-controller.js"></script>
     <script src="/hex_map/hex-map-network-controller.js"></script>
+    <script src="/hex_map/hex-map-url-state.js"></script>
     <script src="/hex_map/hex-map-coordinator.js"></script>
     <script src="/hex_map/hex-map-page-mode.js"></script>
     <script src="/hex_map/hex-map-station-chart-adapter.js"></script>
@@ -1417,6 +1418,7 @@
     <script>
 (() => {
   const coordinator = window.UkAqHexMapCoordinator;
+  const urlState = window.UkAqHexMapUrlState;
   const tabUk = document.getElementById("tab-uk");
   const tabCr = document.getElementById("tab-cr");
   const panelUk = document.getElementById("tab-panel-uk");
@@ -1429,58 +1431,6 @@
     uk: panelUk.querySelector("[data-tab-slot]"),
     cr: panelCr.querySelector("[data-tab-slot]"),
   };
-
-  const REGION_OPTIONS = [
-    "Northern Ireland",
-    "Scotland",
-    "Wales",
-    "East Midlands",
-    "East of England",
-    "London",
-    "North East",
-    "North West",
-    "South East",
-    "South West",
-    "West Midlands",
-    "Yorkshire and The Humber",
-  ];
-  const REGION_LOOKUP = new Map(
-    REGION_OPTIONS.map((name) => [name.toLowerCase(), name])
-  );
-  const DEFAULT_CR_MAP = "London";
-  const mapState = (window.mapTabState = window.mapTabState || {});
-  const params = new URLSearchParams(window.location.search);
-
-  function normalizeMap(value) {
-    if (!value) {
-      return null;
-    }
-    const trimmed = value.trim();
-    if (!trimmed) {
-      return null;
-    }
-    const lower = trimmed.toLowerCase();
-    if (lower === "uk") {
-      return "UK";
-    }
-    return REGION_LOOKUP.get(lower) || null;
-  }
-
-  function updateMapParam(value, options = {}) {
-    const url = new URL(window.location.href);
-    if (value) {
-      url.searchParams.set("map", value);
-    } else {
-      url.searchParams.delete("map");
-    }
-    if (options.push) {
-      window.history.pushState({}, "", url);
-    } else {
-      window.history.replaceState({}, "", url);
-    }
-  }
-
-  window.updateMapParam = updateMapParam;
 
   const toolbarEl = document.getElementById("main-toolbar");
   const toolbarSlots = {
@@ -1508,70 +1458,15 @@
 
   coordinator.registerActiveMapPresenter(presentActiveTab);
 
-  function setCrRegion(region, options = {}) {
-    const normalized = normalizeMap(region) || DEFAULT_CR_MAP;
-    mapState.lastCrMap = normalized;
-    window.UkAqHexMapCrController?.setRegion(normalized, { updateUrl: false });
-    if (options.updateUrl) {
-      updateMapParam(normalized, { push: options.push });
-    }
-  }
-
-  function applyMap(mapValue, options = {}) {
-    if (mapValue === "UK") {
-      coordinator.setActiveMap("uk", { source: options.source || "map" });
-      if (options.updateUrl) {
-        updateMapParam("UK", { push: options.push });
-      }
-      return;
-    }
-    const normalized = normalizeMap(mapValue) || DEFAULT_CR_MAP;
-    coordinator.setActiveMap("cr", { source: options.source || "map" });
-    setCrRegion(normalized, options);
-  }
-
-  window.mapTabController = {
-    getActiveTab: () => coordinator.getActiveMap(),
-    switchToUk: (options = {}) => {
-      applyMap("UK", {
-        updateUrl: options.updateUrl !== false,
-        push: options.push !== false,
-      });
-    },
-    switchToCr: (region, options = {}) => {
-      const target = normalizeMap(region) || normalizeMap(mapState.lastCrMap) || DEFAULT_CR_MAP;
-      applyMap(target, {
-        updateUrl: options.updateUrl !== false,
-        push: options.push !== false,
-      });
-    },
-    setCrRegion: (region, options = {}) => {
-      setCrRegion(region, {
-        updateUrl: options.updateUrl !== false,
-        push: options.push !== false,
-      });
-    },
-  };
-
   tabUk.addEventListener("click", () => {
-    applyMap("UK", { updateUrl: true, push: true });
+    urlState.switchToUk({ updateUrl: true, push: true });
   });
 
   tabCr.addEventListener("click", () => {
-    const target = normalizeMap(mapState.lastCrMap) || DEFAULT_CR_MAP;
-    applyMap(target, { updateUrl: true, push: true });
+    urlState.switchToCr(null, { updateUrl: true, push: true });
   });
 
-  window.addEventListener("popstate", () => {
-    const nextMap = normalizeMap(new URLSearchParams(window.location.search).get("map")) || "UK";
-    applyMap(nextMap, { updateUrl: false });
-  });
-
-  const initialMap = normalizeMap(params.get("map")) || "UK";
-  if (initialMap !== "UK") {
-    mapState.lastCrMap = initialMap;
-  }
-  applyMap(initialMap, { updateUrl: !params.get("map"), push: false });
+  urlState.bootstrap();
 })();
     </script>
     <script>

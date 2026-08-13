@@ -9,8 +9,7 @@
   const networkDomain = window.UkAqNetworks;
   const networkController = window.UkAqHexMapNetworkController;
   const coordinator = window.UkAqHexMapCoordinator;
-  const urlState = window.UkAqHexMapUrlState;
-  if (!pollutantDomain?.definitions || !networkDomain?.resolveCode || !networkController?.loadCatalog || !coordinator?.registerMap || !urlState?.getInitialCrRegion) {
+  if (!pollutantDomain?.definitions || !networkDomain?.resolveCode || !networkController?.loadCatalog || !coordinator?.registerMap) {
     throw new Error("UK AQ shared domain/data modules must load before the C&R Hex Map.");
   }
   const ID_PREFIX = "cr-";
@@ -134,9 +133,12 @@
       const REGION_LOOKUP = new Map(
         REGION_OPTIONS.map((name) => [name.toLowerCase(), name])
       );
-      const initialRegion = normalizeRegion(urlState.getInitialCrRegion()) || DEFAULT_REGION;
+      const mapState = (window.mapTabState = window.mapTabState || {});
+      const initialRegion = normalizeRegion(params.get("map"))
+        || normalizeRegion(mapState.lastCrMap)
+        || DEFAULT_REGION;
       let activeRegion = initialRegion;
-      urlState.noteCrRegion(activeRegion);
+      mapState.lastCrMap = activeRegion;
       const mapDateKey = normalizeDateKey(mapDateParam);
       const activeLaVersion = laVersionParam || LA_CONFIG.version;
       const METRIC_LABELS = {
@@ -3540,10 +3542,11 @@
         updateSelectedHexViewportShift();
       }
 
-      function requestRegionUrlSync(value, push) {
-        if (!urlState.syncCrRegion(value, { push: Boolean(push) })) {
-          throw new Error("Hex Map URL adapter rejected the C&R region.");
+      function requestMapParamUpdate(value, push) {
+        if (typeof window.updateMapParam !== "function") {
+          throw new Error("Hex Map page URL controller is unavailable.");
         }
+        window.updateMapParam(value, { push: Boolean(push) });
       }
 
       function setActiveRegion(nextRegion, { updateUrl = false } = {}) {
@@ -3553,12 +3556,12 @@
         }
         if (normalized === activeRegion) {
           if (updateUrl) {
-            requestRegionUrlSync(normalized, true);
+            requestMapParamUpdate(normalized, true);
           }
           return;
         }
         activeRegion = normalized;
-        urlState.noteCrRegion(normalized);
+        mapState.lastCrMap = normalized;
         const crSvgNode = svg.node();
         if (crSvgNode) {
           crSvgNode.dataset.region = normalized;
@@ -3568,7 +3571,7 @@
         }
         updateEndpointHint();
         if (updateUrl) {
-          requestRegionUrlSync(normalized, true);
+          requestMapParamUpdate(normalized, true);
         }
         window.dispatchEvent(new CustomEvent("crregionchange", {
           detail: { region: activeRegion },

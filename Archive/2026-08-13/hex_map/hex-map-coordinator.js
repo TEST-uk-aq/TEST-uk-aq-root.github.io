@@ -5,8 +5,7 @@
 
   const pollutantDomain = root.UkAqPollutants;
   const networkController = root.UkAqHexMapNetworkController;
-  const urlState = root.UkAqHexMapUrlState;
-  if (!pollutantDomain?.normalize || !networkController?.setActiveScope || !urlState?.getInitialState) {
+  if (!pollutantDomain?.normalize || !networkController?.setActiveScope) {
     throw new Error("Hex coordinator dependencies must load before the coordinator.");
   }
 
@@ -14,15 +13,15 @@
   const METRICS = new Set(["mean", "median"]);
   const COLOR_SCALES = new Set(["linear", "power"]);
   const WINDOWS = new Set(["3h", "6h", "1d", "7d", "all"]);
-  const initialUrlState = urlState.getInitialState();
+  const params = new URLSearchParams(root.location.search);
   const maps = new Map();
   let activeMapPresenter = null;
   const state = {
     activeMap: "uk",
-    pollutant: pollutantDomain.normalize(initialUrlState.pollutant) || "pm25",
+    pollutant: pollutantDomain.normalize(params.get("pollutant")) || "pm25",
     settings: {
-      metric: METRICS.has(initialUrlState.mapSettings?.metric) ? initialUrlState.mapSettings.metric : "mean",
-      colorScale: COLOR_SCALES.has(initialUrlState.mapSettings?.colorScale) ? initialUrlState.mapSettings.colorScale : "power",
+      metric: METRICS.has(params.get("metric")) ? params.get("metric") : "mean",
+      colorScale: COLOR_SCALES.has(params.get("color_scale")) ? params.get("color_scale") : "power",
       window: "6h",
     },
   };
@@ -39,6 +38,13 @@
     });
   }
 
+  function replaceQueryParam(key, value) {
+    const url = new URL(root.location.href);
+    if (value === null || value === undefined || value === "") url.searchParams.delete(key);
+    else url.searchParams.set(key, value);
+    root.history.replaceState({}, "", url);
+  }
+
   function orderedMapAdapters(source) {
     const entries = Array.from(maps.entries());
     if (!MAP_KEYS.has(source)) return entries;
@@ -52,7 +58,7 @@
     const pollutant = pollutantDomain.normalize(value);
     if (!pollutant || pollutant === state.pollutant) return false;
     state.pollutant = pollutant;
-    if (options.updateUrl !== false) urlState.syncPollutant(pollutant);
+    if (options.updateUrl !== false) replaceQueryParam("pollutant", pollutant);
 
     orderedMapAdapters(options.source).forEach(([, adapter]) => {
       adapter.setPollutant?.(pollutant, { source: options.source || null });
@@ -75,8 +81,8 @@
       || next.window !== state.settings.window;
     state.settings = next;
 
-    if (partial.metric) urlState.syncMetric(next.metric);
-    if (partial.colorScale) urlState.syncColorScale(next.colorScale);
+    if (partial.metric) replaceQueryParam("metric", next.metric);
+    if (partial.colorScale) replaceQueryParam("color_scale", next.colorScale);
     if (!changed) return false;
 
     const snapshot = mapSettingsSnapshot();

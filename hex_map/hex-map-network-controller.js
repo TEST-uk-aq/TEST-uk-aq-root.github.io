@@ -21,13 +21,12 @@ function initHexMapNetworkController(root) {
   const scopes = new Map();
   const consumers = new Map();
   const STORAGE_KEY = "uk-aq-hex-map-network-selection-v1";
-  const legacyState = (root.mapNetworkState = root.mapNetworkState || {});
-  const initialLegacySelection = readPersistedSelection();
+  const initialSelection = readPersistedSelection();
 
   let catalog = null;
   let catalogByCode = new Map();
   let catalogLoad = null;
-  let selectedCodes = initialLegacySelection;
+  let selectedCodes = initialSelection;
   let activeScope = "uk";
   let renderedKey = "";
   let panelPinned = false;
@@ -90,9 +89,6 @@ function initHexMapNetworkController(root) {
   }
 
   function readPersistedSelection() {
-    if (Array.isArray(legacyState.shared?.selected)) {
-      return new Set(legacyState.shared.selected.map(normalizeCode).filter(Boolean));
-    }
     try {
       const stored = JSON.parse(root.localStorage?.getItem(STORAGE_KEY) || "null");
       if (stored?.allSelected === true) return null;
@@ -155,12 +151,12 @@ function initHexMapNetworkController(root) {
       }));
   }
 
-  function persistSelectionFacade() {
-    legacyState.shared = selectedCodes === null
+  function persistSelection() {
+    const persistedSelection = selectedCodes === null
       ? { selected: null, allSelected: true }
       : { selected: Array.from(selectedCodes), allSelected: false };
     try {
-      root.localStorage?.setItem(STORAGE_KEY, JSON.stringify(legacyState.shared));
+      root.localStorage?.setItem(STORAGE_KEY, JSON.stringify(persistedSelection));
     } catch (error) {
       console.warn("Unable to persist Hex network selection", error);
     }
@@ -168,14 +164,14 @@ function initHexMapNetworkController(root) {
 
   function reconcileSelection() {
     if (!catalog?.length || selectedCodes === null) {
-      persistSelectionFacade();
+      persistSelection();
       return;
     }
     const available = new Set(catalog.map((definition) => normalizeCode(definition.code)).filter(Boolean));
     const retained = new Set(Array.from(selectedCodes).filter((code) => available.has(code)));
     if (!retained.size) retained.add(normalizeCode(catalog[0].code));
     selectedCodes = retained.size === available.size ? null : retained;
-    persistSelectionFacade();
+    persistSelection();
   }
 
   function setSelection(nextSelection, options = {}) {
@@ -195,7 +191,7 @@ function initHexMapNetworkController(root) {
       return false;
     }
     selectedCodes = next;
-    persistSelectionFacade();
+    persistSelection();
     renderActiveScope({ force: true });
     if (options.notify !== false) notifySelectionChange(options.source || "controller");
     return true;
@@ -632,7 +628,7 @@ function initHexMapNetworkController(root) {
   }, { passive: true });
   root.addEventListener("crregionchange", () => root.requestAnimationFrame(updatePanelSafeArea));
 
-  persistSelectionFacade();
+  persistSelection();
   syncSelectionUi();
   setPanelPinned(false);
 

@@ -68,9 +68,6 @@ function initHexMapToolbarController(root) {
   }
 
   function getWindowLabel(key) {
-    if (typeof root.WINDOW_LABELS === "object" && root.WINDOW_LABELS?.[key]) {
-      return root.WINDOW_LABELS[key];
-    }
     return WINDOW_LABELS_FALLBACK[key] || WINDOW_LABELS_FALLBACK["6h"];
   }
 

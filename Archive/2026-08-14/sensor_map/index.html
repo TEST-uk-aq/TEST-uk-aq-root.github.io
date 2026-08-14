@@ -303,7 +303,7 @@
     
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" crossorigin="anonymous"></script>
     <script src="/shared/domain/pollutants.js"></script>
-    <script src="/shared/auth/uk-aq-cache-auth.js"></script>
+    <script src="/js/uk-aq-cache-auth.js"></script>
     <script>
       (() => {
         const pollutantDomain = window.UkAqPollutants;
@@ -324,6 +324,14 @@
         const params = new URLSearchParams(window.location.search);
         const cacheBaseParam = params.get("cache_base");
         const cacheBaseUrl = resolveCacheBaseUrl(cacheBaseParam);
+        const cacheOrigin = getUrlOrigin(cacheBaseUrl);
+        const cacheSessionParam = params.get("cache_session_url");
+        const defaultCacheSessionUrl = cacheOrigin ? `${cacheOrigin}/api/aq/session/start` : "";
+        const cacheSessionUrl = (cacheSessionParam || defaultCacheSessionUrl || "").trim();
+        const turnstileSiteKeyParam = params.get("turnstile_site_key");
+        const turnstileSiteKey = TURNSTILE_SITE_KEY_PLACEHOLDER.includes("__UK_AQ_TURNSTILE_SITE_KEY__")
+          ? (turnstileSiteKeyParam || "")
+          : (turnstileSiteKeyParam || TURNSTILE_SITE_KEY_PLACEHOLDER);
         const limitParam = parsePositiveInt(params.get("limit"));
         const rowLimit = limitParam || 50000;
         const readingLimit = Math.max(1, Math.min(10000, rowLimit));
@@ -403,6 +411,15 @@
         let stationGeometryRowsPromise = null;
         let hasAutoFit = false;
 
+        let cacheSessionReadyUntil = 0;
+        let cacheSessionInflight = null;
+        let turnstileScriptInflight = null;
+        let turnstileTokenInflight = null;
+        let turnstileWidgetId = null;
+        let turnstileTokenResolver = null;
+        let turnstileTokenRejecter = null;
+        let turnstileTokenTimeoutId = null;
+
         if (endpointHintEl) {
           endpointHintEl.textContent = READINGS_URL
             ? `Readings: ${READINGS_URL} · Geometry: ${STATIONS_URL || STATIONS_MAP_FALLBACK_URL}`
@@ -424,6 +441,17 @@
             return `${window.location.origin.replace(/\/$/, "")}/api/aq`;
           }
           return FALLBACK_CACHE_BASE_URL;
+        }
+
+        function getUrlOrigin(value) {
+          if (!value) {
+            return "";
+          }
+          try {
+            return new URL(value).origin;
+          } catch (_error) {
+            return "";
+          }
         }
 
         function normalizeText(value) {
@@ -484,6 +512,167 @@
 
         function waitMs(ms) {
           return new Promise((resolve) => setTimeout(resolve, ms));
+        }
+
+        function hasFreshCacheSession() {
+          return Date.now() < (cacheSessionReadyUntil - 10000);
+        }
+
+        function ensureTurnstileContainer() {
+          let container = document.getElementById("uk-aq-turnstile-widget");
+          if (!container) {
+            container = document.createElement("div");
+            container.id = "uk-aq-turnstile-widget";
+            container.style.display = "none";
+            document.body.appendChild(container);
+          }
+          return container;
+        }
+
+        function clearTurnstilePendingState() {
+          if (turnstileTokenTimeoutId) {
+            clearTimeout(turnstileTokenTimeoutId);
+            turnstileTokenTimeoutId = null;
+          }
+          turnstileTokenResolver = null;
+          turnstileTokenRejecter = null;
+        }
+
+        async function ensureTurnstileScript() {
+          if (window.turnstile && typeof window.turnstile.render === "function") {
+            return;
+          }
+          if (!turnstileScriptInflight) {
+            turnstileScriptInflight = new Promise((resolve, reject) => {
+              const existing = document.getElementById("uk-aq-turnstile-script");
+              if (existing) {
+                existing.addEventListener("load", () => resolve(), { once: true });
+                existing.addEventListener("error", () => reject(new Error("Failed to load Turnstile script.")), {
+                  once: true,
+                });
+                return;
+              }
+              const script = document.createElement("script");
+              script.id = "uk-aq-turnstile-script";
+              script.src = "https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit";
+              script.async = true;
+              script.defer = true;
+              script.onload = () => resolve();
+              script.onerror = () => reject(new Error("Failed to load Turnstile script."));
+              document.head.appendChild(script);
+            });
+          }
+          await turnstileScriptInflight;
+        }
+
+        async function ensureTurnstileWidget() {
+          if (!turnstileSiteKey) {
+            throw new Error("Missing Turnstile site key. Add ?turnstile_site_key=... to the URL.");
+          }
+          await ensureTurnstileScript();
+          if (turnstileWidgetId !== null) {
+            return;
+          }
+          const turnstileApi = window.turnstile;
+          if (!turnstileApi || typeof turnstileApi.render !== "function") {
+            throw new Error("Turnstile SDK unavailable.");
+          }
+          const container = ensureTurnstileContainer();
+          turnstileWidgetId = turnstileApi.render(container, {
+            sitekey: turnstileSiteKey,
+            appearance: "execute",
+            execution: "execute",
+            callback: (token) => {
+              if (turnstileTokenResolver) {
+                turnstileTokenResolver(token);
+                clearTurnstilePendingState();
+              }
+            },
+            "error-callback": () => {
+              const _api = window.turnstile;
+              if (_api && typeof _api.remove === "function" && turnstileWidgetId !== null) {
+                _api.remove(turnstileWidgetId);
+              }
+              turnstileWidgetId = null;
+              if (turnstileTokenRejecter) {
+                turnstileTokenRejecter(new Error("Turnstile verification failed."));
+                clearTurnstilePendingState();
+              }
+            },
+            "expired-callback": () => {
+              const _api = window.turnstile;
+              if (_api && typeof _api.remove === "function" && turnstileWidgetId !== null) {
+                _api.remove(turnstileWidgetId);
+              }
+              turnstileWidgetId = null;
+              if (turnstileTokenRejecter) {
+                turnstileTokenRejecter(new Error("Turnstile token expired."));
+                clearTurnstilePendingState();
+              }
+            },
+          });
+        }
+
+        async function getTurnstileToken() {
+          await ensureTurnstileWidget();
+          if (!turnstileTokenInflight) {
+            turnstileTokenInflight = (async () => {
+              const turnstileApi = window.turnstile;
+              if (!turnstileApi || typeof turnstileApi.execute !== "function") {
+                throw new Error("Turnstile execute unavailable.");
+              }
+              return new Promise((resolve, reject) => {
+                turnstileTokenResolver = resolve;
+                turnstileTokenRejecter = reject;
+                turnstileTokenTimeoutId = setTimeout(() => {
+                  if (turnstileTokenRejecter) {
+                    turnstileTokenRejecter(new Error("Turnstile token timed out."));
+                  }
+                  clearTurnstilePendingState();
+                }, 30000);
+                turnstileApi.execute(turnstileWidgetId);
+              });
+            })().finally(() => {
+              turnstileTokenInflight = null;
+            });
+          }
+          return turnstileTokenInflight;
+        }
+
+        async function ensureCacheSession(forceRefresh = false) {
+          if (!forceRefresh && hasFreshCacheSession()) {
+            return;
+          }
+          if (!cacheSessionUrl) {
+            throw new Error("Missing cache session URL. Add ?cache_session_url=... if needed.");
+          }
+          if (!cacheSessionInflight) {
+            cacheSessionInflight = (async () => {
+              const token = await getTurnstileToken();
+              const response = await fetch(cacheSessionUrl, {
+                method: "POST",
+                headers: {
+                  Accept: "application/json",
+                  "X-UK-AQ-Session-Init": "1",
+                  "CF-Turnstile-Token": token,
+                },
+                credentials: "include",
+              });
+              if (!response.ok) {
+                throw new Error(`Session start failed: ${response.status}`);
+              }
+              const payload = await response.json().catch(() => ({}));
+              const expiresIn = Number(payload?.session_expires_in);
+              const ttlMs = Math.max(
+                30000,
+                Math.floor((Number.isFinite(expiresIn) && expiresIn > 0 ? expiresIn : 300) * 1000),
+              );
+              cacheSessionReadyUntil = Date.now() + ttlMs;
+            })().finally(() => {
+              cacheSessionInflight = null;
+            });
+          }
+          await cacheSessionInflight;
         }
 
         async function fetchCacheApi(input, init = {}, retryOnAuthFailure = true) {
@@ -1094,7 +1283,7 @@
             return;
           }
 
-          if (!window.ukAqSharedAuth?.cacheSessionUrl) {
+          if (!cacheSessionUrl) {
             setError("Missing cache session URL. Add ?cache_session_url=... if needed.");
             setStatus("Error", true);
             return;

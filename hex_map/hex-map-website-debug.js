@@ -1,8 +1,6 @@
 // Hex Map site-wide diagnostic upload support; intentionally separate from station-chart diagnostics.
 function initHexMapWebsiteDebug(root) {
   "use strict";
-  if (root.__ukAqWebsiteDebugInitialised) return;
-  root.__ukAqWebsiteDebugInitialised = true;
 
   const params = new URLSearchParams(root.location.search);
   const WEBSITE_DEBUG_LOG_ENABLED_PLACEHOLDER = "true";

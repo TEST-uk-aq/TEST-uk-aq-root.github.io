@@ -2,7 +2,7 @@ import pollutantDomain from "../shared/domain/pollutants-module.js";
 import networkDomain from "../shared/domain/networks-module.js";
 import coordinator from "./hex-map-coordinator.js";
 import networkController from "./hex-map-network-controller.js";
-import summary from "./hex-map-summary.js";
+import summaryPresenter from "./hex-map-summary.js";
 import scrollAffordances from "./hex-map-scroll-affordances.js";
 import "./hex-map-station-chart-adapter-module.js";
 import search from "./hex-map-search.js";
@@ -2107,15 +2107,15 @@ function initHexMapUkController(root) {
 
       function updateSummary() {
         updateOverallSummary();
-        const summary = buildSelectedNetworkSummary();
+        const selectedNetworkSummary = buildSelectedNetworkSummary();
         if (networkSummaryCardsComponent) {
-          networkSummaryCardsComponent.render(summary);
+          networkSummaryCardsComponent.render(selectedNetworkSummary);
         }
         if (sensorShareBars) {
-          sensorShareBars.render(summary.shareData || []);
+          sensorShareBars.render(selectedNetworkSummary.shareData || []);
         }
         // ── Top summary boxes ──
-        if (summary?.updateSummary) {
+        if (summaryPresenter?.updateSummary) {
           const pollutantLabel = getPollutantLabel(activePollutant);
           const pollutantUnits = getPollutantUnits(activePollutant);
           const capValue = getLegendCapValue();
@@ -2138,10 +2138,10 @@ function initHexMapUkController(root) {
             highestSensor = resolveStationName(h.row);
             highestNetwork = resolvePrimaryNetworkLabel(h.row) || "Unknown network";
           }
-          summary.updateSummary({
+          summaryPresenter.updateSummary({
             totalSensors: totalSensorsForTopSummary,
-            pconCovered: summary.pconCovered,
-            pconTotal: summary.pconTotal,
+            pconCovered: selectedNetworkSummary.pconCovered,
+            pconTotal: selectedNetworkSummary.pconTotal,
             areaLabel: 'constituencies',
             pollutantLabel,
             pollutantUnits,
@@ -2149,8 +2149,8 @@ function initHexMapUkController(root) {
             highestColor,
             highestSensor,
             highestNetwork,
-            newestReadingISO: summary.newestReadingISO,
-            oldestReadingISO: summary.oldestReadingISO,
+            newestReadingISO: selectedNetworkSummary.newestReadingISO,
+            oldestReadingISO: selectedNetworkSummary.oldestReadingISO,
           });
         }
       }

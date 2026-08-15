@@ -23,6 +23,7 @@ const scriptEntryPath = nodeProcess.argv[1]
 const SCRIPT_DIR = path.dirname(scriptEntryPath);
 const REPO_ROOT = path.resolve(SCRIPT_DIR, "..");
 const ENV_PATH = path.join(REPO_ROOT, ".env");
+const SHARED_AUTH_TARGET = "shared/auth/uk-aq-cache-auth.js";
 const DEFAULT_TARGETS = [
   { path: "hex_map/index.html", required: true },
   { path: "index.html", required: true },
@@ -31,6 +32,7 @@ const DEFAULT_TARGETS = [
 const refPattern = /const PROJECT_REF_PLACEHOLDER = "([^"]*)";/g;
 const anonPattern = /const ANON_KEY_PLACEHOLDER = "([^"]*)";/g;
 const turnstilePattern = /const TURNSTILE_SITE_KEY_PLACEHOLDER = "([^"]*)";/g;
+const sharedTurnstilePattern = /const SHARED_TURNSTILE_SITE_KEY_PLACEHOLDER = "([^"]*)";/g;
 const aqiHistoryPattern = /const AQI_HISTORY_BASE_PLACEHOLDER = "([^"]*)";/g;
 const websiteDebugLogPattern = /const WEBSITE_DEBUG_LOG_ENABLED_PLACEHOLDER = "([^"]*)";/g;
 const aqiMutableHoursPattern = /const AQI_MUTABLE_HOURS_PLACEHOLDER = "([^"]*)";/g;
@@ -135,6 +137,25 @@ async function main() {
     } else {
       console.log(`${path.relative(REPO_ROOT, targetPath)} already uses the configured SUPABASE project ref, publishable key, Turnstile site key, AQI history base, website debug flag, and AQI mutable hours.`);
     }
+  }
+
+  const sharedAuthPath = path.join(REPO_ROOT, SHARED_AUTH_TARGET);
+  const sharedAuth = await readFileIfExists(sharedAuthPath);
+  if (sharedAuth === null) {
+    throw new Error(`Required file missing: ${SHARED_AUTH_TARGET}`);
+  }
+  const updatedSharedAuth = replacePlaceholder(
+    sharedAuth,
+    sharedTurnstilePattern,
+    `const SHARED_TURNSTILE_SITE_KEY_PLACEHOLDER = "${turnstileSiteKey}";`,
+    "SHARED_TURNSTILE_SITE_KEY_PLACEHOLDER",
+    sharedAuthPath,
+  );
+  if (updatedSharedAuth !== sharedAuth) {
+    await fs.writeFile(sharedAuthPath, updatedSharedAuth);
+    console.log(`Injected Turnstile site key into ${SHARED_AUTH_TARGET}`);
+  } else {
+    console.log(`${SHARED_AUTH_TARGET} already uses the configured Turnstile site key.`);
   }
 }
 

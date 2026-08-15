@@ -1,0 +1,74 @@
+name: Retire legacy latest fallback once
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - .github/workflows/retire-legacy-latest-once.yml
+
+permissions:
+  contents: write
+
+jobs:
+  retire:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Remove legacy latest fallback
+        shell: python
+        run: |
+          from pathlib import Path
+
+          files = [
+              Path("hex_map/hex-map-uk-controller.js"),
+              Path("hex_map/hex-map-cr-controller.js"),
+          ]
+
+          legacy_block = '''      const LATEST_LEGACY_URL = cacheBaseUrl
+        ? `${cacheBaseUrl}/latest`
+        : "";
+'''
+          old_resolver = '''      function resolveLatestUrl(windowLabel) {
+        const normalizedWindow = String(windowLabel || "").trim().toLowerCase();
+        if (LATEST_SNAPSHOT_URL && SNAPSHOT_WINDOWS.has(normalizedWindow)) {
+          return LATEST_SNAPSHOT_URL;
+        }
+        return LATEST_LEGACY_URL || LATEST_SNAPSHOT_URL;
+      }
+'''
+          new_resolver = '''      function resolveLatestUrl(windowLabel) {
+        const normalizedWindow = String(windowLabel || "").trim().toLowerCase();
+        if (LATEST_SNAPSHOT_URL && SNAPSHOT_WINDOWS.has(normalizedWindow)) {
+          return LATEST_SNAPSHOT_URL;
+        }
+        return "";
+      }
+'''
+
+          for path in files:
+              text = path.read_text()
+              if legacy_block not in text:
+                  raise SystemExit(f"Expected legacy URL block not found in {path}")
+              if old_resolver not in text:
+                  raise SystemExit(f"Expected legacy resolver not found in {path}")
+              text = text.replace(legacy_block, "", 1)
+              text = text.replace(old_resolver, new_resolver, 1)
+              text = text.replace(
+                  "if (!LATEST_SNAPSHOT_URL && !LATEST_LEGACY_URL) return;",
+                  "if (!LATEST_SNAPSHOT_URL) return;",
+              )
+              if "LATEST_LEGACY_URL" in text or "`${cacheBaseUrl}/latest`" in text:
+                  raise SystemExit(f"Legacy latest reference remains in {path}")
+              path.write_text(text)
+
+      - name: Commit retirement
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git rm .github/workflows/retire-legacy-latest-once.yml
+          git add hex_map/hex-map-uk-controller.js hex_map/hex-map-cr-controller.js
+          git commit -m "refactor: remove legacy latest fallback"
+          git push

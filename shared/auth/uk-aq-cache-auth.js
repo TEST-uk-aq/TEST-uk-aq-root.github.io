@@ -4,6 +4,8 @@
 (() => {
   "use strict";
 
+  const SHARED_TURNSTILE_SITE_KEY_PLACEHOLDER = "__UK_AQ_TURNSTILE_SITE_KEY__";
+
   if (window.ukAqSharedAuth?.fetchCacheApi) {
     window.ukAqFetchCacheApi = window.ukAqSharedAuth.fetchCacheApi;
     return;
@@ -38,6 +40,12 @@
   function configuredSiteKey() {
     const queryKey = String(params.get("turnstile_site_key") || "").trim();
     if (queryKey) return queryKey;
+
+    const sharedKey = String(SHARED_TURNSTILE_SITE_KEY_PLACEHOLDER || "").trim();
+    if (sharedKey && !sharedKey.includes("__UK_AQ_TURNSTILE_SITE_KEY__")) {
+      return sharedKey;
+    }
+
     try {
       if (typeof TURNSTILE_SITE_KEY_PLACEHOLDER === "string"
           && !TURNSTILE_SITE_KEY_PLACEHOLDER.includes("__UK_AQ_TURNSTILE_SITE_KEY__")) {

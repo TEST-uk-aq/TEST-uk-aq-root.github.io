@@ -865,6 +865,14 @@
   }
 }
 
+/* Highest-area table responsive modes are based on the card's usable width,
+   not the site-wide mobile breakpoint. The card content box matches the table
+   wrapper width, so one named container switches all pollutant cells together. */
+body.home-page .dashboard-table-card:has(.dashboard-table--areas) {
+  container-name: area-readings-table;
+  container-type: inline-size;
+}
+
 body.home-page .dashboard-table--areas {
   width: 100%;
   min-width: 0 !important;
@@ -880,19 +888,12 @@ body.home-page .dashboard-table--areas col:not(.dashboard-table-area-type-col) {
   width: 25.333333% !important;
 }
 
-body.home-page .dashboard-table--areas thead th:first-child,
-body.home-page .dashboard-table--areas tbody tr[data-area-type] > th:first-child {
-  white-space: normal;
-  overflow-wrap: normal;
-  word-break: normal;
-}
-
 /* Side-by-side mode: preserve fixed marker and value tracks so content length
    cannot move corresponding markers or value starts between area rows. */
 body.home-page .dashboard-table--areas .area-reading {
   display: grid;
   width: 100%;
-  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-columns: minmax(0, 1fr) 1.17rem 6.4rem;
   align-items: center;
   column-gap: 0.35rem;
   min-width: 0;
@@ -906,62 +907,56 @@ body.home-page .dashboard-table--areas .area-reading-name {
 }
 
 body.home-page .dashboard-table--areas .area-reading-metric {
-  grid-column: 2;
-  display: grid;
-  grid-template-columns: 1.17rem 6.4rem;
-  align-items: center;
-  justify-self: end;
-  column-gap: 0.35rem;
-  min-width: 0;
-  white-space: nowrap;
+  display: contents;
 }
 
 body.home-page .dashboard-table--areas .area-marker {
-  grid-column: 1;
+  grid-column: 2;
   justify-self: start;
 }
 
 body.home-page .dashboard-table--areas .area-reading-value {
-  grid-column: 2;
+  grid-column: 3;
   justify-self: start;
   white-space: nowrap;
   font-variant-numeric: tabular-nums;
 }
 
-/* The controller enables stacked mode only after rendered side-by-side content
-   no longer fits. All pollutant cells switch together. */
-body.home-page .dashboard-table--areas.area-table--stacked .area-reading {
-  grid-template-columns: minmax(0, 1fr);
-  row-gap: 0.28rem;
-  column-gap: 0;
+/* Stacked mode: at this width each pollutant column would otherwise leave less
+   than about 6rem for an area name after its fixed marker/value tracks. */
+@container area-readings-table (max-width: 1020px) {
+  body.home-page .dashboard-table--areas .area-reading {
+    grid-template-columns: minmax(0, 1fr);
+    row-gap: 0.28rem;
+    column-gap: 0;
+  }
+
+  body.home-page .dashboard-table--areas .area-reading-name {
+    grid-column: 1;
+    grid-row: 1;
+  }
+
+  body.home-page .dashboard-table--areas .area-reading-metric {
+    grid-column: 1;
+    grid-row: 2;
+    display: inline-flex;
+    width: max-content;
+    max-width: 100%;
+    align-items: center;
+    justify-self: start;
+    gap: 0.35rem;
+    white-space: nowrap;
+  }
+
+  body.home-page .dashboard-table--areas .area-marker,
+  body.home-page .dashboard-table--areas .area-reading-value {
+    grid-column: auto;
+    justify-self: auto;
+  }
 }
 
-body.home-page .dashboard-table--areas.area-table--stacked .area-reading-name {
-  grid-column: 1;
-  grid-row: 1;
-}
-
-body.home-page .dashboard-table--areas.area-table--stacked .area-reading-metric {
-  grid-column: 1;
-  grid-row: 2;
-  display: inline-flex;
-  width: max-content;
-  max-width: 100%;
-  align-items: center;
-  justify-self: start;
-  gap: 0.35rem;
-  white-space: nowrap;
-}
-
-body.home-page .dashboard-table--areas.area-table--stacked .area-marker,
-body.home-page .dashboard-table--areas.area-table--stacked .area-reading-value {
-  grid-column: auto;
-  justify-self: auto;
-}
-
-/* Grouped five-row fallback. JavaScript enables this when any area-type word,
-   normal-size area-name word, or complete marker/value-unit line cannot fit in
-   the resolved standard layout. */
+/* Grouped five-row fallback. JavaScript enables this only when a normally
+   wrapped area-type label still has horizontal rendered overflow. */
 body.home-page .dashboard-table--areas .area-reading-group-row {
   display: none;
 }

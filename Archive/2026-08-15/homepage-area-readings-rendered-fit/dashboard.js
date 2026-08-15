@@ -365,17 +365,13 @@
     return Boolean(element && element.clientWidth > 0 && element.scrollWidth > element.clientWidth + 1);
   }
 
-  function resetAreaReadingNameFit(nameEl) {
+  function fitAreaReadingName(nameEl) {
     if (!nameEl) return;
     nameEl.classList.remove(
       "area-reading-name--fit-90",
       "area-reading-name--fit-85",
       "area-reading-name--emergency-wrap",
     );
-  }
-
-  function fitAreaReadingName(nameEl) {
-    resetAreaReadingNameFit(nameEl);
     if (!nameEl.textContent.trim() || nameEl.clientWidth <= 0 || !hasHorizontalOverflow(nameEl)) return;
 
     nameEl.classList.add("area-reading-name--fit-90");
@@ -388,83 +384,20 @@
     }
   }
 
-  function metricLineFits(metricEl) {
-    if (!metricEl) return true;
-    const markerEl = metricEl.querySelector(".area-marker");
-    const valueEl = metricEl.querySelector(".area-reading-value");
-    const availableWidth = metricEl.getBoundingClientRect().width;
-    if (!markerEl || !valueEl || availableWidth <= 0) return true;
-
-    const styles = window.getComputedStyle(metricEl);
-    const gap = Number.parseFloat(styles.columnGap || styles.gap) || 0;
-    const markerWidth = markerEl.getBoundingClientRect().width;
-    const valueWidth = Math.max(
-      valueEl.getBoundingClientRect().width,
-      valueEl.scrollWidth,
-    );
-    const requiredWidth = markerWidth + gap + valueWidth;
-    return requiredWidth <= availableWidth + 1 && !hasHorizontalOverflow(metricEl);
-  }
-
-  function sideBySideAreaReadingsFit() {
-    const readings = areaReadingsTable.querySelectorAll(
-      "tbody tr[data-area-type] .area-reading",
-    );
-    return Array.from(readings).every((reading) => {
-      const nameEl = reading.querySelector(".area-reading-name");
-      const metricEl = reading.querySelector(".area-reading-metric");
-      return !hasHorizontalOverflow(reading)
-        && !hasHorizontalOverflow(nameEl)
-        && metricLineFits(metricEl);
-    });
-  }
-
-  function standardAreaTableFits() {
-    const areaTypeCells = areaReadingsTable.querySelectorAll(
-      'tbody tr[data-area-type] > th:first-child',
-    );
-    const names = areaReadingsTable.querySelectorAll(
-      "tbody tr[data-area-type] .area-reading-name",
-    );
-    const metrics = areaReadingsTable.querySelectorAll(
-      "tbody tr[data-area-type] .area-reading-metric",
-    );
-    const readings = areaReadingsTable.querySelectorAll(
-      "tbody tr[data-area-type] .area-reading",
-    );
-    return !Array.from(areaTypeCells).some(hasHorizontalOverflow)
-      && !Array.from(names).some(hasHorizontalOverflow)
-      && Array.from(metrics).every(metricLineFits)
-      && !Array.from(readings).some(hasHorizontalOverflow);
-  }
-
-  function resolveAreaReadingLayout() {
-    areaReadingsTable.classList.remove("area-table--stacked");
-    if (!sideBySideAreaReadingsFit()) {
-      areaReadingsTable.classList.add("area-table--stacked");
-    }
-  }
-
   function applyAreaTableLayout() {
     if (!areaReadingsTable) return;
     ensureAreaGroupRows();
 
-    const names = areaReadingsTable.querySelectorAll(".area-reading-name");
-
-    // Restore normal three-row geometry and normal name sizing before every
-    // decision so widening can return the complete table to standard mode.
-    areaReadingsTable.classList.remove(
-      "area-table--grouped",
-      "area-table--stacked",
+    // Always measure the real three-row presentation first. Normal wrapping is
+    // allowed, so horizontal overflow here means an unbroken word no longer fits.
+    areaReadingsTable.classList.remove("area-table--grouped");
+    const areaTypeCells = areaReadingsTable.querySelectorAll(
+      'tbody tr[data-area-type] > th:first-child',
     );
-    names.forEach(resetAreaReadingNameFit);
-    resolveAreaReadingLayout();
+    const shouldGroup = Array.from(areaTypeCells).some(hasHorizontalOverflow);
+    areaReadingsTable.classList.toggle("area-table--grouped", shouldGroup);
 
-    if (!standardAreaTableFits()) {
-      areaReadingsTable.classList.add("area-table--grouped");
-      resolveAreaReadingLayout();
-      names.forEach(fitAreaReadingName);
-    }
+    areaReadingsTable.querySelectorAll(".area-reading-name").forEach(fitAreaReadingName);
   }
 
   function scheduleAreaTableLayout() {

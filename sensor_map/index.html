@@ -334,7 +334,7 @@
         const updatedWithinParam = normalizeUpdatedWithin(params.get("updated_within"));
         let currentUpdatedWithin = updatedWithinParam || "all";
 
-        const READINGS_URL = cacheBaseUrl ? `${cacheBaseUrl}/latest` : "";
+        const READINGS_URL = cacheBaseUrl ? `${cacheBaseUrl}/latest-snapshot` : "";
         const READING_POLLUTANTS = pollutantDomain.definitions.map(
           (definition) => definition.readingScope,
         );
@@ -517,7 +517,8 @@
           url.searchParams.set("limit", String(readingLimit));
           url.searchParams.set("caller", "sensor_map");
           if (pollutantKey) {
-            url.searchParams.set("pollutant", pollutantKey);
+            const canonicalPollutant = pollutantDomain.getByReadingScope(pollutantKey)?.key || pollutantKey;
+            url.searchParams.set("pollutant", canonicalPollutant);
           }
           return url.toString();
         }
@@ -638,7 +639,8 @@
 
         function getPollutantLabel(row) {
           const raw = normalizeText(
-            row?.pollutant_label
+            row?.pollutant
+              || row?.pollutant_label
               || row?.phenomenon_label
               || row?.observed_property_code
               || row?.phenomenon?.pollutant_label

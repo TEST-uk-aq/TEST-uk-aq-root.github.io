@@ -78,16 +78,13 @@ function initHexMapCrController() {
       const LATEST_SNAPSHOT_URL = cacheBaseUrl
         ? `${cacheBaseUrl}/latest-snapshot`
         : "";
-      const LATEST_LEGACY_URL = cacheBaseUrl
-        ? `${cacheBaseUrl}/latest`
-        : "";
       const SNAPSHOT_WINDOWS = new Set(["3h", "6h", "1d", "7d", "all"]);
       function resolveLatestUrl(windowLabel) {
         const normalizedWindow = String(windowLabel || "").trim().toLowerCase();
         if (LATEST_SNAPSHOT_URL && SNAPSHOT_WINDOWS.has(normalizedWindow)) {
           return LATEST_SNAPSHOT_URL;
         }
-        return LATEST_LEGACY_URL || LATEST_SNAPSHOT_URL;
+        return "";
       }
       const POPULATION_URL = projectRef
         ? `https://${projectRef}.supabase.co/functions/v1/uk_aq_population`
@@ -4303,7 +4300,7 @@ function initHexMapCrController() {
       }
 
       async function fetchAllRegionsForSearch() {
-        if (!LATEST_SNAPSHOT_URL && !LATEST_LEGACY_URL) return;
+        if (!LATEST_SNAPSHOT_URL) return;
         if (allRegionsFetchState === "fetching") return;
         allRegionsFetchState = "fetching";
         const fetchPollutant = activePollutant;

@@ -21,33 +21,10 @@ jobs:
         shell: python
         run: |
           from pathlib import Path
-
-          files = [
-              Path("hex_map/hex-map-uk-controller.js"),
-              Path("hex_map/hex-map-cr-controller.js"),
-          ]
-
-          legacy_block = '''      const LATEST_LEGACY_URL = cacheBaseUrl
-        ? `${cacheBaseUrl}/latest`
-        : "";
-'''
-          old_resolver = '''      function resolveLatestUrl(windowLabel) {
-        const normalizedWindow = String(windowLabel || "").trim().toLowerCase();
-        if (LATEST_SNAPSHOT_URL && SNAPSHOT_WINDOWS.has(normalizedWindow)) {
-          return LATEST_SNAPSHOT_URL;
-        }
-        return LATEST_LEGACY_URL || LATEST_SNAPSHOT_URL;
-      }
-'''
-          new_resolver = '''      function resolveLatestUrl(windowLabel) {
-        const normalizedWindow = String(windowLabel || "").trim().toLowerCase();
-        if (LATEST_SNAPSHOT_URL && SNAPSHOT_WINDOWS.has(normalizedWindow)) {
-          return LATEST_SNAPSHOT_URL;
-        }
-        return "";
-      }
-'''
-
+          files = [Path("hex_map/hex-map-uk-controller.js"), Path("hex_map/hex-map-cr-controller.js")]
+          legacy_block = "      const LATEST_LEGACY_URL = cacheBaseUrl\n        ? `${cacheBaseUrl}/latest`\n        : \"\";\n"
+          old_resolver = "      function resolveLatestUrl(windowLabel) {\n        const normalizedWindow = String(windowLabel || \"\").trim().toLowerCase();\n        if (LATEST_SNAPSHOT_URL && SNAPSHOT_WINDOWS.has(normalizedWindow)) {\n          return LATEST_SNAPSHOT_URL;\n        }\n        return LATEST_LEGACY_URL || LATEST_SNAPSHOT_URL;\n      }\n"
+          new_resolver = "      function resolveLatestUrl(windowLabel) {\n        const normalizedWindow = String(windowLabel || \"\").trim().toLowerCase();\n        if (LATEST_SNAPSHOT_URL && SNAPSHOT_WINDOWS.has(normalizedWindow)) {\n          return LATEST_SNAPSHOT_URL;\n        }\n        return \"\";\n      }\n"
           for path in files:
               text = path.read_text()
               if legacy_block not in text:
@@ -56,10 +33,7 @@ jobs:
                   raise SystemExit(f"Expected legacy resolver not found in {path}")
               text = text.replace(legacy_block, "", 1)
               text = text.replace(old_resolver, new_resolver, 1)
-              text = text.replace(
-                  "if (!LATEST_SNAPSHOT_URL && !LATEST_LEGACY_URL) return;",
-                  "if (!LATEST_SNAPSHOT_URL) return;",
-              )
+              text = text.replace("if (!LATEST_SNAPSHOT_URL && !LATEST_LEGACY_URL) return;", "if (!LATEST_SNAPSHOT_URL) return;")
               if "LATEST_LEGACY_URL" in text or "`${cacheBaseUrl}/latest`" in text:
                   raise SystemExit(f"Legacy latest reference remains in {path}")
               path.write_text(text)

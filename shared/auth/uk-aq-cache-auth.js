@@ -4,7 +4,7 @@
 (() => {
   "use strict";
 
-  const SHARED_TURNSTILE_SITE_KEY_PLACEHOLDER = "__UK_AQ_TURNSTILE_SITE_KEY__";
+  const SHARED_TURNSTILE_SITE_KEY_PLACEHOLDER = "0x4AAAAAADvk69amXC9V2nNx";
 
   if (window.ukAqSharedAuth?.fetchCacheApi) {
     window.ukAqFetchCacheApi = window.ukAqSharedAuth.fetchCacheApi;

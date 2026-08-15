@@ -1,27 +1,15 @@
 <!doctype html>
-<!-- SENSOR MAP index.html  -->
+<!-- SENSOR MAP index.html -->
 <html lang="en">
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <meta
       http-equiv="Content-Security-Policy"
-      content="default-src 'self' https: data: blob:; script-src 'self' 'unsafe-inline' https://unpkg.com https://challenges.cloudflare.com; script-src-elem 'self' 'unsafe-inline' https://unpkg.com https://challenges.cloudflare.com; style-src 'self' 'unsafe-inline' https://unpkg.com; img-src 'self' data: blob: https:; connect-src 'self' https: blob:; frame-src https://challenges.cloudflare.com;"
+      content="default-src 'self' https: data: blob:; script-src 'self' 'unsafe-inline' https://unpkg.com https://challenges.cloudflare.com; script-src-elem 'self' 'unsafe-inline' https://unpkg.com https://challenges.cloudflare.com; style-src 'self' 'unsafe-inline' https://unpkg.com https://fonts.googleapis.com; font-src 'self' data: https://fonts.gstatic.com; img-src 'self' data: blob: https:; connect-src 'self' https: blob:; frame-src https://challenges.cloudflare.com;"
     />
     <title>UK AQ sensor map</title>
     <link rel="icon" href="/images/favicon.ico" type="image/png">
-    <link rel="preload" as="image" href="/sidebar-images/uk-aq-hex-map-icon.svg" />
-    <link rel="preload" as="image" href="/sidebar-images/uk-aq-sensors-icon.svg" />
-    <link rel="preload" as="image" href="/sidebar-images/uk-aq-map-icon.svg" />
-    <link rel="preload" as="image" href="/sidebar-images/Bubble-Chart-Icon.svg" />
-    <link rel="preload" as="image" href="/sidebar-images/Line-Chart-Icon.svg" />
-    <link rel="preload" as="image" href="/sidebar-images/Stove%20Ecodesign%20430x683.svg" />
-    <link rel="preload" as="image" href="/sidebar-images/Category%20Info%20-%20Icon.svg" />
-    <link rel="preload" as="image" href="/sidebar-images/user-guide.svg" />
-    <link rel="preload" as="image" href="/sidebar-images/youtube-logo.svg" />
-    <link rel="preload" as="image" href="/sidebar-images/youtube-logo-Word.svg" />
-    <link rel="preload" as="image" href="/sidebar-images/chain-link-icon-ukaqblue-200h.svg" />
-    <link rel="preload" as="image" href="/sidebar-images/uk-aq-contact-blue-200h.svg" />
     <link rel="preload" as="image" href="/images/UK-AQ-sensor-map-1line.svg" />
     <link
       rel="stylesheet"
@@ -29,13 +17,13 @@
       crossorigin="anonymous"
     />
     <style>
-    :root {
-      --ukaq-sidebar-offset: 0px;
-      --ukaq-chrome-h: 122px;
-      --ukaq-controls-top: 12px;
-      --ukaq-controls-h: 0px;
-      --ukaq-controls-gap: 8px;
-	}
+      :root {
+        --ukaq-sidebar-offset: 0px;
+        --ukaq-chrome-h: 122px;
+        --ukaq-controls-top: 12px;
+        --ukaq-controls-h: 0px;
+        --ukaq-controls-gap: 8px;
+      }
 
       html,
       body {
@@ -58,7 +46,9 @@
 
       #uk-aq-page-chrome {
         position: fixed;
-        top: 0; left: var(--ukaq-sidebar-offset); right: 0;
+        top: 0;
+        left: var(--ukaq-sidebar-offset);
+        right: 0;
         z-index: 250;
         background: #ffffff;
         border-bottom: 1px solid #e4e6ea;
@@ -76,12 +66,14 @@
         gap: 24px;
         padding: 0 132px 0 0;
       }
+
       #uk-aq-header .logo {
         height: 54px;
         width: auto;
         flex-shrink: 0;
         margin-top: 3px;
       }
+
       #uk-aq-header .page-title {
         height: 42px;
         width: auto;
@@ -89,19 +81,22 @@
         margin-top: 0;
       }
 
-	  .sensor-map-controls {
-	    position: fixed;
-	    top: calc(var(--ukaq-chrome-h) + var(--ukaq-controls-top));
-	    left: calc(var(--ukaq-sidebar-offset) + 12px);
-	    right: 12px;
-	    z-index: 1000;
-	    max-width: 920px;
-	    box-sizing: border-box;
-	  }
+      .sensor-map-controls {
+        position: fixed;
+        top: calc(var(--ukaq-chrome-h) + var(--ukaq-controls-top));
+        left: calc(var(--ukaq-sidebar-offset) + 12px);
+        right: 12px;
+        z-index: 1000;
+        max-width: 920px;
+        box-sizing: border-box;
+      }
 
       #map {
         position: absolute;
-        top: var(--ukaq-chrome-h); left: var(--ukaq-sidebar-offset); right: 0; bottom: 0;
+        top: var(--ukaq-chrome-h);
+        left: var(--ukaq-sidebar-offset);
+        right: 0;
+        bottom: 0;
         background: #f4f7f8;
       }
 
@@ -120,16 +115,18 @@
         gap: 8px;
       }
 
-	  .leaflet-top.leaflet-left {
-	    top: calc(
-	      var(--ukaq-controls-top)
-	      + var(--ukaq-controls-h)
-	      + var(--ukaq-controls-gap)
-	    );
-	  }
-	  .leaflet-top.leaflet-left .leaflet-control-zoom {
-	    margin-top: 0;
-	  }
+      .leaflet-top.leaflet-left {
+        top: calc(
+          var(--ukaq-controls-top)
+          + var(--ukaq-controls-h)
+          + var(--ukaq-controls-gap)
+        );
+      }
+
+      .leaflet-top.leaflet-left .leaflet-control-zoom {
+        margin-top: 0;
+      }
+
       .bar-top,
       .bar-bottom {
         display: flex;
@@ -146,17 +143,9 @@
         color: #8b1e3f;
       }
 
-      #last-updated,
-      #endpoint-hint {
+      #last-updated {
         font-size: 0.8rem;
         color: #334449;
-      }
-
-      #endpoint-hint {
-        overflow: hidden;
-        text-overflow: ellipsis;
-        white-space: nowrap;
-        max-width: 100%;
       }
 
       .spacer {
@@ -236,30 +225,25 @@
         color: #334449;
       }
 
-	  @media (max-width: 720px) {
-	    :root {
-	      --ukaq-controls-top: 8px;
-	      --ukaq-controls-gap: 8px;
-	    }
+      @media (max-width: 720px) {
+        :root {
+          --ukaq-controls-top: 8px;
+          --ukaq-controls-gap: 8px;
+        }
 
-	    .sensor-map-controls {
-	      left: calc(var(--ukaq-sidebar-offset) + 8px);
-	      right: 8px;
-	    }
+        .sensor-map-controls {
+          left: calc(var(--ukaq-sidebar-offset) + 8px);
+          right: 8px;
+        }
 
-	    .control-bar {
-	      padding: 8px 10px;
-	    }
-
-        #endpoint-hint {
-          white-space: normal;
-          overflow: visible;
+        .control-bar {
+          padding: 8px 10px;
         }
       }
     </style>
     <link rel="stylesheet" href="/beta-notice.css">
     <link rel="stylesheet" href="/mobile.css" media="(max-width: 767px)">
-</head>
+  </head>
   <body>
     <div id="cic-sidebar-mount"></div>
     <script src="/sidebar.js"></script>
@@ -269,38 +253,39 @@
       </header>
       <div class="ukaq-beta-notice-mount" data-ukaq-beta-notice-mount></div>
     </div>
+
     <div class="sensor-map-controls">
       <div class="control-bar" role="region" aria-label="Map controls">
-      <div class="bar-top">
-        <span class="spacer"></span>
-        <label for="reading-scope">Readings</label>
-        <select id="reading-scope">
-          <option value="all">PM2.5 + PM10 + NO2</option>
-          <option value="pm2.5">PM2.5 only</option>
-          <option value="pm10">PM10 only</option>
-          <option value="no2">NO2 only</option>
-        </select>
-        <label for="updated-within">Updated within</label>
-        <select id="updated-within">
-          <option value="all">Any time</option>
-          <option value="3h">Last 3h</option>
-          <option value="6h">Last 6h</option>
-          <option value="1d">Last 1d</option>
-          <option value="7d">Last 7d</option>
-        </select>
-        <button id="refresh" type="button">Refresh</button>
-      </div>
-      <div class="bar-bottom">
-        <span id="status">Loading…</span>
-        <span class="spacer"></span>
-        <span id="last-updated">Last updated: -</span>
-      </div>
-      <div id="endpoint-hint"></div>
-      <div id="error"></div>
+        <div class="bar-top">
+          <span class="spacer"></span>
+          <label for="reading-scope">Readings</label>
+          <select id="reading-scope">
+            <option value="all">PM2.5 + PM10 + NO2</option>
+            <option value="pm2.5">PM2.5 only</option>
+            <option value="pm10">PM10 only</option>
+            <option value="no2">NO2 only</option>
+          </select>
+          <label for="observed-within">Observed within</label>
+          <select id="observed-within">
+            <option value="all">Any time</option>
+            <option value="3h">Last 3h</option>
+            <option value="6h">Last 6h</option>
+            <option value="1d">Last 1d</option>
+            <option value="7d">Last 7d</option>
+          </select>
+          <button id="refresh" type="button">Refresh</button>
+        </div>
+        <div class="bar-bottom">
+          <span id="status">Loading…</span>
+          <span class="spacer"></span>
+          <span id="last-updated">Last updated: -</span>
+        </div>
+        <div id="error"></div>
       </div>
     </div>
+
     <div id="map" role="application" aria-label="UK AQ sensor map"></div>
-    
+
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" crossorigin="anonymous"></script>
     <script src="/shared/domain/pollutants.js"></script>
     <script src="/shared/auth/uk-aq-cache-auth.js"></script>
@@ -310,16 +295,14 @@
         if (!pollutantDomain?.definitions) {
           throw new Error("UK AQ pollutant domain must load before the Sensor Map.");
         }
+
+        // These placeholders remain build-time injection targets shared with the
+        // rest of the website, even though Sensor Map data is served through the
+        // protected cache boundary.
         const PROJECT_REF_PLACEHOLDER = "zztjgmdiftqtdcrlfpvc";
         const ANON_KEY_PLACEHOLDER = "sb_publishable_Cru7ACLoK8kKQdID5jPaDw_3RHvQNxO";
-        const FALLBACK_CACHE_BASE_URL = "https://cic-test.chronicillnesschannel.co.uk/api/aq";
         const TURNSTILE_SITE_KEY_PLACEHOLDER = "0x4AAAAAADvk69amXC9V2nNx";
-        const UPDATED_WITHIN_MS = {
-          "3h": 3 * 60 * 60 * 1000,
-          "6h": 6 * 60 * 60 * 1000,
-          "1d": 24 * 60 * 60 * 1000,
-          "7d": 7 * 24 * 60 * 60 * 1000,
-        };
+        const FALLBACK_CACHE_BASE_URL = "https://cic-test.chronicillnesschannel.co.uk/api/aq";
 
         const params = new URLSearchParams(window.location.search);
         const cacheBaseParam = params.get("cache_base");
@@ -327,12 +310,12 @@
         const limitParam = parsePositiveInt(params.get("limit"));
         const rowLimit = limitParam || 50000;
         const readingLimit = Math.max(1, Math.min(10000, rowLimit));
-        const connectorProbeMaxParam = parsePositiveInt(params.get("connector_probe_max"));
-        const connectorProbeMax = Math.max(1, Math.min(40, connectorProbeMaxParam || 12));
         const readingScopeParam = normalizeReadingScope(params.get("reading_scope"));
         let currentReadingScope = readingScopeParam || "all";
-        const updatedWithinParam = normalizeUpdatedWithin(params.get("updated_within"));
-        let currentUpdatedWithin = updatedWithinParam || "all";
+        const observedWithinParam = normalizeObservedWithin(
+          params.get("observed_within") || params.get("updated_within"),
+        );
+        let currentObservedWithin = observedWithinParam || "all";
 
         const READINGS_URL = cacheBaseUrl ? `${cacheBaseUrl}/latest-snapshot` : "";
         const READING_POLLUTANTS = pollutantDomain.definitions.map(
@@ -344,10 +327,9 @@
         const refreshBtn = document.getElementById("refresh");
         const statusEl = document.getElementById("status");
         const lastUpdatedEl = document.getElementById("last-updated");
-        const endpointHintEl = document.getElementById("endpoint-hint");
         const errorEl = document.getElementById("error");
         const readingScopeSelect = document.getElementById("reading-scope");
-        const updatedWithinSelect = document.getElementById("updated-within");
+        const observedWithinSelect = document.getElementById("observed-within");
 
         const map = L.map("map", { preferCanvas: true, zoomControl: true }).setView([54.5, -2.5], 6);
         L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
@@ -357,24 +339,20 @@
 
         const pageChrome = document.getElementById("uk-aq-page-chrome");
         const controlBar = document.querySelector(".control-bar");
+
         function syncPageChromeHeight() {
           if (!pageChrome) return;
           const chromeHeight = Math.ceil(pageChrome.getBoundingClientRect().height);
           document.documentElement.style.setProperty("--ukaq-chrome-h", `${chromeHeight}px`);
           window.requestAnimationFrame(() => map.invalidateSize());
         }
-		function syncControlBarHeight() {
-		  if (!controlBar) return;
 
-		  const controlHeight = Math.ceil(
-		    controlBar.getBoundingClientRect().height
-		  );
+        function syncControlBarHeight() {
+          if (!controlBar) return;
+          const controlHeight = Math.ceil(controlBar.getBoundingClientRect().height);
+          document.documentElement.style.setProperty("--ukaq-controls-h", `${controlHeight}px`);
+        }
 
-		  document.documentElement.style.setProperty(
-		    "--ukaq-controls-h",
-		    `${controlHeight}px`
-		  );
-		}
         if (pageChrome) {
           syncPageChromeHeight();
           if ("ResizeObserver" in window) {
@@ -384,17 +362,16 @@
             window.addEventListener("resize", syncPageChromeHeight);
           }
         }
-		
-		if (controlBar) {
-		  syncControlBarHeight();
 
-		  if ("ResizeObserver" in window) {
-		    const controlBarObserver = new ResizeObserver(syncControlBarHeight);
-		    controlBarObserver.observe(controlBar);
-		  } else {
-		    window.addEventListener("resize", syncControlBarHeight);
-		  }
-		}
+        if (controlBar) {
+          syncControlBarHeight();
+          if ("ResizeObserver" in window) {
+            const controlBarObserver = new ResizeObserver(syncControlBarHeight);
+            controlBarObserver.observe(controlBar);
+          } else {
+            window.addEventListener("resize", syncControlBarHeight);
+          }
+        }
 
         const markerLayer = L.layerGroup().addTo(map);
         const markerRenderer = L.canvas({ padding: 0.25 });
@@ -403,13 +380,8 @@
         let stationGeometryRowsPromise = null;
         let hasAutoFit = false;
 
-        if (endpointHintEl) {
-          endpointHintEl.textContent = READINGS_URL
-            ? `Readings: ${READINGS_URL} · Geometry: ${STATIONS_URL || STATIONS_MAP_FALLBACK_URL}`
-            : "Missing cache endpoint base URL. Add ?cache_base=... to the URL.";
-        }
-        if (updatedWithinSelect) {
-          updatedWithinSelect.value = currentUpdatedWithin;
+        if (observedWithinSelect) {
+          observedWithinSelect.value = currentObservedWithin;
         }
         if (readingScopeSelect) {
           readingScopeSelect.value = currentReadingScope;
@@ -444,9 +416,14 @@
           return Math.floor(parsed);
         }
 
-        function normalizeUpdatedWithin(value) {
+        function normalizeObservedWithin(value) {
           const normalized = normalizeText(value).toLowerCase();
-          if (normalized === "3h" || normalized === "6h" || normalized === "1d" || normalized === "7d") {
+          if (
+            normalized === "3h"
+            || normalized === "6h"
+            || normalized === "1d"
+            || normalized === "7d"
+          ) {
             return normalized;
           }
           return "all";
@@ -459,6 +436,14 @@
 
         function formatPollutantKey(value) {
           return pollutantDomain.getByReadingScope(value)?.label || value || "readings";
+        }
+
+        function formatObservedWindow(value) {
+          if (value === "3h") return "3 hours";
+          if (value === "6h") return "6 hours";
+          if (value === "1d") return "1 day";
+          if (value === "7d") return "7 days";
+          return "any time";
         }
 
         function getActiveReadingPollutants() {
@@ -499,7 +484,10 @@
             return window.ukAqSharedAuth.fetchCacheApi(input, init, retryOnAuthFailure);
           }
 
-          if ((requestMethod === "GET" || requestMethod === "HEAD") && [502, 503, 504].includes(response.status)) {
+          if (
+            (requestMethod === "GET" || requestMethod === "HEAD")
+            && [502, 503, 504].includes(response.status)
+          ) {
             await waitMs(300);
             return window.ukAqSharedAuth.fetchCacheApi(input, init, retryOnAuthFailure);
           }
@@ -513,7 +501,7 @@
           }
           const url = new URL(READINGS_URL);
           url.searchParams.set("scope", "all");
-          url.searchParams.set("window", "all");
+          url.searchParams.set("window", currentObservedWithin);
           url.searchParams.set("limit", String(readingLimit));
           url.searchParams.set("caller", "sensor_map");
           if (pollutantKey) {
@@ -523,16 +511,13 @@
           return url.toString();
         }
 
-        function buildStationsEndpoint(baseEndpoint, connectorId = null) {
+        function buildStationsEndpoint(baseEndpoint) {
           if (!baseEndpoint) {
             return "";
           }
           const url = new URL(baseEndpoint);
           if (!url.searchParams.has("limit")) {
             url.searchParams.set("limit", "20000");
-          }
-          if (connectorId !== null && connectorId !== undefined) {
-            url.searchParams.set("connector_id", String(connectorId));
           }
           return url.toString();
         }
@@ -758,13 +743,22 @@
           sourceStation.latestReadings.forEach((reading, pollutant) => {
             const existing = targetStation.latestReadings.get(pollutant);
             const existingMs = existing?.observed_ms ?? null;
-            if (!existing || (reading.observed_ms !== null && (existingMs === null || reading.observed_ms > existingMs))) {
+            if (
+              !existing
+              || (
+                reading.observed_ms !== null
+                && (existingMs === null || reading.observed_ms > existingMs)
+              )
+            ) {
               targetStation.latestReadings.set(pollutant, reading);
             }
           });
           if (
             sourceStation.latestObservedMs !== null
-            && (targetStation.latestObservedMs === null || sourceStation.latestObservedMs > targetStation.latestObservedMs)
+            && (
+              targetStation.latestObservedMs === null
+              || sourceStation.latestObservedMs > targetStation.latestObservedMs
+            )
           ) {
             targetStation.latestObservedMs = sourceStation.latestObservedMs;
             targetStation.latestObservedAt = sourceStation.latestObservedAt;
@@ -805,11 +799,20 @@
 
             const existing = station.latestReadings.get(pollutant);
             const existingMs = existing?.observed_ms ?? null;
-            if (!existing || (observedMs !== null && (existingMs === null || observedMs > existingMs))) {
+            if (
+              !existing
+              || (
+                observedMs !== null
+                && (existingMs === null || observedMs > existingMs)
+              )
+            ) {
               station.latestReadings.set(pollutant, reading);
             }
 
-            if (observedMs !== null && (station.latestObservedMs === null || observedMs > station.latestObservedMs)) {
+            if (
+              observedMs !== null
+              && (station.latestObservedMs === null || observedMs > station.latestObservedMs)
+            ) {
               station.latestObservedMs = observedMs;
               station.latestObservedAt = observedAt;
             }
@@ -842,8 +845,7 @@
         }
 
         function mergeStations(geometryBundle, readingStations) {
-          const mergedStations = [...geometryBundle.stations];
-          const matchedReadingKeys = new Set();
+          const mergedStations = [];
 
           readingStations.forEach((readingStation) => {
             let target = null;
@@ -856,20 +858,15 @@
                 target = geometryBundle.byLabel.get(labelKey) || null;
               }
             }
-            if (!target) {
-              return;
-            }
-            matchedReadingKeys.add(readingStation.key);
-            mergeReadingIntoStation(target, readingStation);
-          });
 
-          readingStations.forEach((readingStation) => {
-            if (matchedReadingKeys.has(readingStation.key)) {
+            if (target) {
+              mergeReadingIntoStation(target, readingStation);
+              mergedStations.push(target);
               return;
             }
-            if (!hasCoordinates(readingStation)) {
-              return;
-            }
+
+            // Keep unmatched snapshot stations so renderStations can report any
+            // missing-coordinate cases without ever adding geometry-only sensors.
             mergedStations.push(readingStation);
           });
 
@@ -889,38 +886,17 @@
         }
 
         async function fetchGeometryRowsForEndpoint(baseEndpoint) {
-          const allRows = await fetchRowsFromEndpoint(
+          return fetchRowsFromEndpoint(
             buildStationsEndpoint(baseEndpoint),
             "Station geometry request failed",
           );
-          const shardPromises = [];
-          for (let connectorId = 1; connectorId <= connectorProbeMax; connectorId += 1) {
-            shardPromises.push(
-              fetchRowsFromEndpoint(
-                buildStationsEndpoint(baseEndpoint, connectorId),
-                `Station geometry request failed (connector ${connectorId})`,
-              ).catch((error) => {
-                console.warn("Station geometry connector shard failed", { connectorId, error });
-                return [];
-              }),
-            );
-          }
-          const shardResults = await Promise.all(shardPromises);
-          const byId = new Map();
-          [...allRows, ...shardResults.flat()].forEach((row) => {
-            const id = normalizeStationId(row?.id);
-            if (!id) {
-              return;
-            }
-            byId.set(id, row);
-          });
-          return Array.from(byId.values());
         }
 
         async function getStationGeometryRows() {
           if (stationGeometryRowsPromise) {
             return stationGeometryRowsPromise;
           }
+
           stationGeometryRowsPromise = (async () => {
             const candidates = [STATIONS_URL, STATIONS_MAP_FALLBACK_URL].filter(Boolean);
             let lastError = null;
@@ -940,19 +916,8 @@
             }
             return [];
           })();
-          return stationGeometryRowsPromise;
-        }
 
-        function applyUpdatedWithinFilter(stations) {
-          if (currentUpdatedWithin === "all") {
-            return stations;
-          }
-          const maxAgeMs = UPDATED_WITHIN_MS[currentUpdatedWithin];
-          if (!maxAgeMs) {
-            return stations;
-          }
-          const cutoffMs = Date.now() - maxAgeMs;
-          return stations.filter((station) => station.latestObservedMs !== null && station.latestObservedMs >= cutoffMs);
+          return stationGeometryRowsPromise;
         }
 
         function escapeHtml(value) {
@@ -969,12 +934,8 @@
           const aIndex = priority.indexOf(a);
           const bIndex = priority.indexOf(b);
           if (aIndex !== -1 || bIndex !== -1) {
-            if (aIndex === -1) {
-              return 1;
-            }
-            if (bIndex === -1) {
-              return -1;
-            }
+            if (aIndex === -1) return 1;
+            if (bIndex === -1) return -1;
             return aIndex - bIndex;
           }
           return a.localeCompare(b);
@@ -984,7 +945,7 @@
           const readings = Array.from(station.latestReadings.values())
             .sort((a, b) => pollutantSort(a.pollutant, b.pollutant));
 
-          let readingsHtml = "<div class=\"popup-empty\">No recent readings</div>";
+          let readingsHtml = "<div class=\"popup-empty\">No readings</div>";
           if (readings.length) {
             const body = readings.map((reading) => {
               const unitPart = reading.unit ? ` ${escapeHtml(reading.unit)}` : "";
@@ -1021,12 +982,12 @@
         function renderStations() {
           markerLayer.clearLayers();
 
-          const filtered = applyUpdatedWithinFilter(groupedStationsCache);
+          const stations = groupedStationsCache.filter((station) => station.latestReadings.size > 0);
           const bounds = [];
           let plotted = 0;
           let missingCoords = 0;
 
-          filtered.forEach((station) => {
+          stations.forEach((station) => {
             if (!hasCoordinates(station)) {
               missingCoords += 1;
               return;
@@ -1055,27 +1016,26 @@
             hasAutoFit = true;
           }
 
-          if (filtered.length === 0) {
-            if (currentUpdatedWithin === "all") {
-              setStatus("No sensors to display.");
+          if (stations.length === 0) {
+            if (currentObservedWithin === "all") {
+              setStatus("No sensors with readings to display.");
             } else {
-              setStatus(`No sensors in ${currentUpdatedWithin} window.`);
+              setStatus(`No sensors observed within the last ${formatObservedWindow(currentObservedWithin)}.`);
             }
             return;
           }
 
-          let message = `Loaded ${plotted} sensors`;
-          const withReadings = filtered.filter((station) => station.latestReadings.size > 0).length;
+          let message;
           if (currentReadingScope === "all") {
-            message += ` · ${withReadings} with readings (PM2.5/PM10/NO2)`;
+            message = `Loaded ${plotted} sensors with readings (PM2.5/PM10/NO2)`;
           } else {
-            message += ` · ${withReadings} with ${formatPollutantKey(currentReadingScope)}`;
+            message = `Loaded ${plotted} sensors with ${formatPollutantKey(currentReadingScope)} readings`;
           }
-          if (currentUpdatedWithin !== "all") {
-            message += ` (${currentUpdatedWithin})`;
+          if (currentObservedWithin !== "all") {
+            message += ` · observed within ${formatObservedWindow(currentObservedWithin)}`;
           }
           if (missingCoords > 0) {
-            message += ` · ${missingCoords} missing coordinates`;
+            message += ` · ${missingCoords} reading sensors missing coordinates`;
           }
           setStatus(message);
         }
@@ -1090,6 +1050,7 @@
               endpoint: buildLatestEndpoint(pollutantKey),
             }))
             .filter((entry) => Boolean(entry.endpoint));
+
           if (!readingEndpoints.length) {
             setError("Missing cache endpoint base URL. Add ?cache_base=... to the URL.");
             setStatus("Error", true);
@@ -1105,9 +1066,15 @@
           try {
             const geometryRowsPromise = getStationGeometryRows();
             const readingRowsPromises = readingEndpoints.map((entry) =>
-              fetchRowsFromEndpoint(entry.endpoint, `Readings request failed (${entry.pollutantKey})`)
+              fetchRowsFromEndpoint(
+                entry.endpoint,
+                `Readings request failed (${entry.pollutantKey})`,
+              )
             );
-            const [geometryRows, ...readingPayloads] = await Promise.all([geometryRowsPromise, ...readingRowsPromises]);
+            const [geometryRows, ...readingPayloads] = await Promise.all([
+              geometryRowsPromise,
+              ...readingRowsPromises,
+            ]);
             const readingsRows = readingPayloads.flat();
             const groupedReadings = groupStationRows(readingsRows);
 
@@ -1117,6 +1084,7 @@
             } else {
               groupedStationsCache = groupedReadings;
             }
+
             renderStations();
             if (lastUpdatedEl) {
               lastUpdatedEl.textContent = `Last updated: ${new Date().toLocaleString()}`;
@@ -1130,10 +1098,11 @@
 
         function updateControlUrlParams() {
           const nextParams = new URLSearchParams(window.location.search);
-          if (currentUpdatedWithin === "all") {
-            nextParams.delete("updated_within");
+          nextParams.delete("updated_within");
+          if (currentObservedWithin === "all") {
+            nextParams.delete("observed_within");
           } else {
-            nextParams.set("updated_within", currentUpdatedWithin);
+            nextParams.set("observed_within", currentObservedWithin);
           }
           if (currentReadingScope === "all") {
             nextParams.delete("reading_scope");
@@ -1152,11 +1121,11 @@
           });
         }
 
-        if (updatedWithinSelect) {
-          updatedWithinSelect.addEventListener("change", () => {
-            currentUpdatedWithin = normalizeUpdatedWithin(updatedWithinSelect.value);
+        if (observedWithinSelect) {
+          observedWithinSelect.addEventListener("change", () => {
+            currentObservedWithin = normalizeObservedWithin(observedWithinSelect.value);
             updateControlUrlParams();
-            renderStations();
+            loadData();
           });
         }
 
@@ -1172,5 +1141,5 @@
       })();
     </script>
     <script src="/beta-notice.js"></script>
-</body>
+  </body>
 </html>

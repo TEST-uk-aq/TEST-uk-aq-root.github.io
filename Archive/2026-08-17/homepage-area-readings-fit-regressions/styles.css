@@ -477,3 +477,84 @@ footer {
     display: none;
   }
 }
+
+/* Below 768px the area readings always use the shared stacked presentation:
+   area name above, then the hex/value/unit as one left-aligned line. */
+@media (max-width: 767px) {
+  body.home-page .dashboard-table--areas .area-reading {
+    display: grid !important;
+    grid-template-columns: minmax(0, 1fr) !important;
+    grid-template-rows: auto auto !important;
+    align-items: start !important;
+    column-gap: 0 !important;
+    row-gap: 0.25rem !important;
+  }
+
+  body.home-page .dashboard-table--areas .area-reading-name {
+    grid-column: 1 !important;
+    grid-row: 1 !important;
+    width: 100%;
+    min-width: 0;
+    overflow-wrap: break-word;
+    word-break: normal;
+  }
+
+  body.home-page .dashboard-table--areas .area-reading-metric {
+    grid-column: 1 !important;
+    grid-row: 2 !important;
+    display: inline-flex !important;
+    flex-flow: row nowrap !important;
+    align-items: center !important;
+    justify-self: start !important;
+    width: max-content;
+    max-width: 100%;
+    gap: 0.35rem;
+    white-space: nowrap;
+  }
+
+  body.home-page .dashboard-table--areas .area-marker {
+    width: 1.17rem !important;
+    height: 1.35rem !important;
+    min-width: 1.17rem;
+    min-height: 1.35rem;
+    flex: 0 0 1.17rem !important;
+  }
+
+  body.home-page .dashboard-table--areas .area-reading-value {
+    white-space: nowrap;
+  }
+}
+
+/* Let the browser calculate the narrow-table column widths from actual content.
+   Area type may wrap at spaces; each pollutant column is constrained by its
+   header and the unbroken hex/value/unit row rather than by an equal 25% share. */
+@media (max-width: 767px) {
+  body.home-page .dashboard-table--areas {
+    width: 100% !important;
+    min-width: 0 !important;
+    table-layout: auto !important;
+  }
+
+  body.home-page .dashboard-table--areas col {
+    width: auto !important;
+  }
+
+  body.home-page .dashboard-table--areas .dashboard-table-area-type-col,
+  body.home-page .dashboard-table--areas thead th:first-child,
+  body.home-page .dashboard-table--areas tbody th[scope="row"] {
+    width: 1% !important;
+    white-space: normal !important;
+    overflow-wrap: normal;
+    word-break: normal;
+  }
+
+  body.home-page .dashboard-table--areas thead th:nth-child(n + 2),
+  body.home-page .dashboard-table--areas tbody td:nth-child(n + 2) {
+    width: 1%;
+  }
+
+  body.home-page .dashboard-table--areas .area-reading-metric,
+  body.home-page .dashboard-table--areas .area-reading-value {
+    white-space: nowrap !important;
+  }
+}

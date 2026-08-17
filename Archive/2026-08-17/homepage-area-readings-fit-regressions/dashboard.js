@@ -361,52 +361,8 @@
     });
   }
 
-  function contentBoxWidth(element) {
-    if (!element || element.clientWidth <= 0) return 0;
-    const styles = window.getComputedStyle(element);
-    const paddingLeft = Number.parseFloat(styles.paddingLeft) || 0;
-    const paddingRight = Number.parseFloat(styles.paddingRight) || 0;
-    return Math.max(0, element.clientWidth - paddingLeft - paddingRight);
-  }
-
-  function renderedContentWidth(element) {
-    if (!element || !element.textContent.trim()) return 0;
-    const range = document.createRange();
-    range.selectNodeContents(element);
-    const width = range.getBoundingClientRect().width;
-    range.detach?.();
-    return width;
-  }
-
-  function longestUnbrokenWordWidth(element) {
-    if (!element || !element.textContent.trim()) return 0;
-    const walker = document.createTreeWalker(element, NodeFilter.SHOW_TEXT);
-    const range = document.createRange();
-    let longestWidth = 0;
-    let textNode = walker.nextNode();
-
-    while (textNode) {
-      const text = textNode.textContent || "";
-      const words = text.matchAll(/\S+/g);
-      for (const word of words) {
-        range.setStart(textNode, word.index);
-        range.setEnd(textNode, word.index + word[0].length);
-        longestWidth = Math.max(longestWidth, range.getBoundingClientRect().width);
-      }
-      textNode = walker.nextNode();
-    }
-
-    range.detach?.();
-    return longestWidth;
-  }
-
-  function longestWordFits(element, availableWidth = contentBoxWidth(element)) {
-    if (!element || availableWidth <= 0) return true;
-    return longestUnbrokenWordWidth(element) <= availableWidth + 1;
-  }
-
-  function pollutantCellContentWidth(element) {
-    return contentBoxWidth(element?.closest("td"));
+  function hasHorizontalOverflow(element) {
+    return Boolean(element && element.clientWidth > 0 && element.scrollWidth > element.clientWidth + 1);
   }
 
   function resetAreaReadingNameFit(nameEl) {
@@ -420,55 +376,34 @@
 
   function fitAreaReadingName(nameEl) {
     resetAreaReadingNameFit(nameEl);
-    if (!nameEl.textContent.trim() || nameEl.clientWidth <= 0 || longestWordFits(nameEl)) return;
+    if (!nameEl.textContent.trim() || nameEl.clientWidth <= 0 || !hasHorizontalOverflow(nameEl)) return;
 
     nameEl.classList.add("area-reading-name--fit-90");
-    if (longestWordFits(nameEl)) return;
+    if (!hasHorizontalOverflow(nameEl)) return;
 
     nameEl.classList.remove("area-reading-name--fit-90");
     nameEl.classList.add("area-reading-name--fit-85");
-    if (!longestWordFits(nameEl)) {
+    if (hasHorizontalOverflow(nameEl)) {
       nameEl.classList.add("area-reading-name--emergency-wrap");
     }
   }
 
-  function metricLineWidth(metricEl) {
-    if (!metricEl) return 0;
+  function metricLineFits(metricEl) {
+    if (!metricEl) return true;
     const markerEl = metricEl.querySelector(".area-marker");
     const valueEl = metricEl.querySelector(".area-reading-value");
-    if (!markerEl || !valueEl) return 0;
+    const availableWidth = metricEl.getBoundingClientRect().width;
+    if (!markerEl || !valueEl || availableWidth <= 0) return true;
 
     const styles = window.getComputedStyle(metricEl);
     const gap = Number.parseFloat(styles.columnGap || styles.gap) || 0;
-    return markerEl.getBoundingClientRect().width + gap + renderedContentWidth(valueEl);
-  }
-
-  function metricLineFits(metricEl, availableWidth = pollutantCellContentWidth(metricEl)) {
-    if (!metricEl) return true;
-    if (availableWidth <= 0) return true;
-    return metricLineWidth(metricEl) <= availableWidth + 1;
-  }
-
-  function readingContentFitsCell(reading) {
-    const cell = reading?.closest("td");
-    if (!cell || cell.clientWidth <= 0) return true;
-
-    const cellStyles = window.getComputedStyle(cell);
-    const cellRect = cell.getBoundingClientRect();
-    const contentLeft = cellRect.left
-      + (Number.parseFloat(cellStyles.borderLeftWidth) || 0)
-      + (Number.parseFloat(cellStyles.paddingLeft) || 0);
-    const contentRight = cellRect.right
-      - (Number.parseFloat(cellStyles.borderRightWidth) || 0)
-      - (Number.parseFloat(cellStyles.paddingRight) || 0);
-    const contentElements = reading.querySelectorAll(
-      ".area-reading-name, .area-reading-metric",
+    const markerWidth = markerEl.getBoundingClientRect().width;
+    const valueWidth = Math.max(
+      valueEl.getBoundingClientRect().width,
+      valueEl.scrollWidth,
     );
-
-    return Array.from(contentElements).every((element) => {
-      const rect = element.getBoundingClientRect();
-      return rect.left >= contentLeft - 1 && rect.right <= contentRight + 1;
-    });
+    const requiredWidth = markerWidth + gap + valueWidth;
+    return requiredWidth <= availableWidth + 1 && !hasHorizontalOverflow(metricEl);
   }
 
   function sideBySideAreaReadingsFit() {
@@ -478,19 +413,9 @@
     return Array.from(readings).every((reading) => {
       const nameEl = reading.querySelector(".area-reading-name");
       const metricEl = reading.querySelector(".area-reading-metric");
-      const availableWidth = pollutantCellContentWidth(reading);
-      if (!nameEl || !metricEl || availableWidth <= 0) return true;
-
-      const styles = window.getComputedStyle(reading);
-      const gap = Number.parseFloat(styles.columnGap || styles.gap) || 0;
-      const metricTrackWidth = Math.max(
-        metricEl.getBoundingClientRect().width,
-        metricLineWidth(metricEl),
-      );
-      const requiredWidth = longestUnbrokenWordWidth(nameEl) + gap + metricTrackWidth;
-      return requiredWidth <= availableWidth + 1
-        && metricLineFits(metricEl, availableWidth)
-        && readingContentFitsCell(reading);
+      return !hasHorizontalOverflow(reading)
+        && !hasHorizontalOverflow(nameEl)
+        && metricLineFits(metricEl);
     });
   }
 
@@ -507,13 +432,10 @@
     const readings = areaReadingsTable.querySelectorAll(
       "tbody tr[data-area-type] .area-reading",
     );
-    return Array.from(areaTypeCells).every((cell) => longestWordFits(cell))
-      && Array.from(names).every((name) => longestWordFits(
-        name,
-        pollutantCellContentWidth(name),
-      ))
-      && Array.from(metrics).every((metric) => metricLineFits(metric))
-      && Array.from(readings).every(readingContentFitsCell);
+    return !Array.from(areaTypeCells).some(hasHorizontalOverflow)
+      && !Array.from(names).some(hasHorizontalOverflow)
+      && Array.from(metrics).every(metricLineFits)
+      && !Array.from(readings).some(hasHorizontalOverflow);
   }
 
   function resolveAreaReadingLayout() {

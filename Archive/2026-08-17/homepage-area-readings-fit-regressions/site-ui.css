@@ -977,17 +977,7 @@ body.home-page .dashboard-table--areas.area-table--grouped col:not(.dashboard-ta
 
 body.home-page .dashboard-table--areas.area-table--grouped thead th:first-child,
 body.home-page .dashboard-table--areas.area-table--grouped tbody tr[data-area-type] > th:first-child {
-  display: table-cell !important;
-  width: 0 !important;
-  min-width: 0 !important;
-  max-width: 0 !important;
-  padding: 0 !important;
-  overflow: hidden;
-  border: 0 !important;
-  visibility: hidden;
-  font-size: 0;
-  line-height: 0;
-  white-space: nowrap;
+  display: none !important;
 }
 
 body.home-page .dashboard-table--areas.area-table--grouped thead th:nth-child(2) {

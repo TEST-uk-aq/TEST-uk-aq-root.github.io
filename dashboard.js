@@ -411,6 +411,7 @@
 
   function resetAreaReadingNameFit(nameEl) {
     if (!nameEl) return;
+    nameEl.textContent = preferredAreaNameDisplay(nameEl.textContent);
     nameEl.classList.remove(
       "area-reading-name--fit-90",
       "area-reading-name--fit-85",
@@ -432,6 +433,11 @@
 
     nameEl.classList.remove("area-reading-name--fit-85");
     nameEl.classList.add("area-reading-name--fit-80");
+    if (longestWordFits(nameEl)) return;
+
+    nameEl.textContent = nameEl.textContent.replace(/\band\u00a0(?=\S)/gi, (match) => (
+      `${match.slice(0, -1)} `
+    ));
     if (!longestWordFits(nameEl)) nameEl.classList.add("area-reading-name--emergency-wrap");
   }
 
@@ -840,7 +846,7 @@
   }
 
   function preferredAreaNameDisplay(name) {
-    return String(name || "").replace(/\band[ \t]+(?=\S)/gi, (match) => (
+    return String(name || "").replace(/\band[ \t\u00a0]+(?=\S)/gi, (match) => (
       `${match.trim()}\u00a0`
     ));
   }

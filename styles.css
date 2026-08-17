@@ -216,6 +216,12 @@ footer {
   width: 100%;
 }
 
+/* Let the WHO card padding provide the natural gap below the final bar instead
+   of shifting each pollutant list down with the legacy inline transform. */
+.home-page .who-pollutant-list {
+  transform: none;
+}
+
 /* Keep the three desktop WHO pollutant lists anchored to a common bottom edge
    even when their headings wrap to different heights. */
 @media (min-width: 981px) {

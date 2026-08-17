@@ -870,6 +870,11 @@ body.home-page .dashboard-table--areas {
   min-width: 0 !important;
   table-layout: fixed;
   --area-group-border: #a9adb1;
+  --area-metric-marker-width: 1.17rem;
+  --area-metric-marker-height: 1.35rem;
+  --area-metric-gap: 0.35rem;
+  --area-metric-value-track: 6.4rem;
+  --area-metric-font-size: 100%;
 }
 
 body.home-page .dashboard-table--areas .dashboard-table-area-type-col {
@@ -908,22 +913,26 @@ body.home-page .dashboard-table--areas .area-reading-name {
 body.home-page .dashboard-table--areas .area-reading-metric {
   grid-column: 2;
   display: grid;
-  grid-template-columns: 1.17rem 6.4rem;
+  grid-template-columns: var(--area-metric-marker-width) var(--area-metric-value-track);
   align-items: center;
   justify-self: end;
-  column-gap: 0.35rem;
+  column-gap: var(--area-metric-gap);
   min-width: 0;
   white-space: nowrap;
 }
 
 body.home-page .dashboard-table--areas .area-marker {
   grid-column: 1;
+  width: var(--area-metric-marker-width);
+  height: var(--area-metric-marker-height);
+  flex: 0 0 var(--area-metric-marker-width);
   justify-self: start;
 }
 
 body.home-page .dashboard-table--areas .area-reading-value {
   grid-column: 2;
   justify-self: start;
+  font-size: var(--area-metric-font-size);
   white-space: nowrap;
   font-variant-numeric: tabular-nums;
 }
@@ -949,7 +958,7 @@ body.home-page .dashboard-table--areas.area-table--stacked .area-reading-metric 
   max-width: 100%;
   align-items: center;
   justify-self: start;
-  gap: 0.35rem;
+  gap: var(--area-metric-gap);
   white-space: nowrap;
 }
 
@@ -957,6 +966,40 @@ body.home-page .dashboard-table--areas.area-table--stacked .area-marker,
 body.home-page .dashboard-table--areas.area-table--stacked .area-reading-value {
   grid-column: auto;
   justify-self: auto;
+}
+
+/* Grouped narrow-fit stages are applied only after normal grouped layout has
+   been measured. Spacing is reduced before the shared metric presentation. */
+body.home-page .dashboard-table--areas.area-table--grouped.area-table--compact {
+  --area-metric-gap: 0.22rem;
+}
+
+body.home-page .dashboard-table--areas.area-table--grouped.area-table--compact tbody tr[data-area-type] > td {
+  padding-inline: 0.38rem;
+}
+
+body.home-page .dashboard-table--areas.area-table--grouped.area-table--metric-90 {
+  --area-metric-marker-width: 1.053rem;
+  --area-metric-marker-height: 1.215rem;
+  --area-metric-gap: 0.198rem;
+  --area-metric-value-track: 5.76rem;
+  --area-metric-font-size: 90%;
+}
+
+body.home-page .dashboard-table--areas.area-table--grouped.area-table--metric-85 {
+  --area-metric-marker-width: 0.995rem;
+  --area-metric-marker-height: 1.148rem;
+  --area-metric-gap: 0.187rem;
+  --area-metric-value-track: 5.44rem;
+  --area-metric-font-size: 85%;
+}
+
+body.home-page .dashboard-table--areas.area-table--grouped.area-table--metric-80 {
+  --area-metric-marker-width: 0.936rem;
+  --area-metric-marker-height: 1.08rem;
+  --area-metric-gap: 0.176rem;
+  --area-metric-value-track: 5.12rem;
+  --area-metric-font-size: 80%;
 }
 
 /* Grouped five-row fallback. JavaScript enables this when any area-type word,
@@ -990,9 +1033,12 @@ body.home-page .dashboard-table--areas.area-table--grouped tbody tr[data-area-ty
   white-space: nowrap;
 }
 
+body.home-page .dashboard-table--areas.area-table--grouped thead th {
+  border-radius: 0;
+}
+
 body.home-page .dashboard-table--areas.area-table--grouped thead th:nth-child(2) {
   border-left: 0 !important;
-  border-top-left-radius: 15px;
 }
 
 body.home-page .dashboard-table--areas.area-table--grouped .area-reading-group-row {
@@ -1002,10 +1048,10 @@ body.home-page .dashboard-table--areas.area-table--grouped .area-reading-group-r
 body.home-page .dashboard-table--areas.area-table--grouped .area-reading-group-row > th {
   display: table-cell;
   padding: 0.55rem 0.65rem;
-  border-top: 2px solid var(--area-group-border);
-  border-right: 2px solid var(--area-group-border);
-  border-bottom: 1px solid var(--area-group-border);
-  border-left: 2px solid var(--area-group-border);
+  border-top: 0;
+  border-right: 0;
+  border-bottom: 1px solid #ded2c4;
+  border-left: 0;
   background: #fff;
   color: #172535;
   font-size: inherit;
@@ -1015,20 +1061,14 @@ body.home-page .dashboard-table--areas.area-table--grouped .area-reading-group-r
   white-space: normal;
 }
 
-body.home-page .dashboard-table--areas.area-table--grouped tbody tr[data-area-type] > td {
-  border-bottom: 2px solid var(--area-group-border) !important;
+/* The Local Authorities heading solely owns the separator between groups.
+   Data rows do not add outer side or bottom edges over the wrapper perimeter. */
+body.home-page .dashboard-table--areas.area-table--grouped tbody tr[data-area-type="pcon"] > td {
+  border-bottom: 0 !important;
 }
 
-body.home-page .dashboard-table--areas.area-table--grouped tbody tr[data-area-type] > td:nth-child(2) {
-  border-left: 2px solid var(--area-group-border) !important;
-}
-
-body.home-page .dashboard-table--areas.area-table--grouped tbody tr[data-area-type] > td:last-child {
-  border-right: 2px solid var(--area-group-border) !important;
-}
-
-body.home-page .dashboard-table--areas.area-table--grouped tbody tr[data-area-type] > td + td {
-  border-left: 1px solid rgba(30, 42, 51, 0.12);
+body.home-page .dashboard-table--areas.area-table--grouped .area-reading-group-row[data-area-group="la"] > th {
+  border-top: 1.5px solid var(--area-group-border);
 }
 
 /* Preserve normal wrapping. Only a residual single-word overflow is allowed to

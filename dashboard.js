@@ -449,6 +449,45 @@
     return metricLineWidth(metricEl) <= availableWidth + 1;
   }
 
+  const groupedMetricFitClasses = [
+    "area-table--compact",
+    "area-table--metric-90",
+    "area-table--metric-85",
+    "area-table--metric-80",
+  ];
+
+  const groupedMetricScaleClasses = groupedMetricFitClasses.slice(1);
+
+  function resetGroupedMetricFit() {
+    areaReadingsTable.classList.remove(...groupedMetricFitClasses);
+  }
+
+  function groupedMetricLinesFit() {
+    const metrics = areaReadingsTable.querySelectorAll(
+      "tbody tr[data-area-type] .area-reading-metric",
+    );
+    return metrics.length > 0 && Array.from(metrics).every((metric) => {
+      const availableWidth = pollutantCellContentWidth(metric);
+      return availableWidth > 0 && metricLineFits(metric, availableWidth);
+    });
+  }
+
+  function resolveGroupedMetricFit() {
+    resetGroupedMetricFit();
+    if (groupedMetricLinesFit()) return;
+
+    areaReadingsTable.classList.add("area-table--compact");
+    if (groupedMetricLinesFit()) return;
+
+    // Each scale replaces the previous one; 80% is reached only when the
+    // measured 90% and 85% presentations both remain too wide.
+    for (const fitClass of groupedMetricScaleClasses) {
+      areaReadingsTable.classList.remove(...groupedMetricScaleClasses);
+      areaReadingsTable.classList.add(fitClass);
+      if (groupedMetricLinesFit()) return;
+    }
+  }
+
   function readingContentFitsCell(reading) {
     const cell = reading?.closest("td");
     if (!cell || cell.clientWidth <= 0) return true;
@@ -531,6 +570,7 @@
 
     // Restore normal three-row geometry and normal name sizing before every
     // decision so widening can return the complete table to standard mode.
+    resetGroupedMetricFit();
     areaReadingsTable.classList.remove(
       "area-table--grouped",
       "area-table--stacked",
@@ -541,6 +581,7 @@
     if (!standardAreaTableFits()) {
       areaReadingsTable.classList.add("area-table--grouped");
       resolveAreaReadingLayout();
+      resolveGroupedMetricFit();
       names.forEach(fitAreaReadingName);
     }
   }

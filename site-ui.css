@@ -1141,6 +1141,10 @@ body.home-page .dashboard-table--areas .area-reading-name.area-reading-name--fit
   font-size: 85% !important;
 }
 
+body.home-page .dashboard-table--areas .area-reading-name.area-reading-name--fit-80 {
+  font-size: 80% !important;
+}
+
 body.home-page .dashboard-table--areas .area-reading-name.area-reading-name--emergency-wrap {
   overflow-wrap: anywhere !important;
 }

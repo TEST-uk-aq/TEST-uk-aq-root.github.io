@@ -414,6 +414,7 @@
     nameEl.classList.remove(
       "area-reading-name--fit-90",
       "area-reading-name--fit-85",
+      "area-reading-name--fit-80",
       "area-reading-name--emergency-wrap",
     );
   }
@@ -427,9 +428,11 @@
 
     nameEl.classList.remove("area-reading-name--fit-90");
     nameEl.classList.add("area-reading-name--fit-85");
-    if (!longestWordFits(nameEl)) {
-      nameEl.classList.add("area-reading-name--emergency-wrap");
-    }
+    if (longestWordFits(nameEl)) return;
+
+    nameEl.classList.remove("area-reading-name--fit-85");
+    nameEl.classList.add("area-reading-name--fit-80");
+    if (!longestWordFits(nameEl)) nameEl.classList.add("area-reading-name--emergency-wrap");
   }
 
   const groupedAreaNameHeightProperty = "--area-reading-name-row-height";

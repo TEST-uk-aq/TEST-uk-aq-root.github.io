@@ -440,7 +440,11 @@
 
     const styles = window.getComputedStyle(metricEl);
     const gap = Number.parseFloat(styles.columnGap || styles.gap) || 0;
-    return markerEl.getBoundingClientRect().width + gap + renderedContentWidth(valueEl);
+    const valueWidth = Math.max(
+      renderedContentWidth(valueEl),
+      valueEl.getBoundingClientRect().width,
+    );
+    return markerEl.getBoundingClientRect().width + gap + valueWidth;
   }
 
   function metricLineFits(metricEl, availableWidth = pollutantCellContentWidth(metricEl)) {
@@ -451,12 +455,17 @@
 
   const groupedMetricFitClasses = [
     "area-table--compact",
+    "area-table--metric-split",
     "area-table--metric-90",
     "area-table--metric-85",
     "area-table--metric-80",
   ];
 
-  const groupedMetricScaleClasses = groupedMetricFitClasses.slice(1);
+  const groupedMetricScaleClasses = [
+    "area-table--metric-90",
+    "area-table--metric-85",
+    "area-table--metric-80",
+  ];
 
   function resetGroupedMetricFit() {
     areaReadingsTable.classList.remove(...groupedMetricFitClasses);
@@ -472,6 +481,53 @@
     });
   }
 
+  function elementFitsPollutantCell(element, availableWidth) {
+    const cell = element?.closest("td");
+    if (!cell || availableWidth <= 0) return false;
+
+    const cellRect = cell.getBoundingClientRect();
+    const styles = window.getComputedStyle(cell);
+    const contentLeft = cellRect.left
+      + (Number.parseFloat(styles.borderLeftWidth) || 0)
+      + (Number.parseFloat(styles.paddingLeft) || 0);
+    const contentRight = contentLeft + availableWidth;
+    const rect = element.getBoundingClientRect();
+
+    return rect.left >= contentLeft - 1 && rect.right <= contentRight + 1;
+  }
+
+  function splitMetricFits(metric) {
+    const markerEl = metric?.querySelector(".area-marker");
+    const numberEl = metric?.querySelector(".area-reading-number");
+    const unitEl = metric?.querySelector(".area-reading-unit");
+    if (!markerEl || !numberEl || !unitEl) return false;
+
+    const availableWidth = pollutantCellContentWidth(metric);
+    if (availableWidth <= 0) return false;
+
+    const styles = window.getComputedStyle(metric);
+    const gap = Number.parseFloat(styles.columnGap || styles.gap) || 0;
+    const markerWidth = markerEl.getBoundingClientRect().width;
+    const numberWidth = renderedContentWidth(numberEl);
+    const unitWidth = unitEl.hidden ? 0 : renderedContentWidth(unitEl);
+    const valueTrackWidth = availableWidth - markerWidth - gap;
+    const renderedElements = [metric, markerEl, numberEl];
+    if (!unitEl.hidden) renderedElements.push(unitEl);
+
+    return markerWidth + gap + numberWidth <= availableWidth + 1
+      && unitWidth <= valueTrackWidth + 1
+      && renderedElements.every((element) => (
+        elementFitsPollutantCell(element, availableWidth)
+      ));
+  }
+
+  function groupedSplitMetricsFit() {
+    const metrics = areaReadingsTable.querySelectorAll(
+      "tbody tr[data-area-type] .area-reading-metric",
+    );
+    return metrics.length > 0 && Array.from(metrics).every(splitMetricFits);
+  }
+
   function resolveGroupedMetricFit() {
     resetGroupedMetricFit();
     if (groupedMetricLinesFit()) return;
@@ -479,12 +535,16 @@
     areaReadingsTable.classList.add("area-table--compact");
     if (groupedMetricLinesFit()) return;
 
-    // Each scale replaces the previous one; 80% is reached only when the
-    // measured 90% and 85% presentations both remain too wide.
+    areaReadingsTable.classList.add("area-table--metric-split");
+    if (groupedSplitMetricsFit()) return;
+
+    // Keep the split presentation while scaling. Each scale replaces the
+    // previous one; 80% is reached only when the measured 90% and 85%
+    // presentations both remain too wide.
     for (const fitClass of groupedMetricScaleClasses) {
       areaReadingsTable.classList.remove(...groupedMetricScaleClasses);
       areaReadingsTable.classList.add(fitClass);
-      if (groupedMetricLinesFit()) return;
+      if (groupedSplitMetricsFit()) return;
     }
   }
 
@@ -762,9 +822,14 @@
         const name = cell.querySelector(".area-reading-name");
         const marker = cell.querySelector(".area-marker");
         const value = cell.querySelector(".area-reading-value");
+        const number = value?.querySelector(".area-reading-number");
+        const unit = value?.querySelector(".area-reading-unit");
         const formattedValue = highest ? formatValue(highest.value) : null;
         name.textContent = highest?.name || "No data";
-        value.innerHTML = highest ? `${formattedValue} &micro;g/m<sup>3</sup>` : "—";
+        if (number && unit) {
+          number.textContent = highest ? formattedValue : "—";
+          unit.hidden = !highest;
+        }
         marker.style.background = severityColour(highest?.value ?? null, pollutant.key);
         reading?.setAttribute("aria-label", highest
           ? `${pollutant.label} highest ${rowEl.cells[0].textContent} reading: ${highest.name}, ${formattedValue} micrograms per cubic metre.`

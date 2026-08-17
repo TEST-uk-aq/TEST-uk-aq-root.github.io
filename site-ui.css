@@ -931,10 +931,18 @@ body.home-page .dashboard-table--areas .area-marker {
 
 body.home-page .dashboard-table--areas .area-reading-value {
   grid-column: 2;
+  display: inline-flex;
+  align-items: baseline;
   justify-self: start;
+  gap: 0.25em;
   font-size: var(--area-metric-font-size);
   white-space: nowrap;
   font-variant-numeric: tabular-nums;
+}
+
+body.home-page .dashboard-table--areas .area-reading-number,
+body.home-page .dashboard-table--areas .area-reading-unit {
+  white-space: nowrap;
 }
 
 /* The controller enables stacked mode only after rendered side-by-side content
@@ -976,6 +984,45 @@ body.home-page .dashboard-table--areas.area-table--grouped.area-table--compact {
 
 body.home-page .dashboard-table--areas.area-table--grouped.area-table--compact tbody tr[data-area-type] > td {
   padding-inline: 0.38rem;
+}
+
+body.home-page .dashboard-table--areas.area-table--grouped.area-table--metric-split .area-reading-metric {
+  display: grid;
+  grid-template-columns: var(--area-metric-marker-width) max-content;
+  grid-template-rows: auto;
+  align-items: start;
+  justify-self: start;
+  column-gap: var(--area-metric-gap);
+  row-gap: 0;
+  width: max-content;
+  max-width: 100%;
+}
+
+body.home-page .dashboard-table--areas.area-table--grouped.area-table--metric-split .area-marker {
+  grid-column: 1;
+  grid-row: 1;
+  align-self: start;
+}
+
+body.home-page .dashboard-table--areas.area-table--grouped.area-table--metric-split .area-reading-value {
+  grid-column: 2;
+  grid-row: 1;
+  display: grid;
+  grid-template-columns: max-content;
+  grid-template-rows: auto auto;
+  align-items: start;
+  justify-self: start;
+  gap: 0;
+}
+
+body.home-page .dashboard-table--areas.area-table--grouped.area-table--metric-split .area-reading-number {
+  grid-row: 1;
+}
+
+body.home-page .dashboard-table--areas.area-table--grouped.area-table--metric-split .area-reading-unit {
+  grid-row: 2;
+  font-size: 78%;
+  line-height: 1.05;
 }
 
 body.home-page .dashboard-table--areas.area-table--grouped.area-table--metric-90 {

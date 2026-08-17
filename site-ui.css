@@ -108,6 +108,10 @@
 
 .home-page .pollutant-meta-cycle .pollutant-station {
   display: flex;
+  white-space: normal;
+  overflow-wrap: normal;
+  word-break: normal;
+  text-align: center;
 }
 
 .home-page .pollutant-meta-cycle .pollutant-network {

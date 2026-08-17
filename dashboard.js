@@ -387,7 +387,7 @@
 
     while (textNode) {
       const text = textNode.textContent || "";
-      const words = text.matchAll(/\S+/g);
+      const words = text.matchAll(/\S+(?:\u00a0\S+)*/g);
       for (const word of words) {
         range.setStart(textNode, word.index);
         range.setEnd(textNode, word.index + word[0].length);
@@ -430,6 +430,30 @@
     if (!longestWordFits(nameEl)) {
       nameEl.classList.add("area-reading-name--emergency-wrap");
     }
+  }
+
+  const groupedAreaNameHeightProperty = "--area-reading-name-row-height";
+
+  function resetGroupedAreaNameHeights() {
+    areaReadingsTable.querySelectorAll("tbody tr[data-area-type]").forEach((row) => {
+      row.style.removeProperty(groupedAreaNameHeightProperty);
+    });
+  }
+
+  function syncGroupedAreaNameHeights() {
+    if (!areaReadingsTable.classList.contains("area-table--grouped")) return;
+
+    areaReadingsTable.querySelectorAll("tbody tr[data-area-type]").forEach((row) => {
+      if (row.getClientRects().length === 0) return;
+      const names = Array.from(row.querySelectorAll(".area-reading-name"));
+      const maxHeight = Math.max(
+        0,
+        ...names.map((name) => name.getBoundingClientRect().height),
+      );
+      if (maxHeight > 0) {
+        row.style.setProperty(groupedAreaNameHeightProperty, `${maxHeight}px`);
+      }
+    });
   }
 
   function metricLineWidth(metricEl) {
@@ -630,6 +654,7 @@
 
     // Restore normal three-row geometry and normal name sizing before every
     // decision so widening can return the complete table to standard mode.
+    resetGroupedAreaNameHeights();
     resetGroupedMetricFit();
     areaReadingsTable.classList.remove(
       "area-table--grouped",
@@ -643,6 +668,7 @@
       resolveAreaReadingLayout();
       resolveGroupedMetricFit();
       names.forEach(fitAreaReadingName);
+      syncGroupedAreaNameHeights();
     }
   }
 
@@ -810,6 +836,12 @@
     }));
   }
 
+  function preferredAreaNameDisplay(name) {
+    return String(name || "").replace(/\band[ \t]+(?=\S)/gi, (match) => (
+      `${match.trim()}\u00a0`
+    ));
+  }
+
   function renderAreas() {
     ["pcon", "la"].forEach((type) => {
       const rowEl = document.querySelector(`[data-area-type="${type}"]`);
@@ -825,7 +857,7 @@
         const number = value?.querySelector(".area-reading-number");
         const unit = value?.querySelector(".area-reading-unit");
         const formattedValue = highest ? formatValue(highest.value) : null;
-        name.textContent = highest?.name || "No data";
+        name.textContent = highest ? preferredAreaNameDisplay(highest.name) : "No data";
         if (number && unit) {
           number.textContent = highest ? formattedValue : "—";
           unit.hidden = !highest;

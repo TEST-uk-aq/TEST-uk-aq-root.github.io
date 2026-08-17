@@ -976,6 +976,19 @@ body.home-page .dashboard-table--areas.area-table--stacked .area-reading-value {
   justify-self: auto;
 }
 
+body.home-page .dashboard-table--areas.area-table--grouped tbody tr[data-area-type] .area-reading {
+  align-items: start;
+}
+
+body.home-page .dashboard-table--areas.area-table--grouped tbody tr[data-area-type] .area-reading-name {
+  align-self: start;
+  min-height: var(--area-reading-name-row-height, 0);
+}
+
+body.home-page .dashboard-table--areas.area-table--grouped tbody tr[data-area-type] .area-reading-metric {
+  align-self: end;
+}
+
 /* Grouped narrow-fit stages are applied only after normal grouped layout has
    been measured. Spacing is reduced before the shared metric presentation. */
 body.home-page .dashboard-table--areas.area-table--grouped.area-table--compact {

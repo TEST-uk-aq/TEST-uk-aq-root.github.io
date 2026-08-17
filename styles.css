@@ -216,6 +216,14 @@ footer {
   width: 100%;
 }
 
+/* Keep the three desktop WHO pollutant lists anchored to a common bottom edge
+   even when their headings wrap to different heights. */
+@media (min-width: 981px) {
+  .home-page .who-pollutant-list {
+    align-self: end;
+  }
+}
+
 /* WHO summary percentage emphasis. Yellow is the low-range default; orange and
    red override it at the existing thresholds. */
 .home-page .who-pollutant-percent {

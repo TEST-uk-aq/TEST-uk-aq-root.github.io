@@ -137,12 +137,6 @@ footer {
   }
 }
 
-@media (min-width: 981px) {
-  .home-page #who-card-last-year > .who-pollutant-list {
-    margin-top: 1.4rem;
-  }
-}
-
 .home-page .dashboard-table--areas {
   table-layout: fixed;
 }

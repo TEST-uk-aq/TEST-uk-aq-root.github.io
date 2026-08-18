@@ -3628,6 +3628,8 @@ function initHexMapCrController() {
           const hexPromise = fetch(hexUrl);
           let laPromise = Promise.resolve(null);
           let laCacheKey = null;
+          let hasMatchingLaState = false;
+          let laRequestSince = null;
           let latestPromise = Promise.resolve(null);
           let populationPromise = Promise.resolve(null);
           if (canLoadData) {
@@ -3639,15 +3641,20 @@ function initHexMapCrController() {
               laUrl.searchParams.set("region", requestRegion);
             }
             laCacheKey = laUrl.toString();
-            const laSince = normalizeIsoTimestamp(laSinceByKey.get(laCacheKey));
-            if (laSince) {
-              laUrl.searchParams.set("since", laSince);
+            hasMatchingLaState = loadedLaCacheKey === laCacheKey;
+            laRequestSince = hasMatchingLaState
+              ? normalizeIsoTimestamp(laSinceByKey.get(laCacheKey))
+              : null;
+            if (laRequestSince) {
+              laUrl.searchParams.set("since", laRequestSince);
             }
-            const laEtag = laEtagByKey.get(laCacheKey) || null;
-	            const laHeaders = {};
-	            if (laEtag) {
-	              laHeaders["If-None-Match"] = laEtag;
-	            }
+            const laEtag = hasMatchingLaState
+              ? laEtagByKey.get(laCacheKey) || null
+              : null;
+            const laHeaders = {};
+            if (laEtag) {
+              laHeaders["If-None-Match"] = laEtag;
+            }
             const latestUrl = new URL(resolveLatestUrl(currentWindow));
             const latestCacheKey = getLatestCacheKey(requestPollutant, requestWindow, requestRegion);
             const latestCursorEnabled = !latestUrl.pathname.endsWith("/latest-snapshot");
@@ -3747,7 +3754,14 @@ function initHexMapCrController() {
           }
           pconCodes = new Set(hexCells.map((cell) => resolveCellAreaCode(cell)).filter(Boolean));
           const laNotModified = Boolean(canLoadData && laResponse && laResponse.status === 304);
-          let laOk = Boolean(canLoadData && laResponse && (laResponse.ok || laNotModified));
+          const laNotModifiedUsable = Boolean(
+            laNotModified
+            && hasMatchingLaState
+            && laCacheKey
+            && loadedLaCacheKey === laCacheKey,
+          );
+          let laOk = Boolean(canLoadData && laResponse && (laResponse.ok || laNotModifiedUsable));
+          let canRetainLaData = false;
           if (laOk) {
             try {
               if (laCacheKey && laResponse) {
@@ -3764,7 +3778,6 @@ function initHexMapCrController() {
                 if (isStale()) {
                   return;
                 }
-                const laSince = laCacheKey ? normalizeIsoTimestamp(laSinceByKey.get(laCacheKey)) : null;
                 const rawRows = payload?.data || [];
                 const incomingRows = rawRows.map((row) => ({
                   ...row,
@@ -3775,13 +3788,16 @@ function initHexMapCrController() {
                   const code = resolveAreaCode(row);
                   return !pconCodes.size || (code && pconCodes.has(code));
                 });
-                basePconRows = laSince
+                if (laRequestSince && loadedLaCacheKey !== laCacheKey) {
+                  throw new Error("la_incremental_base_state_mismatch");
+                }
+                basePconRows = laRequestSince
                   ? mergePconRows(basePconRows, incomingRows)
                   : incomingRows;
                 basePconLookup = new Map(basePconRows.map((row) => [resolveAreaCode(row), row]));
                 pconRows = basePconRows;
                 pconLookup = new Map(pconRows.map((row) => [resolveAreaCode(row), row]));
-                const nextSince = normalizeIsoTimestamp(payload?.next_since) || laSince;
+                const nextSince = normalizeIsoTimestamp(payload?.next_since) || laRequestSince;
                 if (laCacheKey) {
                   if (nextSince) {
                     laSinceByKey.set(laCacheKey, nextSince);
@@ -3804,22 +3820,13 @@ function initHexMapCrController() {
             }
           }
           if (!laOk) {
-            const canRetainLaData = Boolean(laCacheKey && loadedLaCacheKey === laCacheKey);
-            if (canLoadData && errorEl) {
-              errorEl.textContent = canRetainLaData
-                ? "Local authority data unavailable. Showing last available map data."
-                : "Local authority data unavailable. Showing boundaries only.";
-              errorEl.hidden = false;
-            }
+            canRetainLaData = Boolean(laCacheKey && loadedLaCacheKey === laCacheKey);
             if (!canRetainLaData) {
               basePconRows = [];
               basePconLookup = new Map();
               loadedLaCacheKey = null;
               pconRows = [];
               pconLookup = new Map();
-              if (lastUpdated) {
-                lastUpdated.textContent = "Boundary only (no sensor data yet)";
-              }
             }
           }
 
@@ -4000,6 +4007,32 @@ function initHexMapCrController() {
           }
           if (isStale()) {
             return;
+          }
+          if (!laOk) {
+            const hasUsableLatestData = Boolean(
+              (
+                loadedLatestCacheKey === latestCacheKey
+                && latestPollutant === requestPollutant
+                && baseLatestRows.length
+              )
+              || (
+                loadedLatestAllCacheKey === latestAllCacheKey
+                && baseLatestRowsAllWindow.length
+              ),
+            );
+            if (canLoadData && errorEl) {
+              errorEl.textContent = canRetainLaData
+                ? "Local authority data unavailable. Showing last available map data."
+                : hasUsableLatestData
+                  ? "Local authority aggregate data unavailable. Showing available sensor data."
+                  : "Local authority data unavailable. Showing boundaries only.";
+              errorEl.hidden = false;
+            }
+            if (!canRetainLaData && lastUpdated) {
+              lastUpdated.textContent = hasUsableLatestData
+                ? "Showing available sensor data"
+                : "Boundary only (no sensor data yet)";
+            }
           }
           const networkRowsForWindow = getNetworkRowsForWindow();
           const windowNetworkDefs = buildNetworkDefs(networkRowsForWindow);

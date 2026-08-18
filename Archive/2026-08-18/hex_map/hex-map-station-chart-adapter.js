@@ -529,11 +529,7 @@
       const normalizedContext = { ...context, entries: visibleEntries };
       const status = state.pollutantAdapter?.resolveStatus(normalizedContext, options.dataStatus);
       const pollutant = domain.normalizePollutant(normalizedContext.pollutant);
-      if (
-        status !== "ready"
-        || pollutant !== state.pollutantContextController?.renderedPollutant
-        || state.pollutantContextController?.targetStatus !== "ready"
-      ) {
+      if (status !== "ready" || pollutant !== state.pollutantContextController?.renderedPollutant) {
         return state.pollutantAdapter?.sync(normalizedContext, options.dataStatus) === true;
       }
       state.visibleEntries = visibleEntries;

@@ -544,7 +544,6 @@ function initHexMapCrController() {
       let lastRenderHeight = 0;
       let basePconRows = [];
       let basePconLookup = new Map();
-      let loadedLaCacheKey = null;
       let pconRows = [];
       let pconLookup = new Map();
       let pconCodes = new Set();
@@ -555,8 +554,6 @@ function initHexMapCrController() {
       let scopedLatestRowsAllWindow = [];
       let latestRows = [];
       let latestPollutant = null;
-      let loadedLatestCacheKey = null;
-      let loadedLatestAllCacheKey = null;
       let chartDataStatus = "loading";
       let allRegionsMetricLookup = new Map();
       let allRegionsFetchState = "idle"; // "idle" | "fetching" | "done"
@@ -1136,11 +1133,8 @@ function initHexMapCrController() {
           return false;
         }
         baseLatestRows = cached.latestRows;
-        loadedLatestCacheKey = key;
-        const latestAllCacheKey = getLatestCacheKey(activePollutant, "all", activeRegion);
-        const cachedAllRows = getPollutantCache(latestAllCacheKey);
+        const cachedAllRows = getPollutantCache(getLatestCacheKey(activePollutant, "all", activeRegion));
         baseLatestRowsAllWindow = cachedAllRows?.latestRows || cached.latestRows || [];
-        loadedLatestAllCacheKey = cachedAllRows ? latestAllCacheKey : null;
         latestPollutant = cached.latestPollutant || activePollutant;
         chartDataStatus = latestPollutant === activePollutant ? "ready" : "loading";
         const networkRowsForWindow = getNetworkRowsForWindow();
@@ -3608,6 +3602,7 @@ function initHexMapCrController() {
           errorEl.textContent = "";
           errorEl.hidden = true;
         }
+        latestPollutant = null;
         populationLookup = new Map();
 	        const hasCredentials = Boolean(REST_URL) && Boolean(cacheSessionUrl);
 	        const canLoadData = hasCredentials;
@@ -3747,114 +3742,78 @@ function initHexMapCrController() {
           }
           pconCodes = new Set(hexCells.map((cell) => resolveCellAreaCode(cell)).filter(Boolean));
           const laNotModified = Boolean(canLoadData && laResponse && laResponse.status === 304);
-          let laOk = Boolean(canLoadData && laResponse && (laResponse.ok || laNotModified));
+          const laOk = Boolean(canLoadData && laResponse && (laResponse.ok || laNotModified));
           if (laOk) {
-            try {
-              if (laCacheKey && laResponse) {
-                const responseEtag = laResponse.headers.get("ETag");
-                if (responseEtag) {
-                  laEtagByKey.set(laCacheKey, responseEtag);
+            if (laCacheKey && laResponse) {
+              const responseEtag = laResponse.headers.get("ETag");
+              if (responseEtag) {
+                laEtagByKey.set(laCacheKey, responseEtag);
+              }
+            }
+            if (laResponse && laResponse.status === 304) {
+              pconRows = basePconRows;
+              pconLookup = new Map(pconRows.map((row) => [resolveAreaCode(row), row]));
+            } else {
+              const payload = await laResponse.json();
+              const laSince = laCacheKey ? normalizeIsoTimestamp(laSinceByKey.get(laCacheKey)) : null;
+              const rawRows = payload?.data || [];
+              const incomingRows = rawRows.map((row) => ({
+                ...row,
+                area_code: row?.area_code || row?.la_code || null,
+                area_name: row?.area_name || row?.la_name || row?.pcon_name || null,
+                region_name: row?.region_name || row?.region_nation || row?.region || null,
+              })).filter((row) => {
+                const code = resolveAreaCode(row);
+                return !pconCodes.size || (code && pconCodes.has(code));
+              });
+              basePconRows = laSince
+                ? mergePconRows(basePconRows, incomingRows)
+                : incomingRows;
+              basePconLookup = new Map(basePconRows.map((row) => [resolveAreaCode(row), row]));
+              pconRows = basePconRows;
+              pconLookup = new Map(pconRows.map((row) => [resolveAreaCode(row), row]));
+              const nextSince = normalizeIsoTimestamp(payload?.next_since) || laSince;
+              if (laCacheKey) {
+                if (nextSince) {
+                  laSinceByKey.set(laCacheKey, nextSince);
+                } else {
+                  laSinceByKey.delete(laCacheKey);
                 }
               }
-              if (laResponse && laResponse.status === 304) {
-                pconRows = basePconRows;
-                pconLookup = new Map(pconRows.map((row) => [resolveAreaCode(row), row]));
-              } else {
-                const payload = await laResponse.json();
-                if (isStale()) {
-                  return;
-                }
-                const laSince = laCacheKey ? normalizeIsoTimestamp(laSinceByKey.get(laCacheKey)) : null;
-                const rawRows = payload?.data || [];
-                const incomingRows = rawRows.map((row) => ({
-                  ...row,
-                  area_code: row?.area_code || row?.la_code || null,
-                  area_name: row?.area_name || row?.la_name || row?.pcon_name || null,
-                  region_name: row?.region_name || row?.region_nation || row?.region || null,
-                })).filter((row) => {
-                  const code = resolveAreaCode(row);
-                  return !pconCodes.size || (code && pconCodes.has(code));
-                });
-                basePconRows = laSince
-                  ? mergePconRows(basePconRows, incomingRows)
-                  : incomingRows;
-                basePconLookup = new Map(basePconRows.map((row) => [resolveAreaCode(row), row]));
-                pconRows = basePconRows;
-                pconLookup = new Map(pconRows.map((row) => [resolveAreaCode(row), row]));
-                const nextSince = normalizeIsoTimestamp(payload?.next_since) || laSince;
-                if (laCacheKey) {
-                  if (nextSince) {
-                    laSinceByKey.set(laCacheKey, nextSince);
-                  } else {
-                    laSinceByKey.delete(laCacheKey);
-                  }
-                }
-                if (lastUpdated) {
-                  if (payload?.last_updated) {
-                    lastUpdated.textContent = `Latest data ${formatTimestamp(payload.last_updated)}`;
-                  } else {
-                    lastUpdated.textContent = "Latest data unavailable";
-                  }
-                }
-              }
-              loadedLaCacheKey = laCacheKey;
-            } catch (error) {
-              laOk = false;
-              console.error("uk_aq CR local authority response error", error);
-            }
-          }
-          if (!laOk) {
-            const canRetainLaData = Boolean(laCacheKey && loadedLaCacheKey === laCacheKey);
-            if (canLoadData && errorEl) {
-              errorEl.textContent = canRetainLaData
-                ? "Local authority data unavailable. Showing last available map data."
-                : "Local authority data unavailable. Showing boundaries only.";
-              errorEl.hidden = false;
-            }
-            if (!canRetainLaData) {
-              basePconRows = [];
-              basePconLookup = new Map();
-              loadedLaCacheKey = null;
-              pconRows = [];
-              pconLookup = new Map();
               if (lastUpdated) {
-                lastUpdated.textContent = "Boundary only (no sensor data yet)";
+                if (payload?.last_updated) {
+                  lastUpdated.textContent = `Latest data ${formatTimestamp(payload.last_updated)}`;
+                } else {
+                  lastUpdated.textContent = "Latest data unavailable";
+                }
               }
             }
-          }
-
-          const latestCacheKey = getLatestCacheKey(requestPollutant, requestWindow, requestRegion);
-          const latestRequestUrl = resolveLatestUrl(requestWindow);
-          const latestCursorEnabled = Boolean(canLoadData && latestRequestUrl)
-            && !new URL(latestRequestUrl).pathname.endsWith("/latest-snapshot");
-          const latestSince = latestCursorEnabled
-            ? (latestSinceByKey.get(latestCacheKey) || null)
-            : null;
-          const latestSinceId = latestCursorEnabled
-            ? normalizeCursorId(latestSinceIdByKey.get(latestCacheKey))
-            : null;
-          const latestAllCacheKey = getLatestCacheKey(requestPollutant, "all", requestRegion);
-          if (latestResponse) {
-            const responseEtag = latestResponse.headers.get("ETag");
-            if (responseEtag) {
-              latestEtagByKey.set(latestCacheKey, responseEtag);
+            const latestCacheKey = getLatestCacheKey(requestPollutant, requestWindow, requestRegion);
+            const latestCursorEnabled = !new URL(resolveLatestUrl(currentWindow)).pathname.endsWith("/latest-snapshot");
+            const latestSince = latestCursorEnabled
+              ? (latestSinceByKey.get(latestCacheKey) || null)
+              : null;
+            const latestSinceId = latestCursorEnabled
+              ? normalizeCursorId(latestSinceIdByKey.get(latestCacheKey))
+              : null;
+            if (latestResponse) {
+              const responseEtag = latestResponse.headers.get("ETag");
+              if (responseEtag) {
+                latestEtagByKey.set(latestCacheKey, responseEtag);
+              }
             }
-          }
-          if (latestAllResponse) {
-            const responseEtag = latestAllResponse.headers.get("ETag");
-            if (responseEtag) {
-              latestEtagByKey.set(latestAllCacheKey, responseEtag);
+            const latestAllCacheKey = getLatestCacheKey(requestPollutant, "all", requestRegion);
+            if (latestAllResponse) {
+              const responseEtag = latestAllResponse.headers.get("ETag");
+              if (responseEtag) {
+                latestEtagByKey.set(latestAllCacheKey, responseEtag);
+              }
             }
-          }
-
-          let latestOk = false;
-          try {
             if (latestResponse && latestResponse.status === 304) {
               const cachedLatest = pollutantCache.get(latestCacheKey);
               if (cachedLatest) {
                 baseLatestRows = cachedLatest.latestRows || [];
                 latestPollutant = cachedLatest.latestPollutant || requestPollutant;
-                loadedLatestCacheKey = latestCacheKey;
                 const cachedSince = normalizeIsoTimestamp(cachedLatest.nextSince) || latestSince;
                 const cachedSinceId = normalizeCursorId(cachedLatest.nextSinceId)
                   ?? latestSinceId
@@ -3862,22 +3821,13 @@ function initHexMapCrController() {
                 if (cachedSince) {
                   latestSinceByKey.set(latestCacheKey, cachedSince);
                   latestSinceIdByKey.set(latestCacheKey, cachedSinceId);
-                } else {
-                  latestSinceByKey.delete(latestCacheKey);
-                  latestSinceIdByKey.delete(latestCacheKey);
                 }
-                latestOk = true;
-              } else if (
-                loadedLatestCacheKey === latestCacheKey
-                && latestPollutant === requestPollutant
-              ) {
-                latestOk = true;
+              } else {
+                baseLatestRows = [];
+                latestPollutant = requestPollutant;
               }
             } else if (latestResponse && latestResponse.ok) {
               const latestPayload = await latestResponse.json();
-              if (isStale()) {
-                return;
-              }
               const latestRaw = latestPayload?.data || [];
               const cleanedLatest = latestRaw.filter((row) => Number.isFinite(resolveLatestValue(row)));
               const scopedLatest = cleanedLatest.filter((row) => {
@@ -3894,9 +3844,7 @@ function initHexMapCrController() {
                   ?? 0)
                 : 0;
               const existingLatest = (latestCursorEnabled && latestSince)
-                ? (pollutantCache.get(latestCacheKey)?.latestRows || (
-                  loadedLatestCacheKey === latestCacheKey ? baseLatestRows : []
-                ))
+                ? (pollutantCache.get(latestCacheKey)?.latestRows || baseLatestRows)
                 : [];
               const mergedLatest = (latestCursorEnabled && latestSince)
                 ? mergeLatestRows(existingLatest, scopedLatest)
@@ -3904,7 +3852,6 @@ function initHexMapCrController() {
               if (!isStale()) {
                 baseLatestRows = mergedLatest;
                 latestPollutant = responsePollutant;
-                loadedLatestCacheKey = latestCacheKey;
                 pollutantCache.set(latestCacheKey, {
                   timestamp: Date.now(),
                   latestRows: mergedLatest,
@@ -3919,125 +3866,100 @@ function initHexMapCrController() {
                   latestSinceByKey.delete(latestCacheKey);
                   latestSinceIdByKey.delete(latestCacheKey);
                 }
-                latestOk = true;
               }
+            } else if (!isStale()) {
+              baseLatestRows = [];
+              latestPollutant = null;
             }
-          } catch (error) {
-            console.error("uk_aq CR latest snapshot response error", error);
-          }
-          if (!latestOk) {
-            const canRetainLatestData = loadedLatestCacheKey === latestCacheKey
-              && latestPollutant === requestPollutant;
-            if (!canRetainLatestData) {
-              const cachedLatest = pollutantCache.get(latestCacheKey);
-              const cachedPollutant = normalizePollutantKey(cachedLatest?.latestPollutant) || requestPollutant;
-              if (cachedLatest && cachedPollutant === requestPollutant) {
-                baseLatestRows = cachedLatest.latestRows || [];
-                latestPollutant = cachedPollutant;
-                loadedLatestCacheKey = latestCacheKey;
-              } else {
-                baseLatestRows = [];
-                latestPollutant = null;
-                loadedLatestCacheKey = null;
-              }
-            }
-          }
-
-          if (requestWindow === "all") {
-            baseLatestRowsAllWindow = baseLatestRows;
-            loadedLatestAllCacheKey = loadedLatestCacheKey === latestAllCacheKey
-              ? latestAllCacheKey
-              : null;
-          } else {
-            let latestAllOk = false;
-            try {
-              if (latestAllResponse && latestAllResponse.status === 304) {
-                const cachedLatestAll = pollutantCache.get(latestAllCacheKey);
-                if (cachedLatestAll) {
-                  baseLatestRowsAllWindow = cachedLatestAll.latestRows || [];
-                  loadedLatestAllCacheKey = latestAllCacheKey;
-                  latestAllOk = true;
-                } else if (loadedLatestAllCacheKey === latestAllCacheKey) {
-                  latestAllOk = true;
-                }
-              } else if (latestAllResponse && latestAllResponse.ok) {
-                const latestAllPayload = await latestAllResponse.json();
-                if (isStale()) {
-                  return;
-                }
-                const latestAllRaw = latestAllPayload?.data || [];
-                const cleanedLatestAll = latestAllRaw.filter((row) => Number.isFinite(resolveLatestValue(row)));
-                const scopedLatestAll = cleanedLatestAll.filter((row) => {
-                  const code = resolvePconCode(row);
-                  return !pconCodes.size || (code && pconCodes.has(code));
-                });
-                baseLatestRowsAllWindow = scopedLatestAll;
-                loadedLatestAllCacheKey = latestAllCacheKey;
-                pollutantCache.set(latestAllCacheKey, {
-                  timestamp: Date.now(),
-                  latestRows: scopedLatestAll,
-                  latestPollutant: normalizePollutantKey(latestAllPayload?.pollutant) || requestPollutant,
-                  nextSince: null,
-                  nextSinceId: 0,
-                });
-                latestSinceByKey.delete(latestAllCacheKey);
-                latestSinceIdByKey.delete(latestAllCacheKey);
-                latestAllOk = true;
-              }
-            } catch (error) {
-              console.error("uk_aq CR all-window latest snapshot response error", error);
-            }
-            if (!latestAllOk && loadedLatestAllCacheKey !== latestAllCacheKey) {
+            if (latestAllResponse && latestAllResponse.status === 304) {
               const cachedLatestAll = pollutantCache.get(latestAllCacheKey);
               if (cachedLatestAll) {
                 baseLatestRowsAllWindow = cachedLatestAll.latestRows || [];
-                loadedLatestAllCacheKey = latestAllCacheKey;
               } else {
                 baseLatestRowsAllWindow = baseLatestRows;
-                loadedLatestAllCacheKey = null;
+              }
+            } else if (latestAllResponse && latestAllResponse.ok) {
+              const latestAllPayload = await latestAllResponse.json();
+              const latestAllRaw = latestAllPayload?.data || [];
+              const cleanedLatestAll = latestAllRaw.filter((row) => Number.isFinite(resolveLatestValue(row)));
+              const scopedLatestAll = cleanedLatestAll.filter((row) => {
+                const code = resolvePconCode(row);
+                return !pconCodes.size || (code && pconCodes.has(code));
+              });
+              baseLatestRowsAllWindow = scopedLatestAll;
+              pollutantCache.set(latestAllCacheKey, {
+                timestamp: Date.now(),
+                latestRows: scopedLatestAll,
+                latestPollutant: normalizePollutantKey(latestAllPayload?.pollutant) || requestPollutant,
+                nextSince: null,
+                nextSinceId: 0,
+              });
+              latestSinceByKey.delete(latestAllCacheKey);
+              latestSinceIdByKey.delete(latestAllCacheKey);
+            } else {
+              baseLatestRowsAllWindow = baseLatestRows;
+            }
+            if (isStale()) {
+              return;
+            }
+            const networkRowsForWindow = getNetworkRowsForWindow();
+            const windowNetworkDefs = buildNetworkDefs(networkRowsForWindow);
+            const coverageByCode = buildNetworkCoverageByCode(networkRowsForWindow);
+            renderNetworkFiltersIfNeeded(
+              windowNetworkDefs,
+              coverageByCode,
+              pconCodes.size || 0,
+              AREA_LABEL_PLURAL,
+            );
+            if (populationResponse && populationResponse.ok) {
+              const populationPayload = await populationResponse.json();
+              const populationRows = Array.isArray(populationPayload)
+                ? populationPayload
+                : populationPayload?.data || [];
+              const lookup = new Map();
+              populationRows.forEach((row) => {
+                const code = row?.geo_code;
+                if (!code || lookup.has(code)) {
+                  return;
+                }
+                lookup.set(code, row);
+              });
+              populationLookup = lookup;
+            } else {
+              populationLookup = new Map();
+            }
+          } else {
+            if (canLoadData) {
+              if (errorEl) {
+                errorEl.textContent = "Local authority data unavailable. Showing boundaries only.";
+                errorEl.hidden = false;
               }
             }
-          }
-          if (isStale()) {
-            return;
-          }
-          const networkRowsForWindow = getNetworkRowsForWindow();
-          const windowNetworkDefs = buildNetworkDefs(networkRowsForWindow);
-          const coverageByCode = buildNetworkCoverageByCode(networkRowsForWindow);
-          renderNetworkFiltersIfNeeded(
-            windowNetworkDefs,
-            coverageByCode,
-            pconCodes.size || 0,
-            AREA_LABEL_PLURAL,
-          );
-          if (populationResponse && populationResponse.ok) {
-            const populationPayload = await populationResponse.json();
-            const populationRows = Array.isArray(populationPayload)
-              ? populationPayload
-              : populationPayload?.data || [];
-            const lookup = new Map();
-            populationRows.forEach((row) => {
-              const code = row?.geo_code;
-              if (!code || lookup.has(code)) {
-                return;
-              }
-              lookup.set(code, row);
-            });
-            populationLookup = lookup;
-          } else {
+            basePconRows = [];
+            basePconLookup = new Map();
+            pconRows = [];
+            pconLookup = new Map();
+            baseLatestRows = [];
+            baseLatestRowsAllWindow = [];
+            scopedLatestRows = [];
+            scopedLatestRowsAllWindow = [];
+            latestRows = [];
+            latestPollutant = null;
             populationLookup = new Map();
+            renderNetworkFiltersIfNeeded([], new Map(), 0, AREA_LABEL_PLURAL);
+            if (lastUpdated) {
+              lastUpdated.textContent = "Boundary only (no sensor data yet)";
+            }
           }
           markHexMapTiming(timingId, "colored-ready");
           measureHexMapTiming(timingId, "load-to-colored-ready", "load:start", "colored-ready");
-          if (isStale()) {
-            return;
-          }
-          chartDataStatus = laOk && latestOk && latestPollutant === requestPollutant
-            ? "ready"
-            : "failed";
-          applyNetworkFilters();
-          applyPendingAreaSelection();
-          setStatus(chartDataStatus === "ready" ? "Live" : "Error");
+	          if (isStale()) {
+	            return;
+	          }
+	          chartDataStatus = latestPollutant === requestPollutant ? "ready" : "failed";
+	          applyNetworkFilters();
+	          applyPendingAreaSelection();
+	          setStatus("Live");
           markHexMapTiming(timingId, "load-complete");
           measureHexMapTiming(timingId, "load-total", "load:start", "load-complete");
         } catch (error) {

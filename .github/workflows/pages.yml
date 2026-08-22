@@ -23,7 +23,7 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  resolve-mode:
+  prepare:
     runs-on: ubuntu-latest
     outputs:
       mode: ${{ steps.mode.outputs.mode }}
@@ -48,6 +48,7 @@ jobs:
           test -n "${site_host}" || { echo "CNAME is empty."; exit 1; }
           site_url="https://${site_host}"
           requested="${{ github.event_name == 'workflow_dispatch' && inputs.operation || 'preserve' }}"
+
           case "${requested}" in
             on|off)
               mode="${requested}"
@@ -66,56 +67,33 @@ jobs:
               exit 1
               ;;
           esac
+
           printf 'mode=%s\n' "${mode}" >> "${GITHUB_OUTPUT}"
           printf 'operation=%s\n' "${requested}" >> "${GITHUB_OUTPUT}"
           printf 'should_deploy=%s\n' "${should_deploy}" >> "${GITHUB_OUTPUT}"
           printf 'site_url=%s\n' "${site_url}" >> "${GITHUB_OUTPUT}"
 
-  status:
-    needs: resolve-mode
-    if: needs.resolve-mode.outputs.operation == 'status'
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Use Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: 20
-
-      - name: Verify and report current public mode
+      - name: Report current public mode
+        if: steps.mode.outputs.operation == 'status'
         run: |
           node scripts/uk_aq_site_maintenance.mjs verify \
-            --base-url "${{ needs.resolve-mode.outputs.site_url }}" \
+            --base-url "${{ steps.mode.outputs.site_url }}" \
             --expected auto \
             --attempts 3 \
             --delay-seconds 5
 
-  build:
-    needs: resolve-mode
-    if: needs.resolve-mode.outputs.should_deploy == 'true'
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
       - name: Configure GitHub Pages
+        if: steps.mode.outputs.should_deploy == 'true'
         uses: actions/configure-pages@v5
 
-      - name: Setup Node
-        uses: actions/setup-node@v4
-        with:
-          node-version: 20
-
       - name: Verify AQI history base secret
-        if: needs.resolve-mode.outputs.mode == 'off'
+        if: steps.mode.outputs.should_deploy == 'true' && steps.mode.outputs.mode == 'off'
         run: test -n "${UK_AQ_AQI_HISTORY_BASE_URL}"
         env:
           UK_AQ_AQI_HISTORY_BASE_URL: ${{ secrets.UK_AQ_AQI_HISTORY_BASE_URL }}
 
       - name: Inject Supabase config
-        if: needs.resolve-mode.outputs.mode == 'off'
+        if: steps.mode.outputs.should_deploy == 'true' && steps.mode.outputs.mode == 'off'
         run: node scripts/uk_aq_inject_project_ref.mjs
         env:
           SUPABASE_PROJECT_REF: ${{ secrets.SUPABASE_PROJECT_REF }}
@@ -126,7 +104,7 @@ jobs:
           UK_AQ_AQI_MUTABLE_HOURS: ${{ vars.UK_AQ_AQI_MUTABLE_HOURS || '120' }}
 
       - name: Build content-hashed Pages artifact
-        if: needs.resolve-mode.outputs.mode == 'off'
+        if: steps.mode.outputs.should_deploy == 'true' && steps.mode.outputs.mode == 'off'
         run: |
           test ! -e .pages-site
           mkdir .pages-site
@@ -135,7 +113,7 @@ jobs:
           node scripts/uk_aq_content_hash_assets.mjs .pages-site
 
       - name: Build maintenance-only Pages artifact
-        if: needs.resolve-mode.outputs.mode == 'on'
+        if: steps.mode.outputs.should_deploy == 'true' && steps.mode.outputs.mode == 'on'
         run: |
           node scripts/uk_aq_site_maintenance.mjs build \
             --mode on \
@@ -145,7 +123,7 @@ jobs:
             --artifact-built-at "$(date -u +%Y-%m-%dT%H:%M:%S.000Z)"
 
       - name: Add normal-site mode evidence
-        if: needs.resolve-mode.outputs.mode == 'off'
+        if: steps.mode.outputs.should_deploy == 'true' && steps.mode.outputs.mode == 'off'
         run: |
           node scripts/uk_aq_site_maintenance.mjs build \
             --mode off \
@@ -155,13 +133,14 @@ jobs:
             --artifact-built-at "$(date -u +%Y-%m-%dT%H:%M:%S.000Z)"
 
       - name: Upload artifact
+        if: steps.mode.outputs.should_deploy == 'true'
         uses: actions/upload-pages-artifact@v4
         with:
           path: .pages-site
 
   deploy:
-    needs: [resolve-mode, build]
-    if: needs.resolve-mode.outputs.should_deploy == 'true'
+    needs: prepare
+    if: needs.prepare.outputs.should_deploy == 'true'
     permissions:
       contents: read
       pages: write
@@ -171,15 +150,6 @@ jobs:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
     steps:
-      - id: deployment
-        uses: actions/deploy-pages@v4
-
-  verify:
-    needs: [resolve-mode, deploy]
-    if: needs.resolve-mode.outputs.should_deploy == 'true'
-    timeout-minutes: 5
-    runs-on: ubuntu-latest
-    steps:
       - name: Checkout
         uses: actions/checkout@v4
 
@@ -188,11 +158,15 @@ jobs:
         with:
           node-version: 20
 
+      - id: deployment
+        name: Deploy GitHub Pages
+        uses: actions/deploy-pages@v4
+
       - name: Positively verify the deployed public mode
         run: |
           node scripts/uk_aq_site_maintenance.mjs verify \
-            --base-url "${{ needs.resolve-mode.outputs.site_url }}" \
-            --expected "${{ needs.resolve-mode.outputs.mode }}" \
+            --base-url "${{ needs.prepare.outputs.site_url }}" \
+            --expected "${{ needs.prepare.outputs.mode }}" \
             --deployment-id "${{ github.run_id }}-${{ github.run_attempt }}" \
             --attempts 12 \
             --delay-seconds 5

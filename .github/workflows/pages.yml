@@ -4,16 +4,97 @@ on:
   push:
     branches: [main]
   workflow_dispatch:
+    inputs:
+      operation:
+        description: Public website maintenance operation
+        required: true
+        default: status
+        type: choice
+        options:
+          - status
+          - on
+          - off
 
 permissions:
   contents: read
 
 concurrency:
   group: pages
-  cancel-in-progress: true
+  cancel-in-progress: false
 
 jobs:
+  resolve-mode:
+    runs-on: ubuntu-latest
+    outputs:
+      mode: ${{ steps.mode.outputs.mode }}
+      operation: ${{ steps.mode.outputs.operation }}
+      should_deploy: ${{ steps.mode.outputs.should_deploy }}
+      site_url: ${{ steps.mode.outputs.site_url }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Use Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Resolve requested and currently published mode
+        id: mode
+        shell: bash
+        run: |
+          set -euo pipefail
+          site_host="$(tr -d '[:space:]' < CNAME)"
+          test -n "${site_host}" || { echo "CNAME is empty."; exit 1; }
+          site_url="https://${site_host}"
+          requested="${{ github.event_name == 'workflow_dispatch' && inputs.operation || 'preserve' }}"
+          case "${requested}" in
+            on|off)
+              mode="${requested}"
+              should_deploy=true
+              ;;
+            status)
+              mode="$(node scripts/uk_aq_site_maintenance.mjs resolve --base-url "${site_url}")"
+              should_deploy=false
+              ;;
+            preserve)
+              mode="$(node scripts/uk_aq_site_maintenance.mjs resolve --base-url "${site_url}")"
+              should_deploy=true
+              ;;
+            *)
+              echo "Unsupported site operation: ${requested}"
+              exit 1
+              ;;
+          esac
+          printf 'mode=%s\n' "${mode}" >> "${GITHUB_OUTPUT}"
+          printf 'operation=%s\n' "${requested}" >> "${GITHUB_OUTPUT}"
+          printf 'should_deploy=%s\n' "${should_deploy}" >> "${GITHUB_OUTPUT}"
+          printf 'site_url=%s\n' "${site_url}" >> "${GITHUB_OUTPUT}"
+
+  status:
+    needs: resolve-mode
+    if: needs.resolve-mode.outputs.operation == 'status'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Use Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Verify and report current public mode
+        run: |
+          node scripts/uk_aq_site_maintenance.mjs verify \
+            --base-url "${{ needs.resolve-mode.outputs.site_url }}" \
+            --expected auto \
+            --attempts 3 \
+            --delay-seconds 5
+
   build:
+    needs: resolve-mode
+    if: needs.resolve-mode.outputs.should_deploy == 'true'
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -28,11 +109,13 @@ jobs:
           node-version: 20
 
       - name: Verify AQI history base secret
+        if: needs.resolve-mode.outputs.mode == 'off'
         run: test -n "${UK_AQ_AQI_HISTORY_BASE_URL}"
         env:
           UK_AQ_AQI_HISTORY_BASE_URL: ${{ secrets.UK_AQ_AQI_HISTORY_BASE_URL }}
 
       - name: Inject Supabase config
+        if: needs.resolve-mode.outputs.mode == 'off'
         run: node scripts/uk_aq_inject_project_ref.mjs
         env:
           SUPABASE_PROJECT_REF: ${{ secrets.SUPABASE_PROJECT_REF }}
@@ -43,12 +126,33 @@ jobs:
           UK_AQ_AQI_MUTABLE_HOURS: ${{ vars.UK_AQ_AQI_MUTABLE_HOURS || '120' }}
 
       - name: Build content-hashed Pages artifact
+        if: needs.resolve-mode.outputs.mode == 'off'
         run: |
           test ! -e .pages-site
           mkdir .pages-site
-          rsync -a --exclude='.git/' --exclude='.pages-site/' ./ .pages-site/
+          rsync -a --exclude='.git/' --exclude='.pages-site/' --exclude='maintenance/' ./ .pages-site/
           node scripts/uk_aq_inject_initial_loader.mjs .pages-site
           node scripts/uk_aq_content_hash_assets.mjs .pages-site
+
+      - name: Build maintenance-only Pages artifact
+        if: needs.resolve-mode.outputs.mode == 'on'
+        run: |
+          node scripts/uk_aq_site_maintenance.mjs build \
+            --mode on \
+            --source-root . \
+            --output-root .pages-site \
+            --deployment-id "${{ github.run_id }}-${{ github.run_attempt }}" \
+            --artifact-built-at "$(date -u +%Y-%m-%dT%H:%M:%S.000Z)"
+
+      - name: Add normal-site mode evidence
+        if: needs.resolve-mode.outputs.mode == 'off'
+        run: |
+          node scripts/uk_aq_site_maintenance.mjs build \
+            --mode off \
+            --source-root . \
+            --output-root .pages-site \
+            --deployment-id "${{ github.run_id }}-${{ github.run_attempt }}" \
+            --artifact-built-at "$(date -u +%Y-%m-%dT%H:%M:%S.000Z)"
 
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v4
@@ -56,7 +160,8 @@ jobs:
           path: .pages-site
 
   deploy:
-    needs: build
+    needs: [resolve-mode, build]
+    if: needs.resolve-mode.outputs.should_deploy == 'true'
     permissions:
       contents: read
       pages: write
@@ -68,3 +173,33 @@ jobs:
     steps:
       - id: deployment
         uses: actions/deploy-pages@v4
+
+  verify:
+    needs: [resolve-mode, deploy]
+    if: needs.resolve-mode.outputs.should_deploy == 'true'
+    timeout-minutes: 20
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Use Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Positively verify the deployed public mode
+        shell: bash
+        run: |
+          set -euo pipefail
+          minimum_stable=0
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            minimum_stable=610
+          fi
+          node scripts/uk_aq_site_maintenance.mjs verify \
+            --base-url "${{ needs.resolve-mode.outputs.site_url }}" \
+            --expected "${{ needs.resolve-mode.outputs.mode }}" \
+            --deployment-id "${{ github.run_id }}-${{ github.run_attempt }}" \
+            --minimum-stable-seconds "${minimum_stable}" \
+            --attempts 75 \
+            --delay-seconds 10

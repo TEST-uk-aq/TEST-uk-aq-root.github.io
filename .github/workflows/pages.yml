@@ -12,8 +12,8 @@ on:
         type: choice
         options:
           - status
-          - on
-          - off
+          - "on"
+          - "off"
 
 permissions:
   contents: read

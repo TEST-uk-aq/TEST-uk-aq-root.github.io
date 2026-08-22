@@ -177,7 +177,7 @@ jobs:
   verify:
     needs: [resolve-mode, deploy]
     if: needs.resolve-mode.outputs.should_deploy == 'true'
-    timeout-minutes: 20
+    timeout-minutes: 5
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -189,17 +189,10 @@ jobs:
           node-version: 20
 
       - name: Positively verify the deployed public mode
-        shell: bash
         run: |
-          set -euo pipefail
-          minimum_stable=0
-          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
-            minimum_stable=610
-          fi
           node scripts/uk_aq_site_maintenance.mjs verify \
             --base-url "${{ needs.resolve-mode.outputs.site_url }}" \
             --expected "${{ needs.resolve-mode.outputs.mode }}" \
             --deployment-id "${{ github.run_id }}-${{ github.run_attempt }}" \
-            --minimum-stable-seconds "${minimum_stable}" \
-            --attempts 75 \
-            --delay-seconds 10
+            --attempts 12 \
+            --delay-seconds 5

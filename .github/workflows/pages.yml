@@ -24,6 +24,7 @@ concurrency:
 
 jobs:
   prepare:
+    name: Prepare & Build
     runs-on: ubuntu-latest
     outputs:
       mode: ${{ steps.mode.outputs.mode }}
@@ -32,12 +33,13 @@ jobs:
       site_url: ${{ steps.mode.outputs.site_url }}
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Use Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v6
         with:
-          node-version: 20
+          node-version: 24
+          package-manager-cache: false
 
       - name: Resolve requested and currently published mode
         id: mode
@@ -84,7 +86,7 @@ jobs:
 
       - name: Configure GitHub Pages
         if: steps.mode.outputs.should_deploy == 'true'
-        uses: actions/configure-pages@v5
+        uses: actions/configure-pages@v6
 
       - name: Verify AQI history base secret
         if: steps.mode.outputs.should_deploy == 'true' && steps.mode.outputs.mode == 'off'
@@ -134,7 +136,7 @@ jobs:
 
       - name: Upload artifact
         if: steps.mode.outputs.should_deploy == 'true'
-        uses: actions/upload-pages-artifact@v4
+        uses: actions/upload-pages-artifact@v5
         with:
           path: .pages-site
 
@@ -151,16 +153,17 @@ jobs:
       url: ${{ steps.deployment.outputs.page_url }}
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Use Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v6
         with:
-          node-version: 20
+          node-version: 24
+          package-manager-cache: false
 
       - id: deployment
         name: Deploy GitHub Pages
-        uses: actions/deploy-pages@v4
+        uses: actions/deploy-pages@v5
 
       - name: Positively verify the deployed public mode
         run: |

@@ -4,6 +4,7 @@ import path from "node:path";
 const STATUS_FILE = "uk-aq-site-mode.json";
 const MAINTENANCE_MARKER = '<meta name="uk-aq-site-maintenance" content="on">';
 const MAINTENANCE_IMAGE = "images/UK-AQ-Maintenance-NoDate.png";
+const MAINTENANCE_FAVICON = "images/favicon.ico";
 const NORMAL_PATHS = Object.freeze([
   "/",
   "/hex_map/",
@@ -106,6 +107,10 @@ function build(args) {
     fs.copyFileSync(
       path.join(sourceRoot, MAINTENANCE_IMAGE),
       path.join(outputRoot, MAINTENANCE_IMAGE),
+    );
+    fs.copyFileSync(
+      path.join(sourceRoot, MAINTENANCE_FAVICON),
+      path.join(outputRoot, MAINTENANCE_FAVICON),
     );
     fs.copyFileSync(path.join(sourceRoot, "CNAME"), path.join(outputRoot, "CNAME"));
     fs.writeFileSync(path.join(outputRoot, ".nojekyll"), "");

@@ -644,10 +644,9 @@
 }
 
 /* Let an inactive message use the full centre of the circle instead of the
-   numeric value row. The pollutant name and selected-network scope retain
-   their top and bottom positions across static and rotating metadata modes. */
+   numeric value row while the pollutant name remains at the top. */
 .home-page .pollutant-circle.pollutant-circle--inactive {
-  grid-template-rows: auto minmax(0, 1fr) auto;
+  grid-template-rows: auto minmax(0, 1fr);
   align-content: stretch;
 }
 
@@ -668,19 +667,9 @@
 }
 
 .home-page .pollutant-circle--inactive .pollutant-observed,
-.home-page .pollutant-circle--inactive .pollutant-station {
-  display: none !important;
-}
-
+.home-page .pollutant-circle--inactive .pollutant-station,
 .home-page .pollutant-circle--inactive .pollutant-network {
-  grid-row: 3;
-  grid-column: 1;
-  margin-top: 0;
-  top: 0;
-  align-self: end;
-  opacity: 1;
-  transform: none;
-  transition: none;
+  display: none !important;
 }
 
 /* Compensate for the wider right-hand legend endpoint labels at responsive widths. */

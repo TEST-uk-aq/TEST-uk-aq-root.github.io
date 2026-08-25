@@ -660,6 +660,13 @@
   align-self: stretch;
 }
 
+.home-page .pollutant-circle--inactive .pollutant-value {
+  max-width: 92%;
+  font-size: clamp(1.2rem, 2.2vw, 1.55rem);
+  line-height: 1.18;
+  white-space: normal;
+}
+
 .home-page .pollutant-circle--inactive .pollutant-observed,
 .home-page .pollutant-circle--inactive .pollutant-station {
   display: none !important;

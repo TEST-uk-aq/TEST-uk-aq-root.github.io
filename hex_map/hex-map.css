@@ -5250,12 +5250,12 @@
           z-index: 68;
           display: flex;
           flex-direction: column;
-          gap: 6px;
+          gap: 4px;
         }
 
         body.hex-map-page.mobile-map-controls-active .mobile-map-controls--left {
           left: 10px;
-          width: 148px;
+          width: 152px;
           align-items: flex-start;
         }
 
@@ -5330,28 +5330,29 @@
 
         .hex-map-page .mobile-map-controls--right .pollutant-selector {
           display: grid;
-          grid-template-columns: 52px;
-          width: 52px;
-          min-width: 52px;
+          grid-template-columns: 76px;
+          width: 76px;
+          min-width: 76px;
           gap: 4px;
         }
 
         .hex-map-page .mobile-map-controls--right .pollutant-selector .pill {
-          width: 52px;
-          height: 52px;
-          min-height: 52px;
+          width: 76px;
+          height: 44px;
+          min-height: 44px;
           padding: 0;
-          border-radius: 12px;
-          font-size: 0.8rem;
+          border-radius: 10px;
+          font-size: 0.82rem;
           line-height: 1;
         }
 
         .hex-map-page .mobile-map-controls--left .segmented--view {
           display: block;
-          width: 148px;
+          width: 152px;
           min-width: 0;
           box-sizing: border-box;
-          padding: 2px;
+          padding: 0;
+          gap: 0;
         }
 
         .hex-map-page .mobile-map-controls--left .segmented--view button:not(.active) {
@@ -5363,15 +5364,14 @@
           display: grid;
           width: 100%;
           min-width: 0;
-          min-height: 52px;
+          height: 44px;
+          min-height: 44px;
           grid-template-columns: minmax(0, 1fr);
-          grid-template-areas:
-            "view-main"
-            "view-sub";
+          grid-template-areas: "view-main";
           justify-items: start;
           align-content: center;
-          gap: 1px;
-          padding: 5px 25px 5px 7px;
+          gap: 0;
+          padding: 5px 25px 5px 8px;
           cursor: pointer;
           text-align: left;
         }
@@ -5391,24 +5391,30 @@
           grid-area: view-main;
           max-width: 100%;
           overflow: hidden;
-          font-size: 0.72rem;
+          font-size: 0.76rem;
+          line-height: 1.1;
           text-overflow: ellipsis;
         }
 
+        .hex-map-page .mobile-map-controls--left #toolbar-tab-uk .view-button-main {
+          font-size: 0;
+        }
+
+        .hex-map-page .mobile-map-controls--left #toolbar-tab-uk .view-button-main::before {
+          content: "UK";
+          font-size: 0.82rem;
+        }
+
         .hex-map-page .mobile-map-controls--left .view-button-sub {
-          grid-area: view-sub;
-          max-width: 100%;
-          overflow: hidden;
-          font-size: 0.68rem;
-          text-overflow: ellipsis;
+          display: none;
         }
 
         .hex-map-page .mobile-map-controls--left .toolbar-region-section.visible,
         .hex-map-page .mobile-map-controls--left .toolbar-region-section .popover-wrap,
         .hex-map-page .mobile-map-controls--left .popover-trigger {
-          width: 148px;
+          width: 152px;
           min-width: 0;
-          max-width: 148px;
+          max-width: 152px;
           box-sizing: border-box;
         }
 
@@ -5421,6 +5427,7 @@
         }
 
         .hex-map-page .mobile-map-controls--left .popover-trigger {
+          height: 44px;
           min-height: 44px;
           justify-content: space-between;
           padding: 5px 9px;
@@ -5429,24 +5436,32 @@
         }
 
         .hex-map-page .mobile-map-controls--left .window-stepper {
-          display: grid;
-          width: 148px;
+          position: relative;
+          display: block;
+          width: 152px;
+          height: 44px;
           min-width: 0;
-          gap: 2px;
-          justify-content: stretch;
         }
 
         .hex-map-page .mobile-map-controls--left .window-stepper-label {
+          position: absolute;
+          top: 5px;
+          left: 44px;
+          z-index: 2;
+          width: 64px;
           margin: 0;
-          font-size: 0.65rem;
+          font-size: 0.6rem;
           line-height: 1.1;
+          text-align: center;
+          pointer-events: none;
         }
 
         .hex-map-page .mobile-map-controls--left .window-stepper-control {
           display: grid;
-          width: 148px;
+          width: 152px;
+          height: 44px;
           min-width: 0;
-          grid-template-columns: 44px minmax(0, 60px) 44px;
+          grid-template-columns: 44px minmax(0, 64px) 44px;
           gap: 0;
           align-items: center;
         }
@@ -5454,12 +5469,13 @@
         .hex-map-page .mobile-map-controls--left .window-stepper-value-box {
           width: 100%;
           min-width: 0;
-          height: 36px;
+          height: 44px;
           border-radius: 8px;
         }
 
         .hex-map-page .mobile-map-controls--left .window-stepper-value {
-          font-size: 0.76rem;
+          padding-top: 12px;
+          font-size: 0.72rem;
         }
 
         /* With the 280px sensor panel open, compact the right stack so its
@@ -5470,17 +5486,6 @@
         }
 
         .hex-map-page .map-canvas-wrap.hex-selected .mobile-map-controls--right .pollutant-selector {
-          grid-template-columns: 44px;
-          width: 44px;
-          min-width: 44px;
           gap: 0;
-        }
-
-        .hex-map-page .map-canvas-wrap.hex-selected .mobile-map-controls--right .pollutant-selector .pill {
-          width: 44px;
-          height: 44px;
-          min-height: 44px;
-          border-radius: 10px;
-          font-size: 0.72rem;
         }
       }

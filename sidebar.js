@@ -55,6 +55,7 @@
     className: 'cic-home-nav-item',
   };
   const SITE_VERSION_CACHE_KEY = 'uk_aq_site_version_v1';
+  const PUBLIC_NETWORK_CATALOG_URL = `${location.origin}/api/aq/networks`;
   let SITE_VERSION = readCachedSiteVersion();
   const SIDEBAR_ICON_OFF = '/sidebar-images/uk-aq-sidebar-off.svg';
   const SIDEBAR_ICON_ON = '/sidebar-images/uk-aq-sidebar-on.svg';
@@ -102,6 +103,82 @@
     } catch (error) {
       console.warn('UK AQ VERSION failed to load', error);
       return SITE_VERSION;
+    }
+  }
+
+  function applyFooterAttributions(rows, contractVersion) {
+    const footer = document.getElementById('ukaq-site-footer');
+    if (!footer) return;
+
+    if (contractVersion !== 2 || !Array.isArray(rows)) {
+      throw new Error('network catalogue response does not match contract v2');
+    }
+
+    const returnedNetworkCodes = rows
+      .map((row) => String(row?.code || row?.network_code || '').trim());
+    if (returnedNetworkCodes.some((networkCode) => !networkCode)) {
+      throw new Error('network catalogue response contains a missing network_code');
+    }
+    const publicNetworkCodes = new Set(returnedNetworkCodes);
+    const attributionSections = Array.from(
+      footer.querySelectorAll('.ukaq-site-footer-source[data-network-code]'),
+    );
+    const definedNetworkCodes = new Set(
+      attributionSections.map((section) => section.dataset.networkCode),
+    );
+
+    attributionSections.forEach((section) => {
+      if (!publicNetworkCodes.has(section.dataset.networkCode)) section.remove();
+    });
+
+    const sources = footer.querySelector('.ukaq-site-footer-sources');
+    const visibleCount = sources?.querySelectorAll('.ukaq-site-footer-source').length || 0;
+    if (sources) {
+      sources.dataset.sourceCount = String(visibleCount);
+      sources.hidden = visibleCount === 0;
+    }
+
+    const missingDefinitions = [...publicNetworkCodes]
+      .filter((networkCode) => !definedNetworkCodes.has(networkCode));
+    if (missingDefinitions.length) {
+      console.debug(
+        'UK AQ footer has no attribution definition for public network codes',
+        missingDefinitions,
+      );
+    }
+  }
+
+  async function filterFooterAttributions() {
+    try {
+      const existingSnapshot = window.UkAqPublicNetworkCatalogSnapshot;
+      if (existingSnapshot) {
+        applyFooterAttributions(existingSnapshot.rows, existingSnapshot.contractVersion);
+        return;
+      }
+
+      if (window.UkAqNetworkCatalog?.load) {
+        window.addEventListener('ukaq:public-network-catalog', (event) => {
+          try {
+            applyFooterAttributions(event.detail?.rows, event.detail?.contractVersion);
+          } catch (error) {
+            console.warn('UK AQ footer received an invalid network catalogue; retaining all attributions', error);
+          }
+        }, { once: true });
+        return;
+      }
+
+      const response = await fetch(PUBLIC_NETWORK_CATALOG_URL, {
+        credentials: 'omit',
+        headers: { Accept: 'application/json' },
+      });
+      if (!response.ok) {
+        throw new Error(`network catalogue request failed (${response.status})`);
+      }
+
+      const payload = await response.json();
+      applyFooterAttributions(payload?.data, payload?.contract_version);
+    } catch (error) {
+      console.warn('UK AQ footer network catalogue failed to load; retaining all attributions', error);
     }
   }
 
@@ -509,14 +586,14 @@
     return `
       <p class="ukaq-site-footer-meta">&copy; 2026 UK AQ${versionSuffix()}</p>
       <div class="ukaq-site-footer-sources" aria-label="Air quality data sources and licences">
-        <section class="ukaq-site-footer-source" aria-label="GOV.UK and UK-AIR attribution">
+        <section class="ukaq-site-footer-source" data-network-code="gov_uk_aurn" aria-label="GOV.UK and UK-AIR attribution">
           <div class="ukaq-site-footer-mark">
             <a class="ukaq-site-footer-gov-pill" href="https://uk-air.defra.gov.uk/" aria-label="GOV.UK AURN">GOV.UK AURN</a>
           </div>
           <p class="ukaq-site-footer-copy">&copy; Crown 2026 copyright Defra via <a href="https://uk-air.defra.gov.uk/">uk-air.defra.gov.uk</a>, licenced under the <a href="${oglUrl}">Open Government Licence (OGL)</a>.</p>
         </section>
 
-        <section class="ukaq-site-footer-source" aria-label="Breathe London attribution">
+        <section class="ukaq-site-footer-source" data-network-code="breathelondon" aria-label="Breathe London attribution">
           <div class="ukaq-site-footer-mark">
             <a href="https://www.breathelondon.org/" aria-label="Breathe London">
               <img class="ukaq-site-footer-logo ukaq-site-footer-logo--breathe" src="${location.origin}/sidebar-images/breathelondon_logo_v2.svg" alt="Breathe London">
@@ -526,7 +603,7 @@
           <p class="ukaq-site-footer-copy">Powered by <a href="https://www.breathelondon-communities.org/">Breathe London Communities</a></p>
         </section>
 
-        <section class="ukaq-site-footer-source" aria-label="OpenAQ attribution">
+        <section class="ukaq-site-footer-source" data-network-code="openaq" aria-label="OpenAQ attribution">
           <div class="ukaq-site-footer-mark">
             <a href="https://openaq.org/" aria-label="OpenAQ">
               <img class="ukaq-site-footer-logo ukaq-site-footer-logo--openaq" src="${location.origin}/sidebar-images/openaq_logo.svg" alt="OpenAQ">
@@ -535,7 +612,7 @@
           <p class="ukaq-site-footer-copy">Air quality data via <a href="https://openaq.org/">OpenAQ</a></p>
         </section>
 
-        <section class="ukaq-site-footer-source" aria-label="Sensor.Community attribution">
+        <section class="ukaq-site-footer-source" data-network-code="sensorcommunity" aria-label="Sensor.Community attribution">
           <div class="ukaq-site-footer-mark">
             <a href="https://sensor.community/" aria-label="Sensor.Community">
               <img class="ukaq-site-footer-logo ukaq-site-footer-logo--scomm" src="${location.origin}/sidebar-images/scomm_logo_text.svg" alt="Sensor.Community">
@@ -657,6 +734,7 @@
     }
 
     mountSiteFooter();
+    void filterFooterAttributions();
 
     // Initial state: suppress the body transition so the padding-left jump
     // doesn't cause a mid-flight layout shift before the hex map first renders.

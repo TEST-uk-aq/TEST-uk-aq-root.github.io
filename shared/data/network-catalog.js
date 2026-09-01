@@ -4,10 +4,10 @@
   const networkDomain = typeof module === "object" && module.exports
     ? require("../domain/networks.js")
     : root.UkAqNetworks;
-  const api = factory(networkDomain);
+  const api = factory(networkDomain, root);
   if (typeof module === "object" && module.exports) module.exports = api;
   root.UkAqNetworkCatalog = api;
-})(typeof globalThis !== "undefined" ? globalThis : this, function (networkDomain) {
+})(typeof globalThis !== "undefined" ? globalThis : this, function (networkDomain, root) {
   "use strict";
 
   if (!networkDomain?.normalizeCatalogRows) {
@@ -25,9 +25,20 @@
       throw new Error(`Network catalog request failed: ${response.status}`);
     }
     const payload = await response.json();
-    return networkDomain.normalizeCatalogRows(payload, {
+    const rows = networkDomain.normalizeCatalogRows(payload, {
       requirePublicDisplayEnabled: options.requirePublicDisplayEnabled === true,
     });
+    const snapshot = {
+      contractVersion: payload?.contract_version,
+      rows,
+    };
+    root.UkAqPublicNetworkCatalogSnapshot = snapshot;
+    if (typeof root.dispatchEvent === "function" && typeof root.CustomEvent === "function") {
+      root.dispatchEvent(new root.CustomEvent("ukaq:public-network-catalog", {
+        detail: snapshot,
+      }));
+    }
+    return rows;
   }
 
   return { load };

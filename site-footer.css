@@ -61,6 +61,24 @@ body #ukaq-site-footer {
   border-top: 1px solid #e1e3e6;
 }
 
+#ukaq-site-footer .ukaq-site-footer-sources[hidden] {
+  display: none;
+}
+
+@media (min-width: 1001px) {
+  #ukaq-site-footer .ukaq-site-footer-sources[data-source-count="1"] {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  #ukaq-site-footer .ukaq-site-footer-sources[data-source-count="2"] {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  #ukaq-site-footer .ukaq-site-footer-sources[data-source-count="3"] {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
 #ukaq-site-footer .ukaq-site-footer-source {
   position: relative;
   min-width: 0;
@@ -206,6 +224,10 @@ body.ukaq-site-footer-after-viewport #ukaq-site-footer {
 @media (max-width: 1000px) {
   #ukaq-site-footer .ukaq-site-footer-sources {
     grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  #ukaq-site-footer .ukaq-site-footer-sources[data-source-count="1"] {
+    grid-template-columns: minmax(0, 1fr);
   }
 
   #ukaq-site-footer .ukaq-site-footer-source:nth-child(3)::before {

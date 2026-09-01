@@ -4962,10 +4962,12 @@
 
         .hex-map-page .legend-pill {
           bottom: 60px;
-          left: calc(50% + 28px);
-          width: fit-content;
-          max-width: calc(100% - 80px);
+          right: 10px;
+          left: auto;
+          width: min(286px, calc(100% - 78px));
+          max-width: calc(100% - 78px);
           box-sizing: border-box;
+          transform: none;
           grid-template-columns: minmax(0, 1fr);
           justify-items: center;
           row-gap: 5px;
@@ -4981,13 +4983,25 @@
         }
 
         .hex-map-page .legend-pill .legend-scale {
-          width: auto;
+          display: grid;
+          grid-template-columns: max-content minmax(0, 180px) max-content;
+          column-gap: 8px;
+          width: 100%;
           max-width: 100%;
+          min-width: 0;
           justify-content: center;
         }
 
         .hex-map-page .legend-pill .legend-bar-wrap {
-          width: min(180px, 38vw);
+          width: 100%;
+          min-width: 0;
+          max-width: 180px;
+        }
+
+        .hex-map-page .legend-pill .legend-value {
+          width: auto;
+          min-width: max-content;
+          flex: none;
         }
 
         .hex-map-page .map-canvas-wrap.hex-selected .legend-pill {

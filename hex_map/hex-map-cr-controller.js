@@ -4230,7 +4230,7 @@ function initHexMapCrController() {
         if (targetElement && typeof targetElement.closest === "function" && targetElement.closest(".hex")) {
           return;
         }
-        if (targetElement && typeof targetElement.closest === "function" && targetElement.closest(".map-inline-sensor-panel, .map-settings-panel, .map-settings, .map-zoom-controls, .map-topbar, .networks-pill-anchor, .networks-pill, .hex-chart-mode-panel")) {
+        if (targetElement && typeof targetElement.closest === "function" && targetElement.closest(".map-inline-sensor-panel, .map-settings-panel, .map-settings, .map-zoom-controls, .map-topbar, .mobile-map-controls, .networks-pill-anchor, .networks-pill, .hex-chart-mode-panel")) {
           return;
         }
         setSelectedCell(null);

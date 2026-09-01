@@ -2,43 +2,79 @@ import pollutantDomain from "../shared/domain/pollutants-module.js";
 import networkDomain from "../shared/domain/networks-module.js";
 import coordinator from "./hex-map-coordinator.js";
 import networkController from "./hex-map-network-controller.js";
-import summaryPresenter from "./hex-map-summary.js";
+import urlState from "./hex-map-url-state.js";
+import summary from "./hex-map-summary.js";
 import scrollAffordances from "./hex-map-scroll-affordances.js";
 import "./hex-map-station-chart-adapter-module.js";
 import search from "./hex-map-search.js";
+import ukController from "./hex-map-uk-controller.js";
 
-function initHexMapUkController(root) {
-      "use strict";
+function initHexMapCrController() {
+  if (typeof window === "undefined" || !window.document || !document.body.classList.contains("hex-map-page")) return;
 
-      if (!root?.document || !document.body.classList.contains("hex-map-page")) return;
+  const root = document.getElementById("tab-panel-cr");
+  if (!root) {
+    return;
+  }
+  if (!pollutantDomain?.definitions || !networkDomain?.resolveCode || !networkController?.loadCatalog || !coordinator?.registerMap || !urlState?.getInitialCrRegion) {
+    throw new Error("UK AQ shared domain/data modules must load before the C&R Hex Map.");
+  }
+  const ID_PREFIX = "cr-";
+  const byId = (id) => document.getElementById(`${ID_PREFIX}${id}`);
+  const query = (selector) => root.querySelector(selector);
+  const queryAll = (selector) => Array.from(root.querySelectorAll(selector));
 
-      if (!pollutantDomain?.definitions || !networkDomain?.resolveCode || !networkController?.loadCatalog || !coordinator?.registerMap) {
-        throw new Error("UK AQ shared domain/data modules must load before the Hex Map.");
-      }
-      const PROJECT_REF_PLACEHOLDER = "zztjgmdiftqtdcrlfpvc";
-      const ANON_KEY_PLACEHOLDER = "sb_publishable_Cru7ACLoK8kKQdID5jPaDw_3RHvQNxO";
-      const params = new URLSearchParams(window.location.search);
-      const projectRefParam = params.get("project_ref");
-      const anonKeyParam = params.get("anon_key");
-      const cacheBaseParam = params.get("cache_base");
-      const cacheBaseUrl = resolveCacheBaseUrl(cacheBaseParam);
-      const cacheSessionParam = params.get("cache_session_url");
-      const mapDateParam = params.get("map_date");
-      const pconVersionParam = params.get("pcon_version");
-      const initialMapSettings = coordinator.getMapSettings();
+  const SORT_DEFAULTS = {
+    sensor: "asc",
+    network: "asc",
+    pm25: "desc",
+    updated: "desc",
+  };
+
+  function getDefaultSortDir(key) {
+    return SORT_DEFAULTS[key] || "asc";
+  }
+
+  function getSortDirection(columnKey, activeKey, activeDir) {
+    return columnKey === activeKey ? activeDir : getDefaultSortDir(columnKey);
+  }
+
+  function renderSortIcon(columnKey, activeKey, activeDir) {
+    const direction = getSortDirection(columnKey, activeKey, activeDir);
+    return direction === "asc" ? "↑" : "↓";
+  }
+
+  function getSortTooltip(columnKey, activeKey, activeDir) {
+    const isActive = columnKey === activeKey;
+    if (!isActive) {
+      if (columnKey === "sensor" || columnKey === "network") return "Click to sort A to Z";
+      if (columnKey === "pm25") return "Click to sort high to low";
+      return "Click to sort newest first";
+    }
+    return "";
+  }
+
+		      const params = new URLSearchParams(window.location.search);
+		      const projectRefParam = params.get("project_ref");
+		      const anonKeyParam = params.get("anon_key");
+		      const cacheBaseParam = params.get("cache_base");
+		      const cacheBaseUrl = resolveCacheBaseUrl(cacheBaseParam);
+		      const cacheSessionParam = params.get("cache_session_url");
+	      const mapDateParam = params.get("map_date");
+	      const laVersionParam = params.get("la_version");
       const inferredProjectRef = inferProjectRefFromHost();
       const projectRef = PROJECT_REF_PLACEHOLDER.includes("__SUPABASE_PROJECT_REF__")
         ? (projectRefParam || inferredProjectRef || "")
         : PROJECT_REF_PLACEHOLDER;
-      const anonKey = ANON_KEY_PLACEHOLDER.includes("__SB_PUBLISHABLE_DEFAULT_KEY__")
-        ? (anonKeyParam || "")
-        : ANON_KEY_PLACEHOLDER;
-      const cacheOrigin = cacheBaseUrl ? new URL(cacheBaseUrl).origin : "";
-      const defaultCacheSessionUrl = cacheOrigin ? `${cacheOrigin}/api/aq/session/start` : "";
-      const cacheSessionUrl = (cacheSessionParam || defaultCacheSessionUrl || "").trim();
-      const REST_URL = cacheBaseUrl
-        ? `${cacheBaseUrl}/pcon-hex`
-        : "";
+	      const anonKey = ANON_KEY_PLACEHOLDER.includes("__SB_PUBLISHABLE_DEFAULT_KEY__")
+	        ? (anonKeyParam || "")
+	        : ANON_KEY_PLACEHOLDER;
+	      const cacheOrigin = cacheBaseUrl ? new URL(cacheBaseUrl).origin : "";
+	      const defaultCacheSessionUrl = cacheOrigin ? `${cacheOrigin}/api/aq/session/start` : "";
+	      const cacheSessionUrl = (cacheSessionParam || defaultCacheSessionUrl || "").trim();
+		      const REST_URL = cacheBaseUrl
+		        ? `${cacheBaseUrl}/la-hex`
+		        : "";
       const LATEST_SNAPSHOT_URL = cacheBaseUrl
         ? `${cacheBaseUrl}/latest-snapshot`
         : "";
@@ -59,34 +95,57 @@ function initHexMapUkController(root) {
       const latestSinceByKey = new Map();
       const latestSinceIdByKey = new Map();
       const latestEtagByKey = new Map();
-      const pconEtagByKey = new Map();
-      const pconSinceByKey = new Map();
+      const laEtagByKey = new Map();
+      const laSinceByKey = new Map();
       let latestLoadId = 0;
-      const MAP_CUTOVER = "2023-11-29";
-      const MAP_CONFIGS = [
-        {
-          id: "pcon24",
-          label: "2024 constituencies",
-          hexUrl: "/data/PCON/uk-constituencies-2023.hexjson",
-          version: "2024",
-          effectiveFrom: MAP_CUTOVER,
+      // Postcode lookup uses ONSPD Feb 2026 lad25cd (LAD 2025 codes).
+      // The hex map must therefore use LAD 2025 codes. Barnsley and Sheffield
+      // received new GSS codes in the 2025 boundary revision:
+      //   Barnsley: E08000016 → E08000038
+      //   Sheffield: E08000019 → E08000039
+      // uk_aq_la_hex_2025.geojson uses the same cartogram layout as the 2023 file
+      // but with updated LA identifiers. Validate with: npm run validate:hexmap:2025
+      //
+      // Wales and Scotland use region-only GeoJSON files because their cartogram
+      // layouts have been manually adjusted; the full UK LAD GeoJSON is used for
+      // all other Countries & Regions selections.
+      const LA_CONFIG = {
+        id: "la25",
+        label: "2025 local authorities",
+        hexUrl: "/data/LAD/uk_aq_la_hex_2025.geojson",
+        regionHexUrls: {
+          Wales: "/data/LAD/uk_aq_la_wales_hex_custom_2025.geojson",
+          Scotland: "/data/LAD/uk_aq_la_scotland_hex_custom_2025.geojson",
         },
-        {
-          id: "pcon23",
-          label: "Pre-2024 constituencies",
-          hexUrl: "/data/PCON/uk-constituencies-2017.hexjson",
-          version: "2023",
-          effectiveUntil: MAP_CUTOVER,
-        },
+        version: "2025",
+      };
+      const DEFAULT_REGION = "London";
+      const REGION_OPTIONS = [
+        "Northern Ireland",
+        "Scotland",
+        "Wales",
+        "East Midlands",
+        "East of England",
+        "London",
+        "North East",
+        "North West",
+        "South East",
+        "South West",
+        "West Midlands",
+        "Yorkshire and The Humber",
       ];
+      const REGION_LOOKUP = new Map(
+        REGION_OPTIONS.map((name) => [name.toLowerCase(), name])
+      );
+      const initialRegion = normalizeRegion(urlState.getInitialCrRegion()) || DEFAULT_REGION;
+      let activeRegion = initialRegion;
+      urlState.noteCrRegion(activeRegion);
       const mapDateKey = normalizeDateKey(mapDateParam);
-      const activeMap = pickMapConfig(mapDateKey);
-      const HEX_DATA_URL = activeMap.hexUrl;
-      const activePconVersion = pconVersionParam || activeMap.version;
-        const METRIC_LABELS = {
-          median: "Typical (median)",
-          mean: "Average (mean)",
-        };
+      const activeLaVersion = laVersionParam || LA_CONFIG.version;
+      const METRIC_LABELS = {
+        median: "Typical (median)",
+        mean: "Average (mean)",
+      };
       const MIN_VALID_PM25_VALUE = 0.09;
       const MAX_VALID_PM25_VALUE = 500;
       const WINDOW_OPTIONS = {
@@ -111,13 +170,7 @@ function initHexMapUkController(root) {
       const BREATHE_LONDON_MATCHERS = ["breathelondon"];
       const LAQN_NETWORK_MATCHERS = ["laqn"];
       const SENSOR_COMMUNITY_MATCHERS = ["sensorcommunity"];
-      const TOTAL_PCON_COUNT = 650;
-      const SORT_DEFAULTS = {
-        sensor: "asc",
-        network: "asc",
-        pm25: "desc",
-        updated: "desc",
-      };
+      const AREA_LABEL_PLURAL = "local authorities";
       const HEAT_STOPS = ["--heat-0", "--heat-1", "--heat-2", "--heat-3", "--heat-4"];
       const HEAT_STOP_FALLBACKS = ["#00a85a", "#ffd54a", "#ff9b3a", "#e03c3c", "#5b2a86"];
       const REGION_NAMES = {
@@ -143,23 +196,28 @@ function initHexMapUkController(root) {
         { q: 0, r: 1 },
       ];
       const EDGE_DIRECTION_CACHE = new Map();
+      const LA_REGION_OVERRIDES = Object.freeze({
+        // Source data fix: Kingston Upon Hull is Yorkshire and The Humber.
+        E06000010: "Yorkshire and The Humber",
+      });
+      const GEO_ISLAND_COMPACTION_EXCLUDED_REGIONS = new Set([
+        "London",
+        "Yorkshire and The Humber",
+      ]);
 
-      const statusEl = document.getElementById("status");
+      const mapSelect = byId("map-select");
+      const statusEl = byId("status");
       const statusIndicator = statusEl ? statusEl.closest(".status-indicator") : null;
-      const errorEl = document.getElementById("error");
-      const rowCount = document.getElementById("row-count");
-      const lastUpdated = document.getElementById("last-updated");
-      const endpointHint = document.getElementById("endpoint-hint");
-      const mapTitle = document.getElementById("map-title");
-      const pollutantSelector = document.getElementById("pollutant-selector");
-      const pollutantButtons = pollutantSelector
-        ? Array.from(pollutantSelector.querySelectorAll("button[data-pollutant]"))
-        : [];
-      const legendPollutantLabel = document.getElementById("legend-pollutant");
-      const legendLabel = document.getElementById("legend-label");
-      const legendMin = document.getElementById("legend-min");
-      const legendMax = document.getElementById("legend-max");
-      const legendScale = document.getElementById("legend-scale");
+      const errorEl = byId("error");
+      const rowCount = byId("row-count");
+      const lastUpdated = byId("last-updated");
+      const endpointHint = byId("endpoint-hint");
+      const mapTitle = byId("map-title");
+      const legendPollutantLabel = byId("legend-pollutant");
+      const legendLabel = byId("legend-label");
+      const legendMin = byId("legend-min");
+      const legendMax = byId("legend-max");
+      const legendScale = byId("legend-scale");
       requestAnimationFrame(() => {
         if (!legendLabel) return;
         const saved = legendLabel.textContent;
@@ -172,107 +230,123 @@ function initHexMapUkController(root) {
         legendLabel.textContent = saved;
         if (maxW > 0) legendLabel.style.minWidth = `${maxW}px`;
       });
-      const legendTicks = Array.from(document.querySelectorAll(".legend-tick"));
-      const legendTickLabels = Array.from(document.querySelectorAll(".legend-tick-label"));
-      const summaryStations = document.getElementById("summary-stations");
-      const summaryHighestLabel = document.getElementById("summary-highest-label");
-      const summaryLowestLabel = document.getElementById("summary-lowest-label");
-      const summaryLowestValue = document.getElementById("summary-lowest-value");
-      const summaryLowestDatetime = document.getElementById("summary-lowest-datetime");
-      const summaryLowestConnector = document.getElementById("summary-lowest-connector");
-      const summaryLowestName = document.getElementById("summary-lowest-name");
-      const summaryHighestValue = document.getElementById("summary-highest-value");
-      const summaryHighestDatetime = document.getElementById("summary-highest-datetime");
-      const summaryHighestConnector = document.getElementById("summary-highest-connector");
-      const summaryHighestName = document.getElementById("summary-highest-name");
-      const sensorValueLabel = document.getElementById("sensor-value-label");
-      const overallSummaryCard = document.getElementById("overall-summary");
-      const overallSummaryTitle = document.getElementById("summary-overall-title");
+      const legendTicks = Array.from(queryAll(".legend-tick"));
+      const legendTickLabels = Array.from(queryAll(".legend-tick-label"));
+      const summaryStations = byId("summary-stations");
+      const summaryHighestLabel = byId("summary-highest-label");
+      const summaryLowestLabel = byId("summary-lowest-label");
+      const summaryLowestValue = byId("summary-lowest-value");
+      const summaryLowestDatetime = byId("summary-lowest-datetime");
+      const summaryLowestConnector = byId("summary-lowest-connector");
+      const summaryLowestName = byId("summary-lowest-name");
+      const summaryHighestValue = byId("summary-highest-value");
+      const summaryHighestDatetime = byId("summary-highest-datetime");
+      const summaryHighestConnector = byId("summary-highest-connector");
+      const summaryHighestName = byId("summary-highest-name");
+      const overallSummaryTitle = byId("summary-overall-title");
+      const sensorValueLabel = byId("sensor-value-label");
+      const tooltip = byId("tooltip");
+      const sensorDetailsSection = document.getElementById("cr-sensor-details");
+      const detailsTitle = byId("details-title");
+      const detailsMeta = byId("details-meta");
+      const detailsEmpty = byId("details-empty");
+      const detailsTableWrap = byId("sensor-table-wrap");
+      const detailsTableBody = byId("sensor-table-body");
+      const networkSummary = byId("network-summary");
+      const aurnSensors = byId("network-aurn-sensors");
+      const aurnCoverageValue = byId("network-aurn-coverage-value");
+      const aurnCoverageBar = byId("network-aurn-coverage-bar");
+      const aurnCoverageFill = byId("network-aurn-coverage-fill");
+      const aurnAverage = byId("network-aurn-average");
+      const aurnMedian = byId("network-aurn-median");
+      const aurnHighest = byId("network-aurn-highest");
+      const aurnLowest = byId("network-aurn-lowest");
+      const aurnLatest = byId("network-aurn-latest");
+      const openaqSensors = byId("network-openaq-sensors");
+      const openaqCoverageValue = byId("network-openaq-coverage-value");
+      const openaqCoverageBar = byId("network-openaq-coverage-bar");
+      const openaqCoverageFill = byId("network-openaq-coverage-fill");
+      const openaqAverage = byId("network-openaq-average");
+      const openaqMedian = byId("network-openaq-median");
+      const openaqHighest = byId("network-openaq-highest");
+      const openaqLowest = byId("network-openaq-lowest");
+      const openaqLatest = byId("network-openaq-latest");
+      const breatheSensors = byId("network-breathe-sensors");
+      const breatheCoverageValue = byId("network-breathe-coverage-value");
+      const breatheCoverageBar = byId("network-breathe-coverage-bar");
+      const breatheCoverageFill = byId("network-breathe-coverage-fill");
+      const breatheAverage = byId("network-breathe-average");
+      const breatheMedian = byId("network-breathe-median");
+      const breatheHighest = byId("network-breathe-highest");
+      const breatheLowest = byId("network-breathe-lowest");
+      const breatheLatest = byId("network-breathe-latest");
+      const laqnSensors = byId("network-laqn-sensors");
+      const laqnCoverageValue = byId("network-laqn-coverage-value");
+      const laqnCoverageBar = byId("network-laqn-coverage-bar");
+      const laqnCoverageFill = byId("network-laqn-coverage-fill");
+      const laqnAverage = byId("network-laqn-average");
+      const laqnMedian = byId("network-laqn-median");
+      const laqnHighest = byId("network-laqn-highest");
+      const laqnLowest = byId("network-laqn-lowest");
+      const laqnLatest = byId("network-laqn-latest");
+      const scSensors = byId("network-sc-sensors");
+      const scCoverageValue = byId("network-sc-coverage-value");
+      const scCoverageBar = byId("network-sc-coverage-bar");
+      const scCoverageFill = byId("network-sc-coverage-fill");
+      const scAverage = byId("network-sc-average");
+      const scMedian = byId("network-sc-median");
+      const scHighest = byId("network-sc-highest");
+      const scLowest = byId("network-sc-lowest");
+      const scLatest = byId("network-sc-latest");
       const extraNetworkSummaryDefs = [
-        {
-          key: "openaq",
-          matchers: OPENAQ_NETWORK_MATCHERS,
-          elements: {
-            sensors: document.getElementById("network-openaq-sensors"),
-            coverageValue: document.getElementById("network-openaq-coverage-value"),
-            coverageBar: document.getElementById("network-openaq-coverage-bar"),
-            coverageFill: document.getElementById("network-openaq-coverage-fill"),
-            average: document.getElementById("network-openaq-average"),
-            median: document.getElementById("network-openaq-median"),
-            highest: document.getElementById("network-openaq-highest"),
-            lowest: document.getElementById("network-openaq-lowest"),
-            latest: document.getElementById("network-openaq-latest"),
-          },
-        },
         {
           key: "breathe-london",
           matchers: BREATHE_LONDON_MATCHERS,
           elements: {
-            sensors: document.getElementById("network-breathe-sensors"),
-            coverageValue: document.getElementById("network-breathe-coverage-value"),
-            coverageBar: document.getElementById("network-breathe-coverage-bar"),
-            coverageFill: document.getElementById("network-breathe-coverage-fill"),
-            average: document.getElementById("network-breathe-average"),
-            median: document.getElementById("network-breathe-median"),
-            highest: document.getElementById("network-breathe-highest"),
-            lowest: document.getElementById("network-breathe-lowest"),
-            latest: document.getElementById("network-breathe-latest"),
+            sensors: breatheSensors,
+            coverageValue: breatheCoverageValue,
+            coverageBar: breatheCoverageBar,
+            coverageFill: breatheCoverageFill,
+            average: breatheAverage,
+            median: breatheMedian,
+            highest: breatheHighest,
+            lowest: breatheLowest,
+            latest: breatheLatest,
           },
         },
         {
           key: "laqn",
           matchers: LAQN_NETWORK_MATCHERS,
           elements: {
-            sensors: document.getElementById("network-laqn-sensors"),
-            coverageValue: document.getElementById("network-laqn-coverage-value"),
-            coverageBar: document.getElementById("network-laqn-coverage-bar"),
-            coverageFill: document.getElementById("network-laqn-coverage-fill"),
-            average: document.getElementById("network-laqn-average"),
-            median: document.getElementById("network-laqn-median"),
-            highest: document.getElementById("network-laqn-highest"),
-            lowest: document.getElementById("network-laqn-lowest"),
-            latest: document.getElementById("network-laqn-latest"),
+            sensors: laqnSensors,
+            coverageValue: laqnCoverageValue,
+            coverageBar: laqnCoverageBar,
+            coverageFill: laqnCoverageFill,
+            average: laqnAverage,
+            median: laqnMedian,
+            highest: laqnHighest,
+            lowest: laqnLowest,
+            latest: laqnLatest,
           },
         },
         {
           key: "sensor-community",
           matchers: SENSOR_COMMUNITY_MATCHERS,
           elements: {
-            sensors: document.getElementById("network-sc-sensors"),
-            coverageValue: document.getElementById("network-sc-coverage-value"),
-            coverageBar: document.getElementById("network-sc-coverage-bar"),
-            coverageFill: document.getElementById("network-sc-coverage-fill"),
-            average: document.getElementById("network-sc-average"),
-            median: document.getElementById("network-sc-median"),
-            highest: document.getElementById("network-sc-highest"),
-            lowest: document.getElementById("network-sc-lowest"),
-            latest: document.getElementById("network-sc-latest"),
+            sensors: scSensors,
+            coverageValue: scCoverageValue,
+            coverageBar: scCoverageBar,
+            coverageFill: scCoverageFill,
+            average: scAverage,
+            median: scMedian,
+            highest: scHighest,
+            lowest: scLowest,
+            latest: scLatest,
           },
         },
       ];
-      const tooltip = document.getElementById("tooltip");
-      const sensorDetailsSection = document.getElementById("sensor-details");
-      const detailsTitle = document.getElementById("details-title");
-      const detailsMeta = document.getElementById("details-meta");
-      const detailsEmpty = document.getElementById("details-empty");
-      const detailsTableWrap = document.getElementById("sensor-table-wrap");
-      const detailsTableBody = document.getElementById("sensor-table-body");
-      const networkSummary = document.getElementById("network-summary");
-      const sensorShareList = document.getElementById("sensor-share-list");
-      const networkSummaryCoverage = document.getElementById("network-summary-coverage");
-      const networkSummarySensors = document.getElementById("network-summary-sensors");
-      const networkSummaryFreshness = document.getElementById("network-summary-freshness");
-      const aurnSensors = document.getElementById("network-aurn-sensors");
-      const aurnCoverageValue = document.getElementById("network-aurn-coverage-value");
-      const aurnCoverageBar = document.getElementById("network-aurn-coverage-bar");
-      const aurnCoverageFill = document.getElementById("network-aurn-coverage-fill");
-      const aurnAverage = document.getElementById("network-aurn-average");
-      const aurnMedian = document.getElementById("network-aurn-median");
-      const aurnHighest = document.getElementById("network-aurn-highest");
-      const aurnLowest = document.getElementById("network-aurn-lowest");
-      const aurnLatest = document.getElementById("network-aurn-latest");
-      const mapSvg = document.getElementById("hex-map");
-      const svg = d3.select("#hex-map");
+      const mapSvg = byId("hex-map");
+      const svg = d3.select("#cr-hex-map");
       const mapResizeTarget = svg.node()?.parentElement || svg.node();
       if (mapResizeTarget && typeof ResizeObserver !== "undefined") {
         const mapResizeObserver = new ResizeObserver(() => {
@@ -282,37 +356,36 @@ function initHexMapUkController(root) {
         });
         mapResizeObserver.observe(mapResizeTarget);
       }
-      const ukRoot = document.getElementById("tab-panel-uk");
-      const mapSettingsButton = document.querySelector(".map-settings");
-      const mapSettingsPanel = document.getElementById("map-settings-panel");
-      const mapSettingsClose = document.getElementById("map-settings-close");
-      const mapPanel = document.querySelector(".map-panel");
-      const mapWrap = document.querySelector("#tab-panel-uk .map-wrap");
-      const windowInputs = Array.from(document.querySelectorAll("input[name='averagingWindow']"));
-      const metricInputs = Array.from(document.querySelectorAll("input[name='metricSelect']"));
-      const metricGroup = document.querySelector(".metric-group");
+      const mapSettingsButton = query(".map-settings");
+      const mapSettingsPanel = byId("map-settings-panel");
+      const mapSettingsClose = byId("map-settings-close");
+      const mapWrap = query(".map-wrap");
+      const windowInputs = Array.from(queryAll("input[name='cr-averagingWindow']"));
+      const metricInputs = Array.from(queryAll("input[name='cr-metricSelect']"));
+      const metricGroup = query(".metric-group");
       const metricToggle = metricGroup ? metricGroup.querySelector(".metric-toggle") : null;
-      const colorScaleInputs = Array.from(document.querySelectorAll("input[name='colourScale']"));
-      const colorScaleGroup = document.querySelector(".colour-scale-group");
+      const colorScaleInputs = Array.from(queryAll("input[name='cr-colourScale']"));
+      const colorScaleGroup = query(".colour-scale-group");
       const colorScaleToggle = colorScaleGroup ? colorScaleGroup.querySelector(".colour-scale-toggle") : null;
-      const networkPanel = document.querySelector(".network-panel");
+      const networkPanel = query(".network-panel");
+      // Shared toolbar dropdown controls (single DOM instance moved between UK/CR tabs).
       const sortHeaders = detailsTableWrap
         ? Array.from(detailsTableWrap.querySelectorAll("th[data-sort-key]"))
         : [];
       const sortHeaderButtons = sortHeaders
         .map((header) => header.querySelector("button[data-sort-key]"))
         .filter(Boolean);
-      const mapCanvasWrap = document.getElementById("map-inline-sensor-panel")?.closest(".map-canvas-wrap") || null;
-      const inlinePanelClose = document.getElementById("sensor-panel-close");
-      const inlinePanelWindowLabel = document.getElementById("sensor-panel-window-label");
-      const inlinePanelTitle = document.getElementById("sensor-panel-title");
-      const inlinePanelTitleLaunch = document.querySelector("#tab-panel-uk .sensor-panel-title-launch");
-      const inlinePanelLaunchButton = document.querySelector("#tab-panel-uk .sensor-title-icon-button");
-      const inlinePanelReading = document.getElementById("sensor-panel-reading");
-      const inlinePanelNetworkLabel = document.getElementById("sensor-panel-network-label");
-      const inlinePanelCount = document.getElementById("sensor-panel-count");
-      const inlinePanelHexIcon = document.getElementById("sensor-panel-hex-icon");
-      const inlinePanelBody = document.getElementById("sensor-panel-body");
+      const mapCanvasWrap = byId("map-inline-sensor-panel")?.closest(".map-canvas-wrap") || null;
+      const inlinePanelClose = byId("sensor-panel-close");
+      const inlinePanelWindowLabel = byId("sensor-panel-window-label");
+      const inlinePanelTitle = byId("sensor-panel-title");
+      const inlinePanelTitleLaunch = query("#tab-panel-cr .sensor-panel-title-launch");
+      const inlinePanelLaunchButton = query("#tab-panel-cr .sensor-title-icon-button");
+      const inlinePanelReading = byId("sensor-panel-reading");
+      const inlinePanelNetworkLabel = byId("sensor-panel-network-label");
+      const inlinePanelCount = byId("sensor-panel-count");
+      const inlinePanelHexIcon = byId("sensor-panel-hex-icon");
+      const inlinePanelBody = byId("sensor-panel-body");
       const SENSOR_PANEL_EMPTY_HEIGHT = 116;
       const SENSOR_PANEL_HEADER_HEIGHT = 62;
       const SENSOR_TABLE_HEADER_HEIGHT = 44;
@@ -338,7 +411,7 @@ function initHexMapUkController(root) {
         if (!inlinePanelTitle) {
           return;
         }
-        const isChartModeActive = Boolean(window.hexChartMode?.isActive?.("uk"));
+        const isChartModeActive = Boolean(window.hexChartMode?.isActive?.("cr"));
         const isInteractive = chartLaunchAvailable && !isChartModeActive;
         inlinePanelTitleLaunch?.setAttribute("data-chart-launch-available", isInteractive ? "true" : "false");
         if (inlinePanelLaunchButton) {
@@ -355,31 +428,31 @@ function initHexMapUkController(root) {
       };
       if (inlinePanelClose) {
         inlinePanelClose.addEventListener("click", () => {
-          if (window.hexChartMode?.isActive?.("uk")) {
+          if (window.hexChartMode?.isActive?.("cr")) {
             window.hexChartMode?.exit?.();
           }
           setSelectedCell(null);
         });
       }
       const openSelectedAreaChartMode = () => {
-        if (!chartLaunchAvailable || !selectedPconCode || window.hexChartMode?.isActive?.("uk")) {
+        if (!chartLaunchAvailable || !selectedAreaCode || window.hexChartMode?.isActive?.("cr")) {
           return;
         }
-        window.hexChartMode?.enter?.({ mapKey: "uk" });
+        window.hexChartMode?.enter?.({ mapKey: "cr" });
       };
       inlinePanelLaunchButton?.addEventListener("click", (event) => {
         event.stopPropagation();
         openSelectedAreaChartMode();
       });
       inlinePanelTitle?.addEventListener("click", (event) => {
-        if (!chartLaunchAvailable || window.hexChartMode?.isActive?.("uk")) {
+        if (!chartLaunchAvailable || window.hexChartMode?.isActive?.("cr")) {
           return;
         }
         event.stopPropagation();
         openSelectedAreaChartMode();
       });
       inlinePanelTitle?.addEventListener("keydown", (event) => {
-        if (!chartLaunchAvailable || window.hexChartMode?.isActive?.("uk")) {
+        if (!chartLaunchAvailable || window.hexChartMode?.isActive?.("cr")) {
           return;
         }
         if (event.key === "Enter" || event.key === " ") {
@@ -396,11 +469,11 @@ function initHexMapUkController(root) {
           if (launchButton && detailsTableWrap.contains(launchButton)) {
             event.stopPropagation();
             const stationId = String(launchButton.dataset.stationId || "").trim();
-            if (!stationId || window.hexChartMode?.isActive?.("uk")) {
+            if (!stationId || window.hexChartMode?.isActive?.("cr")) {
               return;
             }
             window.hexChartMode?.enter?.({
-              mapKey: "uk",
+              mapKey: "cr",
               initialSensorId: stationId,
             });
             return;
@@ -414,8 +487,8 @@ function initHexMapUkController(root) {
             if (!action) {
               return;
             }
-            if (window.hexChartMode?.isActive?.("uk")) {
-              window.hexChartMode?.applyHeaderSelectionAction?.(action, { mapKey: "uk" });
+            if (window.hexChartMode?.isActive?.("cr")) {
+              window.hexChartMode?.applyHeaderSelectionAction?.(action, { mapKey: "cr" });
             }
             return;
           }
@@ -428,8 +501,8 @@ function initHexMapUkController(root) {
             if (!stationId) {
               return;
             }
-            if (window.hexChartMode?.isActive?.("uk")) {
-              window.hexChartMode?.selectSensor?.(stationId, { mapKey: "uk", mode: "toggle" });
+            if (window.hexChartMode?.isActive?.("cr")) {
+              window.hexChartMode?.selectSensor?.(stationId, { mapKey: "cr", mode: "toggle" });
             }
             return;
           }
@@ -444,17 +517,18 @@ function initHexMapUkController(root) {
           if (!stationId) {
             return;
           }
-          if (window.hexChartMode?.isActive?.("uk")) {
-            window.hexChartMode?.selectSensor?.(stationId, { mapKey: "uk", mode: "single" });
+          if (window.hexChartMode?.isActive?.("cr")) {
+            window.hexChartMode?.selectSensor?.(stationId, { mapKey: "cr", mode: "single" });
             return;
           }
           window.hexChartMode?.enter?.({
-            mapKey: "uk",
+            mapKey: "cr",
             initialSensorId: stationId,
           });
         });
       }
 
+      const initialMapSettings = coordinator.getMapSettings();
       let currentMetric = initialMapSettings.metric;
       let currentColorScale = initialMapSettings.colorScale;
       let currentWindow = initialMapSettings.window;
@@ -470,6 +544,7 @@ function initHexMapUkController(root) {
       let lastRenderHeight = 0;
       let basePconRows = [];
       let basePconLookup = new Map();
+      let loadedLaCacheKey = null;
       let pconRows = [];
       let pconLookup = new Map();
       let pconCodes = new Set();
@@ -480,16 +555,21 @@ function initHexMapUkController(root) {
       let scopedLatestRowsAllWindow = [];
       let latestRows = [];
       let latestPollutant = null;
+      let loadedLatestCacheKey = null;
+      let loadedLatestAllCacheKey = null;
       let chartDataStatus = "loading";
-      let ukRefreshTimer = null;
-      let ukWasHidden = true;
-      let ukBootstrapReady = false;
+      let allRegionsMetricLookup = new Map();
+      let allRegionsFetchState = "idle"; // "idle" | "fetching" | "done"
+      let allRegionsFetchPollutant = null;
+      let crRefreshTimer = null;
+      let crWasHidden = true;
+      let crBootstrapReady = false;
       let populationLookup = new Map();
-      let selectedPconCode = null;
-      let selectedCell = null;
-      let areaRegionLookup = new Map();
-      let pinnedTooltipCell = null;
-      let ukSearchPreloadPromise = null;
+	      let selectedAreaCode = null;
+	      let selectedCell = null;
+	      let pendingSelectedAreaCode = null;
+	      let areaRegionLookup = new Map();
+	      let crSearchPreloadPromise = null;
       let colorScale = null;
       let currentDomainMax = null;
       function setStatus(value) {
@@ -503,11 +583,18 @@ function initHexMapUkController(root) {
         }
       }
 
-      if (endpointHint) {
-        endpointHint.textContent = REST_URL
-          ? `Endpoint: ${REST_URL} (${activeMap.label})`
-          : "Missing cache endpoint base URL. Add ?cache_base=... to the URL.";
+      function updateEndpointHint() {
+        if (!endpointHint) {
+          return;
+        }
+        if (!REST_URL) {
+          endpointHint.textContent = "Missing cache endpoint base URL. Add ?cache_base=... to the URL.";
+          return;
+        }
+        const regionSuffix = activeRegion ? ` · ${activeRegion}` : "";
+        endpointHint.textContent = `Endpoint: ${REST_URL} (${LA_CONFIG.label}${regionSuffix})`;
       }
+      updateEndpointHint();
 
       function resolveCacheBaseUrl(rawValue) {
         const explicit = typeof rawValue === "string" ? rawValue.trim() : "";
@@ -540,7 +627,7 @@ function initHexMapUkController(root) {
 
       const ACCESS_LOGIN_REDIRECT_KEY = "uk_aq_access_login_redirect_ts";
       const HEX_MAP_TIMING_PREFIX = "uk-aq-hex-map";
-      const MAP_TIMING_KEY = "uk";
+      const MAP_TIMING_KEY = "cr";
       let hexMapTimingSequence = 0;
 
       function nextHexMapTimingId() {
@@ -589,47 +676,58 @@ function initHexMapUkController(root) {
         if (!(error instanceof TypeError)) {
           return false;
         }
-        const message = String(error.message || "").toLowerCase();
-        return message.includes("failed to fetch") || message.includes("networkerror");
-      }
+	        const message = String(error.message || "").toLowerCase();
+	        return message.includes("failed to fetch") || message.includes("networkerror");
+	      }
 
-      function buildAccessLoginUrl() {
-        const host = window.location.hostname || "";
-        if (!host) {
-          return null;
-        }
-        const appSlug = host.split(".")[0];
-        if (!appSlug) {
-          return null;
-        }
-        const loginOrigin = `https://${appSlug}.cloudflareaccess.com`;
-        const redirectPath = `${window.location.pathname}${window.location.search}${window.location.hash}`;
-        return `${loginOrigin}/cdn-cgi/access/login/${host}?redirect_url=${encodeURIComponent(redirectPath)}`;
-      }
+	      function buildAccessLoginUrl() {
+	        const host = window.location.hostname || "";
+	        if (!host) {
+	          return null;
+	        }
+	        const appSlug = host.split(".")[0];
+	        if (!appSlug) {
+	          return null;
+	        }
+	        const loginOrigin = `https://${appSlug}.cloudflareaccess.com`;
+	        const redirectPath = `${window.location.pathname}${window.location.search}${window.location.hash}`;
+	        return `${loginOrigin}/cdn-cgi/access/login/${host}?redirect_url=${encodeURIComponent(redirectPath)}`;
+	      }
 
-      function maybeRedirectToAccessLogin(error) {
-        if (!cacheOrigin || !cacheSessionUrl || !isLikelyAccessFetchFailure(error)) {
-          return false;
-        }
-        if ((window.location.hostname || "").endsWith(".cloudflareaccess.com")) {
-          return false;
-        }
-        const loginUrl = buildAccessLoginUrl();
-        if (!loginUrl) {
-          return false;
-        }
-        try {
-          const now = Date.now();
-          const last = Number(sessionStorage.getItem(ACCESS_LOGIN_REDIRECT_KEY) || "0");
-          if (Number.isFinite(last) && now - last < 10000) {
-            return false;
+	      function maybeRedirectToAccessLogin(error) {
+	        if (!cacheOrigin || !cacheSessionUrl || !isLikelyAccessFetchFailure(error)) {
+	          return false;
+	        }
+	        if ((window.location.hostname || "").endsWith(".cloudflareaccess.com")) {
+	          return false;
+	        }
+	        const loginUrl = buildAccessLoginUrl();
+	        if (!loginUrl) {
+	          return false;
+	        }
+	        try {
+	          const now = Date.now();
+	          const last = Number(sessionStorage.getItem(ACCESS_LOGIN_REDIRECT_KEY) || "0");
+	          if (Number.isFinite(last) && now - last < 10000) {
+	            return false;
+	          }
+	          sessionStorage.setItem(ACCESS_LOGIN_REDIRECT_KEY, String(now));
+	        } catch (_err) {
+	          // Ignore storage failures and continue with redirect.
+	        }
+	        window.location.assign(loginUrl);
+	        return true;
+	      }
+
+	      if (mapSelect) {
+	        mapSelect.value = activeRegion;
+        mapSelect.addEventListener("change", () => {
+          const nextRegion = normalizeRegion(mapSelect.value);
+          if (!nextRegion) {
+            return;
           }
-          sessionStorage.setItem(ACCESS_LOGIN_REDIRECT_KEY, String(now));
-        } catch (_err) {
-          // Ignore storage failures and continue with redirect.
-        }
-        window.location.assign(loginUrl);
-        return true;
+          setActiveRegion(nextRegion, { updateUrl: true });
+        });
       }
 
       function inferProjectRefFromHost() {
@@ -651,12 +749,25 @@ function initHexMapUkController(root) {
         return trimmed;
       }
 
-      function pickMapConfig(dateKey) {
-        if (!dateKey) {
-          return MAP_CONFIGS[0];
+      function normalizeRegion(value) {
+        if (!value) {
+          return null;
         }
-        return dateKey < MAP_CUTOVER ? MAP_CONFIGS[1] : MAP_CONFIGS[0];
+        const trimmed = value.trim();
+        if (!trimmed) {
+          return null;
+        }
+        const lower = trimmed.toLowerCase();
+        if (lower === "uk") {
+          return null;
+        }
+        return REGION_LOOKUP.get(lower) || null;
       }
+
+      function getHexUrlForRegion(region) {
+        return LA_CONFIG.regionHexUrls?.[region] || LA_CONFIG.hexUrl;
+      }
+
 
       function normalizeNumber(value) {
         if (value === null || value === undefined) {
@@ -682,306 +793,6 @@ function initHexMapUkController(root) {
           return "-";
         }
         return value.toLocaleString();
-      }
-
-      function SensorShareBars(listEl, initialData = []) {
-        if (!listEl) {
-          return {
-            render: () => {},
-          };
-        }
-        const MIN_BAR_PERCENT = 4;
-        const MAX_BAR_PERCENT = 78;
-        const COUNT_GAP = 16;
-
-        const updatePlacement = (row) => {
-          const bar = row.querySelector(".sensor-share-bar");
-          const count = row.querySelector(".sensor-share-count");
-          if (!bar || !count) {
-            return;
-          }
-          row.classList.remove("is-stacked");
-          const barWidthPct = Number(row.dataset.barWidth || 0);
-          const barRect = bar.getBoundingClientRect();
-          const countRect = count.getBoundingClientRect();
-          const barEnd = barRect.left + (barRect.width * barWidthPct) / 100 + COUNT_GAP;
-          const overflow = barEnd + countRect.width > barRect.right;
-          if (overflow) {
-            row.classList.add("is-stacked");
-          }
-        };
-
-        const updateAll = () => {
-          Array.from(listEl.querySelectorAll(".sensor-share-item")).forEach(updatePlacement);
-        };
-
-        const render = (data) => {
-          const items = Array.isArray(data) ? data.slice() : [];
-          const totalSensors = items.reduce((sum, item) => sum + (Number(item?.sensors) || 0), 0);
-          const maxSensors = items.reduce((max, item) => Math.max(max, Number(item?.sensors) || 0), 0);
-          items.sort((a, b) => (Number(b?.sensors) || 0) - (Number(a?.sensors) || 0));
-          listEl.innerHTML = "";
-
-          items.forEach((item) => {
-            const name = item?.name || "Unknown";
-            const sensors = Number(item?.sensors) || 0;
-            const shareExact = totalSensors ? (sensors / totalSensors) * 100 : 0;
-            const shareRounded = Math.round(shareExact);
-            const relativeWidth = maxSensors ? (sensors / maxSensors) * MAX_BAR_PERCENT : 0;
-            const displayWidth = relativeWidth > 0 ? Math.max(relativeWidth, MIN_BAR_PERCENT) : 0;
-
-            const li = document.createElement("li");
-            li.className = "sensor-share-item";
-            li.setAttribute("role", "listitem");
-            li.setAttribute("aria-label", `${name}: ${formatNumber(sensors)} sensors, ${shareRounded} percent share`);
-            li.dataset.barWidth = displayWidth.toFixed(2);
-            li.style.setProperty("--bar-width", `${displayWidth}%`);
-            li.style.setProperty("--bar-min-width", shareExact > 0 ? `${MIN_BAR_PERCENT}%` : "0%");
-
-            const label = document.createElement("div");
-            label.className = "sensor-share-label";
-            const labelName = document.createElement("span");
-            labelName.className = "sensor-share-name";
-            labelName.textContent = name;
-            const labelPercent = document.createElement("span");
-            labelPercent.className = "sensor-share-percent";
-            labelPercent.textContent = `${shareRounded}%`;
-            label.append(labelName, labelPercent);
-
-            const barRow = document.createElement("div");
-            barRow.className = "sensor-share-bar-row";
-            const bar = document.createElement("div");
-            bar.className = "sensor-share-bar";
-            const fill = document.createElement("span");
-            fill.className = "sensor-share-fill";
-            bar.appendChild(fill);
-            const count = document.createElement("span");
-            count.className = "sensor-share-count";
-            count.textContent = formatNumber(sensors);
-            barRow.append(bar, count);
-
-            li.append(label, barRow);
-            listEl.appendChild(li);
-          });
-
-          requestAnimationFrame(updateAll);
-        };
-
-        if (window.ResizeObserver) {
-          const observer = new ResizeObserver(updateAll);
-          observer.observe(listEl);
-        } else {
-          window.addEventListener("resize", updateAll);
-        }
-
-        render(initialData);
-        return { render };
-      }
-
-      function NetworkSummaryCards(targets, data) {
-        if (!targets) {
-          return {
-            render: () => {},
-          };
-        }
-        const { coverageEl, sensorsEl, freshnessEl } = targets;
-
-        const renderCoverageCard = (metrics) => {
-          const covered = Number(metrics?.pconCovered) || 0;
-          const total = Number(metrics?.pconTotal) || 0;
-          const percent = total ? Math.round((covered / total) * 100) : 0;
-
-          const card = document.createElement("div");
-          card.className = "network-summary-content";
-          const title = document.createElement("h4");
-          title.className = "network-summary-title";
-          title.textContent = "Coverage";
-
-          const value = document.createElement("div");
-          value.className = "network-summary-value network-summary-accent";
-          value.textContent = `${percent}%`;
-
-          const subtext = document.createElement("div");
-          subtext.className = "network-summary-subtext";
-          subtext.textContent = `${formatNumber(covered)} / ${formatNumber(total)} constituencies`;
-
-          const bar = document.createElement("div");
-          bar.className = "network-summary-bar";
-          const fill = document.createElement("span");
-          fill.className = "network-summary-bar-fill";
-          fill.style.width = `${total ? (covered / total) * 100 : 0}%`;
-          bar.appendChild(fill);
-
-          card.append(title, value, subtext, bar);
-          return card;
-        };
-
-        const renderSensorsCard = (metrics) => {
-          const totalSensors = Number(metrics?.totalSensors) || 0;
-          const avgSensors = Number(metrics?.avgSensorsPerPcon);
-
-          const card = document.createElement("div");
-          card.className = "network-summary-content";
-          const title = document.createElement("h4");
-          title.className = "network-summary-title";
-          title.textContent = "Sensors";
-
-          const grid = document.createElement("div");
-          grid.className = "network-summary-grid";
-
-          const totalBlock = document.createElement("div");
-          totalBlock.className = "network-summary-metric";
-          const totalLabel = document.createElement("div");
-          totalLabel.className = "network-summary-label";
-          totalLabel.textContent = "Total Active Sensors";
-          const totalValue = document.createElement("div");
-          totalValue.className = "network-summary-number";
-          totalValue.textContent = formatNumber(totalSensors);
-          totalBlock.append(totalLabel, totalValue);
-
-          const avgBlock = document.createElement("div");
-          avgBlock.className = "network-summary-metric";
-          const avgLabel = document.createElement("div");
-          avgLabel.className = "network-summary-label";
-          avgLabel.textContent = "Average sensors per covered constituency";
-          const avgValue = document.createElement("div");
-          avgValue.className = "network-summary-number";
-          avgValue.textContent = Number.isFinite(avgSensors) ? avgSensors.toFixed(1) : "-";
-          avgBlock.append(avgLabel, avgValue);
-
-          grid.append(totalBlock, avgBlock);
-          card.append(title, grid);
-          return card;
-        };
-
-        const renderFreshnessCard = (metrics) => {
-          const latest = metrics?.newestReadingISO || null;
-          const stalest = metrics?.oldestReadingISO || null;
-
-          const card = document.createElement("div");
-          card.className = "network-summary-content";
-          const title = document.createElement("h4");
-          title.className = "network-summary-title";
-          title.textContent = "Data Freshness";
-
-          const grid = document.createElement("div");
-          grid.className = "network-summary-grid";
-
-          const latestBlock = document.createElement("div");
-          latestBlock.className = "network-summary-metric";
-          const latestLabel = document.createElement("div");
-          latestLabel.className = "network-summary-label";
-          latestLabel.textContent = "Latest update";
-          const latestValue = document.createElement("div");
-          latestValue.className = latest ? "network-summary-number" : "network-summary-empty";
-          latestValue.textContent = latest ? formatSummaryTimestamp(latest) : "No data";
-          latestBlock.append(latestLabel, latestValue);
-
-          const stalestBlock = document.createElement("div");
-          stalestBlock.className = "network-summary-metric";
-          const stalestLabel = document.createElement("div");
-          stalestLabel.className = "network-summary-label";
-          stalestLabel.textContent = "Oldest Update";
-          const stalestValue = document.createElement("div");
-          stalestValue.className = stalest ? "network-summary-number" : "network-summary-empty";
-          stalestValue.textContent = stalest ? formatSummaryTimestamp(stalest) : "No data";
-          stalestBlock.append(stalestLabel, stalestValue);
-
-          grid.append(latestBlock, stalestBlock);
-          card.append(title, grid);
-          return card;
-        };
-
-        const render = (metrics) => {
-          if (coverageEl) {
-            coverageEl.innerHTML = "";
-            coverageEl.append(renderCoverageCard(metrics));
-          }
-          if (sensorsEl) {
-            sensorsEl.innerHTML = "";
-            sensorsEl.append(renderSensorsCard(metrics));
-          }
-          if (freshnessEl) {
-            freshnessEl.innerHTML = "";
-            freshnessEl.append(renderFreshnessCard(metrics));
-          }
-        };
-
-        render(data);
-        return { render };
-      }
-
-      function collectSelectedStationEntries(rows) {
-        const stationMap = new Map();
-        rows.forEach((item, index) => {
-          const value = resolveLatestValue(item);
-          if (!Number.isFinite(value)) {
-            return;
-          }
-          const stationKey = resolveStationKey(item) || `station-${index}`;
-          const timestamp = resolveLatestTimestamp(item);
-          const existing = stationMap.get(stationKey);
-          if (!existing || (timestamp && (!existing.timestamp || timestamp > existing.timestamp))) {
-            stationMap.set(stationKey, { row: item, value, timestamp });
-          }
-        });
-        return Array.from(stationMap.values());
-      }
-
-      function getSelectedNetworkLabel(row, selectedNetworkCodes) {
-        const entries = collectNetworkEntries(row);
-        if (selectedNetworkCodes && selectedNetworkCodes.size) {
-          const match = entries.find((entry) => entry.code && selectedNetworkCodes.has(entry.code));
-          if (match) {
-            return match.label || match.code;
-          }
-        }
-        return resolvePrimaryNetworkLabel(row) || "Unknown network";
-      }
-
-      function buildSelectedNetworkSummary() {
-        const windowed = filterRowsByWindow(scopedLatestRows);
-        const scopedRows = getRowsForActivePollutant(windowed);
-        const entries = collectSelectedStationEntries(scopedRows);
-        const selectedNetworkCodes = getActiveNetworkCodes();
-        const pconSet = new Set();
-        const counts = new Map();
-        let newest = null;
-        let oldest = null;
-
-        entries.forEach((entry) => {
-          const pcon = resolvePconCode(entry.row);
-          if (pcon) {
-            pconSet.add(pcon);
-          }
-          const timestamp = entry.timestamp;
-          if (timestamp) {
-            if (!newest || timestamp > newest) {
-              newest = timestamp;
-            }
-            if (!oldest || timestamp < oldest) {
-              oldest = timestamp;
-            }
-          }
-          const label = getSelectedNetworkLabel(entry.row, selectedNetworkCodes);
-          counts.set(label, (counts.get(label) || 0) + 1);
-        });
-
-        const shareData = Array.from(counts.entries()).map(([name, sensors]) => ({ name, sensors }));
-        const totalSensors = entries.length;
-        const pconCovered = pconSet.size;
-        const pconTotal = pconCodes.size || TOTAL_PCON_COUNT;
-        const avgSensorsPerPcon = pconCovered ? totalSensors / pconCovered : null;
-
-        return {
-          pconCovered,
-          pconTotal,
-          totalSensors,
-          avgSensorsPerPcon,
-          newestReadingISO: newest ? newest.toISOString?.() || newest : null,
-          oldestReadingISO: oldest ? oldest.toISOString?.() || oldest : null,
-          shareData,
-        };
       }
 
       function formatSensorCount(value) {
@@ -1105,16 +916,16 @@ function initHexMapUkController(root) {
           return;
         }
         if (!options.coordinated) {
-          coordinator.updateMapSettings({ window: normalized }, { source: "uk" });
+          coordinator.updateMapSettings({ window: normalized }, { source: "cr" });
           return;
         }
         currentWindow = normalized;
         syncWindowInputs();
-        if (!isUkMapVisible()) {
+        if (!isCrMapVisible()) {
           return;
         }
         setMapLoading(true);
-        const latestCacheKey = getLatestCacheKey(activePollutant, currentWindow);
+        const latestCacheKey = getLatestCacheKey(activePollutant, currentWindow, activeRegion);
         // Window switches must compare like-for-like snapshots. Drop incremental
         // state for the target window so we always fetch a fresh full window.
         latestSinceByKey.delete(latestCacheKey);
@@ -1140,7 +951,7 @@ function initHexMapUkController(root) {
         const pollutantLabel = getPollutantLabel(activePollutant);
         const pollutantUnits = getPollutantUnits(activePollutant);
         if (mapTitle) {
-          mapTitle.textContent = `Latest ${pollutantLabel} by constituency`;
+          mapTitle.textContent = `Latest ${pollutantLabel} by local authority`;
         }
         if (legendPollutantLabel) {
           legendPollutantLabel.textContent = `${pollutantLabel} (${pollutantUnits})`;
@@ -1158,19 +969,19 @@ function initHexMapUkController(root) {
           sensorValueLabel.textContent = pollutantLabel;
         }
         if (mapSvg) {
-          mapSvg.setAttribute("aria-label", `Hex cartogram of ${pollutantLabel} by constituency`);
+          mapSvg.setAttribute("aria-label", `Hex cartogram of ${pollutantLabel} by local authority`);
         }
       }
 
-      let ukInitialLoad = true;
+      let crInitialLoad = true;
 
       function setMapLoading(isLoading) {
         if (!mapWrap) {
           return;
         }
         if (!isLoading) {
-          if (ukInitialLoad) {
-            ukInitialLoad = false;
+          if (crInitialLoad) {
+            crInitialLoad = false;
             mapWrap.classList.remove("is-initial");
           }
           const dataHexes = mapWrap.querySelectorAll(".hex.has-data");
@@ -1191,25 +1002,25 @@ function initHexMapUkController(root) {
         }
       }
 
-      function isUkMapVisible() {
-        return !document.hidden && !ukRoot?.hidden;
+      function isCrMapVisible() {
+        return !document.hidden && !root?.hidden;
       }
 
-      function clearUkRefreshTimer() {
-        if (ukRefreshTimer) {
-          clearInterval(ukRefreshTimer);
-          ukRefreshTimer = null;
+      function clearCrRefreshTimer() {
+        if (crRefreshTimer) {
+          clearInterval(crRefreshTimer);
+          crRefreshTimer = null;
         }
       }
 
-      function startUkRefreshTimer() {
-        clearUkRefreshTimer();
-        if (!isUkMapVisible()) {
+      function startCrRefreshTimer() {
+        clearCrRefreshTimer();
+        if (!isCrMapVisible()) {
           return;
         }
-        ukRefreshTimer = setInterval(() => {
-          if (isUkMapVisible()) {
-            if (window.hexChartMode?.isActive?.("uk")) {
+        crRefreshTimer = setInterval(() => {
+          if (isCrMapVisible()) {
+            if (window.hexChartMode?.isActive?.("cr")) {
               window.hexChartMode.refresh?.();
             } else {
               loadMapData();
@@ -1218,24 +1029,28 @@ function initHexMapUkController(root) {
         }, 60 * 1000);
       }
 
-      function syncUkPollingOnVisibility() {
-        if (!isUkMapVisible()) {
-          clearUkRefreshTimer();
-          ukWasHidden = true;
+      function syncCrPollingOnVisibility() {
+        if (!isCrMapVisible()) {
+          clearCrRefreshTimer();
+          crWasHidden = true;
           return;
         }
-        if (!ukBootstrapReady) {
+        if (!crBootstrapReady) {
           return;
         }
-        startUkRefreshTimer();
-        if (ukWasHidden) {
+        startCrRefreshTimer();
+        if (crWasHidden) {
           loadMapData();
-          ukWasHidden = false;
+          crWasHidden = false;
         }
       }
 
-      function getLatestCacheKey(pollutantKey = activePollutant, windowKey = currentWindow) {
-        return `${pollutantKey || "all"}::${windowKey || "all"}`;
+      function getLatestCacheKey(
+        pollutantKey = activePollutant,
+        windowKey = currentWindow,
+        regionKey = activeRegion
+      ) {
+        return `${pollutantKey || "all"}::${windowKey || "all"}::${regionKey || "all"}`;
       }
 
       function normalizeIsoTimestamp(value) {
@@ -1292,7 +1107,7 @@ function initHexMapUkController(root) {
         const merged = new Map();
         const extras = [];
         const upsert = (row) => {
-          const key = row?.pcon_code;
+          const key = resolveAreaCode(row);
           if (!key) {
             extras.push(row);
             return;
@@ -1321,8 +1136,11 @@ function initHexMapUkController(root) {
           return false;
         }
         baseLatestRows = cached.latestRows;
-        const cachedAllRows = getPollutantCache(getLatestCacheKey(activePollutant, "all"));
+        loadedLatestCacheKey = key;
+        const latestAllCacheKey = getLatestCacheKey(activePollutant, "all", activeRegion);
+        const cachedAllRows = getPollutantCache(latestAllCacheKey);
         baseLatestRowsAllWindow = cachedAllRows?.latestRows || cached.latestRows || [];
+        loadedLatestAllCacheKey = cachedAllRows ? latestAllCacheKey : null;
         latestPollutant = cached.latestPollutant || activePollutant;
         chartDataStatus = latestPollutant === activePollutant ? "ready" : "loading";
         const networkRowsForWindow = getNetworkRowsForWindow();
@@ -1331,8 +1149,8 @@ function initHexMapUkController(root) {
         renderNetworkFiltersIfNeeded(
           windowNetworkDefs,
           coverageByCode,
-          TOTAL_PCON_COUNT,
-          "constituencies",
+          pconCodes.size || 0,
+          AREA_LABEL_PLURAL,
         );
         applyNetworkFilters();
         requestAnimationFrame(() => {
@@ -1341,69 +1159,33 @@ function initHexMapUkController(root) {
         return true;
       }
 
-      function syncPollutantButtons() {
-        if (!pollutantButtons.length) {
-          return;
-        }
-        pollutantButtons.forEach((button) => {
-          const key = button.dataset.pollutant;
-          const isActive = key === activePollutant;
-          button.setAttribute("aria-checked", isActive ? "true" : "false");
-          button.tabIndex = isActive ? 0 : -1;
-        });
-      }
-
       function setActivePollutant(nextPollutant, options = {}) {
         if (!nextPollutant) {
           return;
         }
         const normalized = normalizePollutantKey(nextPollutant);
         if (!normalized || normalized === activePollutant) {
-          syncPollutantButtons();
           updatePollutantLabels();
           return;
         }
         if (!options.coordinated) {
-          coordinator.setPollutant(normalized, { source: coordinator.getActiveMap() });
+          coordinator.setPollutant(normalized, { source: "cr" });
           return;
         }
         activePollutant = normalized;
         chartDataStatus = "loading";
         updatePollutantLabels();
-        syncPollutantButtons();
         if (options.deferFetch) {
           return;
         }
-        if (!isUkMapVisible()) {
+        if (!isCrMapVisible()) {
           return;
         }
         setMapLoading(true);
-        if (applyCachedPollutant(getLatestCacheKey(activePollutant, currentWindow))) {
+        if (applyCachedPollutant(getLatestCacheKey(activePollutant, currentWindow, activeRegion))) {
           return;
         }
         loadMapData();
-      }
-
-      function handlePollutantKeydown(event) {
-        if (!pollutantButtons.length) {
-          return;
-        }
-        if (event.key !== "ArrowLeft" && event.key !== "ArrowRight" && event.key !== "ArrowUp" && event.key !== "ArrowDown") {
-          return;
-        }
-        event.preventDefault();
-        const currentIndex = pollutantButtons.findIndex((button) => button.dataset.pollutant === activePollutant);
-        if (currentIndex === -1) {
-          return;
-        }
-        const direction = (event.key === "ArrowLeft" || event.key === "ArrowUp") ? -1 : 1;
-        const nextIndex = (currentIndex + direction + pollutantButtons.length) % pollutantButtons.length;
-        const nextButton = pollutantButtons[nextIndex];
-        if (!nextButton) {
-          return;
-        }
-        setActivePollutant(nextButton.dataset.pollutant);
-        nextButton.focus();
       }
 
       function getWindowCutoff() {
@@ -1422,29 +1204,6 @@ function initHexMapUkController(root) {
           return false;
         }
         return timestamp.getTime() >= cutoff;
-      }
-
-      function getDefaultSortDir(key) {
-        return SORT_DEFAULTS[key] || "asc";
-      }
-
-      function getSortDirection(columnKey, activeKey, activeDir) {
-        return columnKey === activeKey ? activeDir : getDefaultSortDir(columnKey);
-      }
-
-      function renderSortIcon(columnKey, activeKey, activeDir) {
-        const direction = getSortDirection(columnKey, activeKey, activeDir);
-        return direction === "asc" ? "↑" : "↓";
-      }
-
-      function getSortTooltip(columnKey, activeKey, activeDir) {
-        const isActive = columnKey === activeKey;
-        if (!isActive) {
-          if (columnKey === "sensor" || columnKey === "network") return "Click to sort A to Z";
-          if (columnKey === "pm25") return "Click to sort high to low";
-          return "Click to sort newest first";
-        }
-        return "";
       }
 
       function syncColorScaleInputs() {
@@ -1471,7 +1230,7 @@ function initHexMapUkController(root) {
           return;
         }
         if (!options.coordinated) {
-          coordinator.updateMapSettings({ colorScale: nextScale }, { source: "uk" });
+          coordinator.updateMapSettings({ colorScale: nextScale }, { source: "cr" });
           return;
         }
         currentColorScale = nextScale;
@@ -1684,7 +1443,7 @@ function initHexMapUkController(root) {
       function buildNetworkCoverageByCode(rows) {
         const coverageByCode = new Map();
         rows.forEach((row) => {
-          const areaCode = resolvePconCode(row);
+          const areaCode = resolveAreaCode(row);
           if (!areaCode) {
             return;
           }
@@ -1705,7 +1464,7 @@ function initHexMapUkController(root) {
       }
 
       function renderNetworkFiltersIfNeeded(defs, coverageByCode, coverageTotal, coverageAreaLabel) {
-        return networkController.updateScope("uk", {
+        return networkController.updateScope("cr", {
           definitions: defs,
           coverageByCode,
           coverageTotal,
@@ -1718,20 +1477,53 @@ function initHexMapUkController(root) {
         return code ? [code] : [];
       }
 
+      function resolveAreaCode(row) {
+        return row?.area_code
+          || row?.la_code
+          || row?.lad_code
+          || row?.la
+          || row?.lad
+          || row?.local_authority_code
+          || row?.local_authority
+          || row?.pcon_code
+          || row?.station?.la_code
+          || row?.station?.lad_code
+          || row?.station?.la
+          || row?.station?.lad
+          || row?.station?.local_authority_code
+          || row?.station?.local_authority
+          || row?.station?.pcon_code
+          || null;
+      }
+
       function resolvePconCode(row) {
         return row?.pcon_code
           || row?.station?.pcon_code
           || null;
       }
 
-      function resolveLaCode(row) {
-        return row?.la_code
-          || row?.lad_code
-          || row?.local_authority_code
-          || row?.station?.la_code
-          || row?.station?.lad_code
-          || row?.station?.local_authority_code
+      function resolveAreaName(row) {
+        return row?.area_name
+          || row?.la_name
+          || row?.pcon_name
+          || row?.local_authority_name
+          || row?.station?.la_name
+          || row?.station?.local_authority_name
+          || row?.station?.pcon_name
           || null;
+      }
+
+      function resolveCellAreaCode(cell) {
+        return cell?.area_code || cell?.pcon_code || null;
+      }
+
+      function resolveCellAreaName(cell) {
+        return cell?.area_name || cell?.pcon_name || null;
+      }
+
+      // Backward-compatible alias used by existing helpers.
+      function resolvePconCode(row) {
+        return resolveAreaCode(row);
       }
 
       function resolveStationKey(row) {
@@ -1981,6 +1773,7 @@ function initHexMapUkController(root) {
           return;
         }
         const pollutantUnits = getPollutantUnits(activePollutant);
+        const total = pconCodes.size || 0;
         extraNetworkSummaryDefs.forEach((def) => {
           const summary = computeNetworkSummary(scopedLatestRows, def.matchers);
           const sensorLabel = summary.totalCount
@@ -1996,8 +1789,8 @@ function initHexMapUkController(root) {
             def.elements.coverageFill,
             def.elements.coverageBar,
             summary.coverage,
-            TOTAL_PCON_COUNT,
-            "constituencies"
+            total,
+            AREA_LABEL_PLURAL
           );
           if (def.elements.average) {
             def.elements.average.textContent = Number.isFinite(summary.mean)
@@ -2027,25 +1820,17 @@ function initHexMapUkController(root) {
         });
       }
 
-      function updateOverallSummary() {
-        if (!summaryStations || !summaryLowestValue || !summaryLowestDatetime || !summaryLowestConnector
-          || !summaryLowestName || !summaryHighestValue || !summaryHighestDatetime
-          || !summaryHighestConnector || !summaryHighestName) {
-          return;
-        }
+      function updateSummary() {
         const pollutantLabel = getPollutantLabel(activePollutant);
         const pollutantUnits = getPollutantUnits(activePollutant);
         updatePollutantLabels();
-        if (overallSummaryTitle) {
-          overallSummaryTitle.textContent = `${pollutantLabel} summary`;
-        }
+        const totalStations = pconRows.reduce((total, row) => {
+          const count = normalizeNumber(row.station_count);
+          return total + (count ?? 0);
+        }, 0);
         if (!pconRows.length) {
           summaryStations.textContent = "-";
         } else {
-          const totalStations = pconRows.reduce((total, row) => {
-            const count = normalizeNumber(row.station_count);
-            return total + (count ?? 0);
-          }, 0);
           summaryStations.textContent = formatNumber(totalStations);
         }
 
@@ -2071,6 +1856,23 @@ function initHexMapUkController(root) {
           summaryHighestDatetime.textContent = "-";
           summaryHighestConnector.textContent = "-";
           summaryHighestName.textContent = `No ${pollutantLabel} data`;
+          // ── Top summary boxes (no-data state) ──
+          if (summary?.updateSummary) {
+            summary.updateSummary({
+              totalSensors: totalStations,
+              pconCovered: 0,
+              pconTotal: pconCodes.size,
+              areaLabel: AREA_LABEL_PLURAL,
+              pollutantLabel,
+              pollutantUnits,
+              highestValue: null,
+              highestColor: null,
+              highestSensor: '—',
+              highestNetwork: '—',
+              newestReadingISO: null,
+              oldestReadingISO: null,
+            }, 'cr-top');
+          }
           return;
         }
 
@@ -2100,55 +1902,35 @@ function initHexMapUkController(root) {
         summaryHighestDatetime.textContent = formatSummaryTimestamp(resolveLatestTimestamp(highest.row));
         summaryHighestConnector.textContent = resolveConnectorLabel(highest.row);
         summaryHighestName.textContent = resolveStationName(highest.row);
-      }
 
-      function updateSummary() {
-        updateOverallSummary();
-        const selectedNetworkSummary = buildSelectedNetworkSummary();
-        if (networkSummaryCardsComponent) {
-          networkSummaryCardsComponent.render(selectedNetworkSummary);
-        }
-        if (sensorShareBars) {
-          sensorShareBars.render(selectedNetworkSummary.shareData || []);
-        }
         // ── Top summary boxes ──
-        if (summaryPresenter?.updateSummary) {
-          const pollutantLabel = getPollutantLabel(activePollutant);
-          const pollutantUnits = getPollutantUnits(activePollutant);
+        if (summary?.updateSummary) {
           const capValue = getLegendCapValue();
-          const totalSensorsForTopSummary = pconRows.reduce((total, row) => {
-            const count = normalizeNumber(row.station_count);
-            return total + (count ?? 0);
-          }, 0);
-          const baseRows = filterRowsByWindow(scopedLatestRows);
-          const pollutantRows = getRowsForActivePollutant(baseRows);
-          const candidates = pollutantRows
-            .map((row) => { const v = resolveLatestValue(row); return Number.isFinite(v) ? { row, value: v } : null; })
-            .filter(Boolean);
-          let highestValue = null, highestColor = null, highestSensor = '—', highestNetwork = '—';
-          if (candidates.length) {
-            let h = candidates[0];
-            for (const c of candidates) { if (c.value > h.value) h = c; }
-            highestValue = h.value;
-            const palette = HEAT_STOPS.map((n, i) => resolveCssColor(n, HEAT_STOP_FALLBACKS[i]));
-            highestColor = d3.interpolateRgbBasis(palette)(mapValueToT(highestValue, capValue));
-            highestSensor = resolveStationName(h.row);
-            highestNetwork = resolvePrimaryNetworkLabel(h.row) || "Unknown network";
-          }
-          summaryPresenter.updateSummary({
-            totalSensors: totalSensorsForTopSummary,
-            pconCovered: selectedNetworkSummary.pconCovered,
-            pconTotal: selectedNetworkSummary.pconTotal,
-            areaLabel: 'constituencies',
+          const coveredPcons = new Set(rowsWithPcon.map((row) => resolvePconCode(row)).filter(Boolean));
+          let newest = null, oldest = null;
+          candidates.forEach(({ row }) => {
+            const ts = resolveLatestTimestamp(row);
+            if (ts) {
+              if (!newest || ts > newest) newest = ts;
+              if (!oldest || ts < oldest) oldest = ts;
+            }
+          });
+          const palette = HEAT_STOPS.map((n, i) => resolveCssColor(n, HEAT_STOP_FALLBACKS[i]));
+          const highestColor = d3.interpolateRgbBasis(palette)(mapValueToT(highest.value, capValue));
+          summary.updateSummary({
+            totalSensors: totalStations,
+            pconCovered: coveredPcons.size,
+            pconTotal: pconCodes.size,
+            areaLabel: AREA_LABEL_PLURAL,
             pollutantLabel,
             pollutantUnits,
-            highestValue,
+            highestValue: highest.value,
             highestColor,
-            highestSensor,
-            highestNetwork,
-            newestReadingISO: selectedNetworkSummary.newestReadingISO,
-            oldestReadingISO: selectedNetworkSummary.oldestReadingISO,
-          });
+            highestSensor: resolveStationName(highest.row),
+            highestNetwork: resolvePrimaryNetworkLabel(highest.row) || "Unknown network",
+            newestReadingISO: newest ? (newest.toISOString?.() || newest) : null,
+            oldestReadingISO: oldest ? (oldest.toISOString?.() || oldest) : null,
+          }, 'cr-top');
         }
       }
 
@@ -2158,7 +1940,7 @@ function initHexMapUkController(root) {
         }
         const withData = pconRows.filter((row) => getStationCount(row) > 0);
         const pollutantLabel = getPollutantLabel(activePollutant);
-        rowCount.textContent = `${formatNumber(withData.length)} of ${formatNumber(pconCodes.size)} constituencies with ${pollutantLabel} data`;
+        rowCount.textContent = `${formatNumber(withData.length)} of ${formatNumber(pconCodes.size)} local authorities with ${pollutantLabel} data`;
       }
 
       function updateLegend(minValue, maxValue, capValue) {
@@ -2227,20 +2009,20 @@ function initHexMapUkController(root) {
         if (!hexes.size()) {
           return;
         }
-        if (!selectedPconCode) {
+        if (!selectedAreaCode) {
           hexes.classed("is-selected", false).classed("is-dimmed", false);
           return;
         }
         hexes
-          .classed("is-selected", (cell) => cell.pcon_code === selectedPconCode)
-          .classed("is-dimmed", (cell) => cell.pcon_code !== selectedPconCode);
+          .classed("is-selected", (cell) => resolveCellAreaCode(cell) === selectedAreaCode)
+          .classed("is-dimmed", (cell) => resolveCellAreaCode(cell) !== selectedAreaCode);
       }
 
       function setSelectedCell(cell) {
         selectedCell = cell || null;
-        selectedPconCode = cell?.pcon_code || null;
+        selectedAreaCode = resolveCellAreaCode(cell);
         if (mapCanvasWrap) mapCanvasWrap.classList.toggle("hex-selected", !!cell);
-        pinnedTooltipCell = null;
+        ukController?.clearPinnedTooltip?.();
         if (tooltip) {
           tooltip.classList.remove("visible");
         }
@@ -2254,12 +2036,12 @@ function initHexMapUkController(root) {
         if (!mapCanvasWrap) {
           return;
         }
-        if (!selectedPconCode) {
+        if (!selectedAreaCode) {
           mapCanvasWrap.style.removeProperty("--selected-hex-shift-y");
           return;
         }
         window.requestAnimationFrame(() => {
-          if (!selectedPconCode || !mapCanvasWrap) {
+          if (!selectedAreaCode || !mapCanvasWrap) {
             return;
           }
           mapCanvasWrap.style.setProperty("--selected-hex-shift-y", "0px");
@@ -2280,24 +2062,61 @@ function initHexMapUkController(root) {
         });
       }
 
-      function selectPconByCode(code) {
+      // Defensive alias map: maps retired 2023 codes → current 2025 codes so
+      // that any stale URLs or cached data using old codes still resolve.
+      const LA_CODE_ALIASES = {
+        E08000016: "E08000038", // Barnsley 2023 → 2025
+        E08000019: "E08000039", // Sheffield 2023 → 2025
+        E08000038: "E08000038",
+        E08000039: "E08000039",
+      };
+
+      function selectAreaByCode(code, { allowRegionSwitch = true, updateUrl = true } = {}) {
         const normalized = typeof code === "string" ? code.trim().toUpperCase() : "";
         if (!normalized) {
           return false;
         }
+        const resolved = LA_CODE_ALIASES[normalized] || normalized;
         const match = hexCells.find((cell) => {
-          const cellCode = typeof cell?.pcon_code === "string" ? cell.pcon_code.trim().toUpperCase() : "";
-          return cellCode === normalized;
+          const cellCode = resolveCellAreaCode(cell);
+          return typeof cellCode === "string" && cellCode.trim().toUpperCase() === resolved;
         }) || null;
-        if (!match) {
+        if (match) {
+          setSelectedCell(match);
+          if (tooltip) {
+            tooltip.classList.remove("visible");
+          }
+          return true;
+        }
+        if (!allowRegionSwitch) {
+          if (resolved !== normalized) {
+            console.warn(`[uk-aq] selectAreaByCode: alias resolved ${normalized} → ${resolved} but no hex feature found`);
+          } else {
+            console.warn(`[uk-aq] selectAreaByCode: no hex feature found for code ${normalized}`);
+          }
           return false;
         }
-        setSelectedCell(match);
-        if (tooltip) {
-          tooltip.classList.remove("visible");
+        const targetRegion = areaRegionLookup.get(resolved) || null;
+        if (targetRegion && targetRegion !== activeRegion) {
+          pendingSelectedAreaCode = resolved;
+          setActiveRegion(targetRegion, { updateUrl });
+          return true;
         }
-        pinnedTooltipCell = null;
-        return true;
+        if (targetRegion && targetRegion === activeRegion && statusEl?.textContent === "Loading...") {
+          pendingSelectedAreaCode = resolved;
+          return true;
+        }
+        console.warn(`[uk-aq] selectAreaByCode: no region mapping found for code ${normalized}${resolved !== normalized ? ` (alias: ${resolved})` : ""}`);
+        return false;
+      }
+
+      function applyPendingAreaSelection() {
+        if (!pendingSelectedAreaCode) {
+          return false;
+        }
+        const code = pendingSelectedAreaCode;
+        pendingSelectedAreaCode = null;
+        return selectAreaByCode(code, { allowRegionSwitch: false, updateUrl: false });
       }
 
       function compareTextValues(a, b) {
@@ -2443,11 +2262,11 @@ function initHexMapUkController(root) {
         }
         const pollutantUnits = getPollutantUnits(activePollutant);
         const previousScrollTop = detailsTableWrap.scrollTop;
-        if (!selectedPconCode) {
+        if (!selectedAreaCode) {
           chartLaunchAvailable = false;
           syncInlinePanelTitleInteractivity();
           if (sensorDetailsSection) sensorDetailsSection.hidden = true;
-          detailsTitle.textContent = "Constituency sensors";
+          detailsTitle.textContent = "Local authority sensors";
           detailsMeta.textContent = "Click a hex to view sensors.";
           if (inlinePanelWindowLabel) inlinePanelWindowLabel.textContent = "Select a hex";
           if (inlinePanelTitle) inlinePanelTitle.textContent = "";
@@ -2467,8 +2286,8 @@ function initHexMapUkController(root) {
         }
         if (sensorDetailsSection) sensorDetailsSection.hidden = true;
         if (networkSummary) networkSummary.hidden = true;
-        const row = pconLookup.get(selectedPconCode);
-        const areaName = selectedCell?.pcon_name || row?.pcon_name || selectedPconCode;
+        const row = pconLookup.get(selectedAreaCode);
+        const areaName = resolveCellAreaName(selectedCell) || resolveAreaName(row) || selectedAreaCode;
         detailsTitle.textContent = areaName;
         const metricVal = getMetricValue(row);
         const valueLabel = Number.isFinite(metricVal)
@@ -2487,7 +2306,7 @@ function initHexMapUkController(root) {
         }
         const detailSourceRows = scopedLatestRowsAllWindow.length ? scopedLatestRowsAllWindow : scopedLatestRows;
         const scopedRows = getRowsForActivePollutant(detailSourceRows);
-        const stationEntries = collectStationEntries(scopedRows, selectedPconCode);
+        const stationEntries = collectStationEntries(scopedRows, selectedAreaCode);
         chartLaunchAvailable = stationEntries.length > 0;
         syncInlinePanelTitleInteractivity();
         if (!stationEntries.length) {
@@ -2499,15 +2318,17 @@ function initHexMapUkController(root) {
             inlinePanelHexIcon.style.color = "var(--no-data)";
             inlinePanelHexIcon.classList.add("sensor-panel-hex-icon--outlined");
           }
-          detailsEmpty.textContent = "No sensors found for this constituency.";
+          detailsEmpty.textContent = "No sensors found for this local authority.";
           detailsEmpty.hidden = false;
           detailsTableWrap.hidden = true;
           detailsTableWrap.classList.add("sensor-list-sort-hidden");
           detailsTableWrap.classList.remove("is-chart-select-mode");
           syncSortHeaders();
+          networkSummary.hidden = true;
           detailsTableBody.innerHTML = "";
           updateInlinePanelHeight(0);
           updateSelectedHexViewportShift();
+          restoreDetailsScrollPosition(selectedAreaCode, 0);
           return;
         }
         const cutoff = getWindowCutoff();
@@ -2526,7 +2347,7 @@ function initHexMapUkController(root) {
         if (inlinePanelHexIcon) {
           inlinePanelHexIcon.classList.remove("sensor-panel-hex-icon--outlined");
         }
-        const chartModeActive = window.hexChartMode?.isActive?.("uk") === true;
+        const chartModeActive = window.hexChartMode?.isActive?.("cr") === true;
         detailsEmpty.hidden = true;
         detailsTableWrap.hidden = false;
         detailsTableWrap.classList.toggle("sensor-list-sort-hidden", entries.length <= 1);
@@ -2538,8 +2359,8 @@ function initHexMapUkController(root) {
           const stationId = String(resolveStationKey(entry.row) || stationName || "");
           const networkLabel = resolvePrimaryNetworkLabel(entry.row) || "Unknown network";
           const updatedText = formatSummaryTimestamp(entry.timestamp);
-          const chartSelected = window.hexChartMode?.isSensorSelected?.("uk", stationId) === true;
-          const symbolIndex = window.hexChartMode?.getSelectedSensorIndex?.("uk", stationId) ?? -1;
+          const chartSelected = window.hexChartMode?.isSensorSelected?.("cr", stationId) === true;
+          const symbolIndex = window.hexChartMode?.getSelectedSensorIndex?.("cr", stationId) ?? -1;
           const symbolMarkup = symbolIndex >= 0
               ? (window.ChartCore?.getSymbolSvgMarkup?.(symbolIndex, {
                 className: "hex-chart-symbol-svg chart-mode-sensor-symbol-svg",
@@ -2588,6 +2409,7 @@ function initHexMapUkController(root) {
         ].join("");
         updateInlinePanelHeight(entries.length, dividerRow ? 1 : 0);
         updateSelectedHexViewportShift();
+        restoreDetailsScrollPosition(selectedAreaCode, previousScrollTop);
       }
 
       function updateNetworkSummary() {
@@ -2601,14 +2423,14 @@ function initHexMapUkController(root) {
           : `${formatNumber(summary.windowCount)} in window / ${formatNumber(summary.totalCount)} total`;
         aurnSensors.textContent = summary.totalCount ? sensorLabel : "0";
         const covered = summary.coverage;
-        const total = TOTAL_PCON_COUNT;
+        const total = pconCodes.size || 0;
         updateCoverageElements(
           aurnCoverageValue,
           aurnCoverageFill,
           aurnCoverageBar,
           covered,
           total,
-          "constituencies"
+          AREA_LABEL_PLURAL
         );
         aurnAverage.textContent = Number.isFinite(summary.mean)
           ? `${formatValue(summary.mean)} ${pollutantUnits}`
@@ -2624,6 +2446,39 @@ function initHexMapUkController(root) {
           : "-";
         aurnLatest.textContent = summary.latestTimestamp
           ? formatSummaryTimestamp(summary.latestTimestamp)
+          : "-";
+
+        if (!openaqSensors || !openaqCoverageValue || !openaqCoverageBar || !openaqCoverageFill
+          || !openaqAverage || !openaqMedian || !openaqHighest || !openaqLowest || !openaqLatest) {
+          return;
+        }
+        const openaqSummary = computeNetworkSummary(scopedLatestRows, OPENAQ_NETWORK_MATCHERS);
+        const openaqSensorLabel = currentWindow === "all"
+          ? formatNumber(openaqSummary.totalCount)
+          : `${formatNumber(openaqSummary.windowCount)} in window / ${formatNumber(openaqSummary.totalCount)} total`;
+        openaqSensors.textContent = openaqSummary.totalCount ? openaqSensorLabel : "0";
+        updateCoverageElements(
+          openaqCoverageValue,
+          openaqCoverageFill,
+          openaqCoverageBar,
+          openaqSummary.coverage,
+          total,
+          AREA_LABEL_PLURAL
+        );
+        openaqAverage.textContent = Number.isFinite(openaqSummary.mean)
+          ? `${formatValue(openaqSummary.mean)} ${pollutantUnits}`
+          : "-";
+        openaqMedian.textContent = Number.isFinite(openaqSummary.median)
+          ? `${formatValue(openaqSummary.median)} ${pollutantUnits}`
+          : "-";
+        openaqHighest.textContent = openaqSummary.highest
+          ? `${formatValue(openaqSummary.highest.value)} ${pollutantUnits} · ${formatSummaryTimestamp(openaqSummary.highest.timestamp)}`
+          : "-";
+        openaqLowest.textContent = openaqSummary.lowest
+          ? `${formatValue(openaqSummary.lowest.value)} ${pollutantUnits} · ${formatSummaryTimestamp(openaqSummary.lowest.timestamp)}`
+          : "-";
+        openaqLatest.textContent = openaqSummary.latestTimestamp
+          ? formatSummaryTimestamp(openaqSummary.latestTimestamp)
           : "-";
         updateExtraNetworkSummaries();
       }
@@ -2705,6 +2560,8 @@ function initHexMapUkController(root) {
             cy: y,
             q,
             r,
+            area_code: key,
+            area_name: value?.n || null,
             pcon_code: key,
             pcon_name: value?.n || null,
             region_code: value?.region || null,
@@ -2712,6 +2569,333 @@ function initHexMapUkController(root) {
           };
         });
         return { cells, bounds: computeHexBounds(cells, size), side: size, layout };
+      }
+
+      function extractOuterRings(geometry) {
+        if (!geometry) {
+          return [];
+        }
+        if (geometry.type === "Polygon") {
+          return Array.isArray(geometry.coordinates?.[0]) ? [geometry.coordinates[0]] : [];
+        }
+        if (geometry.type === "MultiPolygon") {
+          return (geometry.coordinates || [])
+            .map((polygon) => polygon?.[0])
+            .filter((ring) => Array.isArray(ring));
+        }
+        return [];
+      }
+
+      function computePolygonBounds(cells) {
+        let minX = Infinity;
+        let minY = Infinity;
+        let maxX = -Infinity;
+        let maxY = -Infinity;
+        cells.forEach((cell) => {
+          (cell.paths || []).forEach((ring) => {
+            ring.forEach((point) => {
+              const [x, y] = point;
+              if (x < minX) {
+                minX = x;
+              }
+              if (y < minY) {
+                minY = y;
+              }
+              if (x > maxX) {
+                maxX = x;
+              }
+              if (y > maxY) {
+                maxY = y;
+              }
+            });
+          });
+        });
+        return { minX, minY, maxX, maxY };
+      }
+
+      function canonicalRegionName(value) {
+        if (typeof value !== "string") {
+          return "";
+        }
+        const trimmed = value.trim();
+        if (!trimmed) {
+          return "";
+        }
+        return REGION_LOOKUP.get(trimmed.toLowerCase()) || trimmed;
+      }
+
+      function resolveLaRegionName(laCode, laName, rawRegionName) {
+        const normalizedCode = String(laCode || "").trim().toUpperCase();
+        const normalizedName = String(laName || "").trim().toLowerCase();
+        if (
+          normalizedCode === "E06000010"
+          || normalizedName === "kingston upon hull"
+          || normalizedName === "kingston upon hull, city of"
+        ) {
+          return "Yorkshire and The Humber";
+        }
+        const override = LA_REGION_OVERRIDES[normalizedCode];
+        if (override) {
+          return override;
+        }
+        return canonicalRegionName(rawRegionName);
+      }
+
+      function computeRingBounds(rings) {
+        let minX = Infinity;
+        let minY = Infinity;
+        let maxX = -Infinity;
+        let maxY = -Infinity;
+        (rings || []).forEach((ring) => {
+          (ring || []).forEach((point) => {
+            const [x, y] = point;
+            if (x < minX) {
+              minX = x;
+            }
+            if (y < minY) {
+              minY = y;
+            }
+            if (x > maxX) {
+              maxX = x;
+            }
+            if (y > maxY) {
+              maxY = y;
+            }
+          });
+        });
+        return { minX, minY, maxX, maxY };
+      }
+
+      function mergeBounds(a, b) {
+        return {
+          minX: Math.min(a.minX, b.minX),
+          minY: Math.min(a.minY, b.minY),
+          maxX: Math.max(a.maxX, b.maxX),
+          maxY: Math.max(a.maxY, b.maxY),
+        };
+      }
+
+      function translateBounds(bounds, dx, dy) {
+        return {
+          minX: bounds.minX + dx,
+          minY: bounds.minY + dy,
+          maxX: bounds.maxX + dx,
+          maxY: bounds.maxY + dy,
+        };
+      }
+
+      function boundsCenter(bounds) {
+        return {
+          x: (bounds.minX + bounds.maxX) / 2,
+          y: (bounds.minY + bounds.maxY) / 2,
+        };
+      }
+
+      function boundsTouchOrOverlap(a, b, epsilon = 1e-6) {
+        return (
+          a.minX <= b.maxX + epsilon
+          && a.maxX >= b.minX - epsilon
+          && a.minY <= b.maxY + epsilon
+          && a.maxY >= b.minY - epsilon
+        );
+      }
+
+      function boundsDistance(a, b) {
+        const dx = Math.max(0, Math.max(a.minX - b.maxX, b.minX - a.maxX));
+        const dy = Math.max(0, Math.max(a.minY - b.maxY, b.minY - a.maxY));
+        return Math.hypot(dx, dy);
+      }
+
+      function estimateTypicalCellSpan(cells) {
+        const spans = cells
+          .map((cell) => {
+            const bounds = computeRingBounds(cell.paths || []);
+            return Math.max(bounds.maxX - bounds.minX, bounds.maxY - bounds.minY);
+          })
+          .filter((value) => Number.isFinite(value) && value > 0)
+          .sort((a, b) => a - b);
+        if (!spans.length) {
+          return 1;
+        }
+        return spans[Math.floor(spans.length / 2)];
+      }
+
+      function buildGeoIslandComponents(cells) {
+        const metrics = cells.map((cell, index) => ({
+          index,
+          bounds: computeRingBounds(cell.paths || []),
+        }));
+        const components = [];
+        const visited = new Set();
+        for (let i = 0; i < metrics.length; i += 1) {
+          if (visited.has(i)) {
+            continue;
+          }
+          visited.add(i);
+          const queue = [i];
+          const indices = [];
+          let componentBounds = metrics[i].bounds;
+          while (queue.length) {
+            const current = queue.pop();
+            indices.push(current);
+            const currentBounds = metrics[current].bounds;
+            for (let j = 0; j < metrics.length; j += 1) {
+              if (visited.has(j)) {
+                continue;
+              }
+              if (!boundsTouchOrOverlap(currentBounds, metrics[j].bounds)) {
+                continue;
+              }
+              visited.add(j);
+              queue.push(j);
+            }
+          }
+          indices.forEach((idx) => {
+            componentBounds = mergeBounds(componentBounds, metrics[idx].bounds);
+          });
+          components.push({
+            id: components.length,
+            indices,
+            bounds: componentBounds,
+            center: boundsCenter(componentBounds),
+          });
+        }
+        return components;
+      }
+
+      function compactGeoIslands(cells, regionName) {
+        const canonicalRegion = canonicalRegionName(regionName);
+        if (
+          !canonicalRegion
+          || GEO_ISLAND_COMPACTION_EXCLUDED_REGIONS.has(canonicalRegion)
+          || !Array.isArray(cells)
+          || cells.length < 2
+        ) {
+          return cells;
+        }
+        const components = buildGeoIslandComponents(cells);
+        if (components.length < 2) {
+          return cells;
+        }
+        const anchor = components.reduce((best, candidate) => (
+          candidate.indices.length > best.indices.length ? candidate : best
+        ), components[0]);
+        const anchorCenter = anchor.center;
+        const span = estimateTypicalCellSpan(cells);
+        const stepSize = Math.max(span * 0.2, 0.02);
+        const maxSteps = 700;
+        const placements = new Map();
+        const movedBoundsById = new Map();
+        placements.set(anchor.id, { dx: 0, dy: 0 });
+        movedBoundsById.set(anchor.id, anchor.bounds);
+
+        const movable = components
+          .filter((component) => component.id !== anchor.id)
+          .sort((a, b) => {
+            const aDistance = Math.hypot(a.center.x - anchorCenter.x, a.center.y - anchorCenter.y);
+            const bDistance = Math.hypot(b.center.x - anchorCenter.x, b.center.y - anchorCenter.y);
+            return bDistance - aDistance;
+          });
+
+        movable.forEach((component) => {
+          let directionX = anchorCenter.x - component.center.x;
+          let directionY = anchorCenter.y - component.center.y;
+          const magnitude = Math.hypot(directionX, directionY) || 1;
+          directionX /= magnitude;
+          directionY /= magnitude;
+          let dx = 0;
+          let dy = 0;
+          let movedBounds = component.bounds;
+          for (let step = 0; step < maxSteps; step += 1) {
+            const trialDx = dx + directionX * stepSize;
+            const trialDy = dy + directionY * stepSize;
+            const trialBounds = translateBounds(component.bounds, trialDx, trialDy);
+            const hasCollision = components.some((otherComponent) => {
+              if (otherComponent.id === component.id) {
+                return false;
+              }
+              const otherBounds = movedBoundsById.get(otherComponent.id) || otherComponent.bounds;
+              return boundsTouchOrOverlap(trialBounds, otherBounds, 1e-6);
+            });
+            if (hasCollision) {
+              break;
+            }
+            dx = trialDx;
+            dy = trialDy;
+            movedBounds = trialBounds;
+          }
+          placements.set(component.id, { dx, dy });
+          movedBoundsById.set(component.id, movedBounds);
+        });
+
+        const moveByCellIndex = new Map();
+        components.forEach((component) => {
+          const move = placements.get(component.id) || { dx: 0, dy: 0 };
+          component.indices.forEach((cellIndex) => {
+            moveByCellIndex.set(cellIndex, move);
+          });
+        });
+
+        return cells.map((cell, cellIndex) => {
+          const move = moveByCellIndex.get(cellIndex) || { dx: 0, dy: 0 };
+          if (!move.dx && !move.dy) {
+            return cell;
+          }
+          return {
+            ...cell,
+            paths: (cell.paths || []).map((ring) =>
+              ring.map((point) => [point[0] + move.dx, point[1] + move.dy])
+            ),
+          };
+        });
+      }
+
+      function buildHexCellsFromGeojson(geojson) {
+        const features = Array.isArray(geojson?.features) ? geojson.features : [];
+        const cells = [];
+        features.forEach((feature, index) => {
+          const props = feature?.properties || {};
+          const laCode = typeof props.la_code === "string" ? props.la_code.trim() : "";
+          const laName = typeof props.la_name === "string" ? props.la_name.trim() : "";
+          const regionName = resolveLaRegionName(laCode, laName, props.region_nation);
+          if (activeRegion && regionName !== activeRegion) {
+            return;
+          }
+          const rings = extractOuterRings(feature?.geometry);
+          if (!rings.length) {
+            return;
+          }
+          const code = laCode || laName || `la-${index}`;
+          const name = laName || code;
+          cells.push({
+            id: code,
+            area_code: code || null,
+            area_name: name || null,
+            region_name: regionName || null,
+            paths: rings,
+          });
+        });
+        const compactedCells = compactGeoIslands(cells, activeRegion);
+        return { cells: compactedCells, bounds: computePolygonBounds(compactedCells), side: null, layout: null };
+      }
+
+      function buildAreaRegionLookupFromGeojson(geojson) {
+        const features = Array.isArray(geojson?.features) ? geojson.features : [];
+        const lookup = new Map();
+        features.forEach((feature) => {
+          const props = feature?.properties || {};
+          const laCode = typeof props.la_code === "string" ? props.la_code.trim().toUpperCase() : "";
+          if (!laCode) {
+            return;
+          }
+          const laName = typeof props.la_name === "string" ? props.la_name.trim() : "";
+          const regionName = resolveLaRegionName(laCode, laName, props.region_nation);
+          if (!regionName || lookup.has(laCode)) {
+            return;
+          }
+          lookup.set(laCode, regionName);
+        });
+        return lookup;
       }
 
       function offsetToAxial(layout, col, row) {
@@ -2917,7 +3101,21 @@ function initHexMapUkController(root) {
       }
 
       function prepareHexGrid() {
-        if (!hexData || hexCells.length) {
+        if (!hexData) {
+          return;
+        }
+        hexCells = [];
+        hexBounds = null;
+        hexSide = null;
+        hexLayout = "odd-r";
+        boundaryPaths = [];
+        if (hexData?.type === "FeatureCollection") {
+          const { cells, bounds } = buildHexCellsFromGeojson(hexData);
+          hexCells = cells;
+          hexBounds = bounds;
+          hexSide = null;
+          hexLayout = null;
+          boundaryPaths = [];
           return;
         }
         const { cells, bounds, side, layout } = buildHexCellsFromHexjson(hexData);
@@ -2956,6 +3154,24 @@ function initHexMapUkController(root) {
         ];
       }
 
+      function buildPathFromRings(rings, projection) {
+        if (!rings || !rings.length) {
+          return "";
+        }
+        return rings.map((ring) => {
+          if (!ring.length) {
+            return "";
+          }
+          const [start, ...rest] = ring;
+          const [startX, startY] = projection(start);
+          const segments = rest.map((point) => {
+            const [x, y] = projection(point);
+            return `L${x},${y}`;
+          }).join("");
+          return `M${startX},${startY}${segments}Z`;
+        }).join("");
+      }
+
       function applyMetricState() {
         metricInputs.forEach((input) => {
           input.checked = input.value === currentMetric;
@@ -2974,7 +3190,7 @@ function initHexMapUkController(root) {
           return;
         }
         if (!options.coordinated) {
-          coordinator.updateMapSettings({ metric: nextMetric }, { source: "uk" });
+          coordinator.updateMapSettings({ metric: nextMetric }, { source: "cr" });
           return;
         }
         currentMetric = nextMetric;
@@ -3034,6 +3250,10 @@ function initHexMapUkController(root) {
             card: aurnSensors?.closest(".network-card"),
             matchers: GOVUK_NETWORK_MATCHERS,
           },
+          {
+            card: openaqSensors?.closest(".network-card"),
+            matchers: OPENAQ_NETWORK_MATCHERS,
+          },
           ...extraNetworkSummaryDefs.map((def) => ({
             card: def.elements?.sensors?.closest(".network-card"),
             matchers: def.matchers,
@@ -3064,17 +3284,17 @@ function initHexMapUkController(root) {
         const groups = new Map();
         const scopedRows = getRowsForActivePollutant(rows);
         scopedRows.forEach((row, index) => {
-          const pconCode = resolvePconCode(row);
-          if (!pconCode) {
+          const areaCode = resolveAreaCode(row);
+          if (!areaCode) {
             return;
           }
           const value = resolveLatestValue(row);
           if (!Number.isFinite(value)) {
             return;
           }
-          const stationKey = resolveStationKey(row) || `${pconCode}-${index}`;
+          const stationKey = resolveStationKey(row) || `${areaCode}-${index}`;
           const timestamp = parseDate(row?.last_value_at || row?.observed_at || row?.latest_value_at);
-          const group = groups.get(pconCode) || { stations: new Map(), latestAt: null };
+          const group = groups.get(areaCode) || { stations: new Map(), latestAt: null };
           const existing = group.stations.get(stationKey);
           if (!existing || (timestamp && (!existing.timestamp || timestamp > existing.timestamp))) {
             group.stations.set(stationKey, { value, timestamp });
@@ -3082,11 +3302,11 @@ function initHexMapUkController(root) {
           if (timestamp && (!group.latestAt || timestamp > group.latestAt)) {
             group.latestAt = timestamp;
           }
-          groups.set(pconCode, group);
+          groups.set(areaCode, group);
         });
 
         const rowsForMap = [];
-        groups.forEach((group, pconCode) => {
+        groups.forEach((group, areaCode) => {
           const values = Array.from(group.stations.values())
             .map((entry) => entry.value)
             .filter((value) => Number.isFinite(value));
@@ -3099,11 +3319,11 @@ function initHexMapUkController(root) {
             ? (sorted[midpoint - 1] + sorted[midpoint]) / 2
             : sorted[midpoint];
           const mean = values.reduce((sum, value) => sum + value, 0) / values.length;
-          const baseRow = basePconLookup.get(pconCode) || {};
+          const baseRow = basePconLookup.get(areaCode) || {};
           rowsForMap.push({
-            pcon_code: pconCode,
-            pcon_name: baseRow.pcon_name || null,
-            pcon_version: baseRow.pcon_version || activePconVersion,
+            area_code: areaCode,
+            area_name: resolveAreaName(baseRow),
+            pcon_version: baseRow.pcon_version || baseRow.la_version || activeLaVersion,
             station_count: values.length,
             single_site: values.length === 1,
             median_value: median,
@@ -3118,11 +3338,12 @@ function initHexMapUkController(root) {
         const networkRowsForWindow = getNetworkRowsForWindow();
         const windowNetworkDefs = buildNetworkDefs(networkRowsForWindow);
         const coverageByCode = buildNetworkCoverageByCode(networkRowsForWindow);
+        const coverageTotal = pconCodes.size || 0;
         renderNetworkFiltersIfNeeded(
           windowNetworkDefs,
           coverageByCode,
-          TOTAL_PCON_COUNT,
-          "constituencies",
+          coverageTotal,
+          AREA_LABEL_PLURAL,
         );
         updateNetworkSummaryCardVisibility();
         if (!basePconRows.length && !baseLatestRows.length && !baseLatestRowsAllWindow.length) {
@@ -3135,7 +3356,7 @@ function initHexMapUkController(root) {
           updateSummary();
           renderMap();
           updateDetailsPanel();
-          window.hexChartMode?.syncFromMap?.("uk", { preserveChartMode: true, updateChart: false });
+          window.hexChartMode?.syncFromMap?.("cr", { preserveChartMode: true, updateChart: false });
           return;
         }
         const networkCodes = getActiveNetworkCodes();
@@ -3156,78 +3377,12 @@ function initHexMapUkController(root) {
         latestRows = filterRowsByWindow(filteredLatest);
         const derived = latestRows.length ? buildPconRowsFromLatest(latestRows) : [];
         pconRows = derived;
-        pconLookup = new Map(pconRows.map((row) => [row.pcon_code, row]));
+        pconLookup = new Map(pconRows.map((row) => [resolveAreaCode(row), row]));
         updateRowCountText();
         updateSummary();
         renderMap();
         updateDetailsPanel();
-        window.hexChartMode?.syncFromMap?.("uk", { preserveChartMode: true, updateChart: false });
-        refreshPinnedTooltip();
-      }
-
-      function buildTooltipHtml(cell) {
-        const row = pconLookup.get(cell.pcon_code);
-        const metricValue = getMetricValue(row);
-        const areaName = cell.pcon_name || row?.pcon_name || cell.pcon_code || "Unknown constituency";
-        const regionLabel = cell.region_name || cell.region_code || "Unknown region";
-        const pollutantLabel = getPollutantLabel(activePollutant);
-        const pollutantUnits = getPollutantUnits(activePollutant);
-        const populationEntry = populationLookup.get(cell.pcon_code);
-        const populationValue = normalizeNumber(populationEntry?.population_value);
-        const populationDate = parseDate(populationEntry?.reference_date);
-        const populationYear = populationDate ? populationDate.getFullYear() : null;
-        const populationLabel = populationValue === null
-          ? "Population: n/a"
-          : `Population${populationYear ? ` (${populationYear})` : ""}: ${formatNumber(populationValue)}`;
-        const valueLabel = Number.isFinite(metricValue)
-          ? `${formatValue(metricValue)} ${pollutantUnits}`
-          : `No ${pollutantLabel} data`;
-        const rowsForTooltip = getRowsForActivePollutant(latestRows)
-          .filter((item) => resolvePconCode(item) === cell.pcon_code);
-        const stationEntries = collectStationEntries(rowsForTooltip, cell.pcon_code);
-        const networkCounts = countStationsByNetwork(stationEntries);
-        const networkLines = stationEntries.length
-          ? networkCounts.map((entry) =>
-            `<div class="tooltip-line"><span class="tooltip-network-name">${entry.label}</span>: ${formatSensorCount(entry.count)}</div>`
-          )
-          : [`<div class="tooltip-line">${formatSensorCount(0)}</div>`];
-        if (stationEntries.length && networkCounts.length >= 2) {
-          networkLines.push(
-            `<div class="tooltip-line">Total: ${formatSensorCount(stationEntries.length)}</div>`
-          );
-        }
-        return `
-          <div class="tooltip-title">${areaName}</div>
-          <div class="tooltip-line">Region: ${regionLabel}</div>
-          <div class="tooltip-line">${populationLabel}</div>
-          <div class="tooltip-line">${currentMetric === "median" ? "Typical" : "Average"}: ${valueLabel}</div>
-          ${networkLines.join("")}
-        `;
-      }
-
-      function showTooltipForCell(cell, event) {
-        if (!tooltip || !cell) {
-          return;
-        }
-        tooltip.innerHTML = buildTooltipHtml(cell);
-        tooltip.classList.add("visible");
-        if (event) {
-          positionTooltip(event);
-        }
-      }
-
-      function setPinnedTooltip(cell, event) {
-        pinnedTooltipCell = cell || null;
-        if (pinnedTooltipCell) {
-          showTooltipForCell(pinnedTooltipCell, event);
-        }
-      }
-
-      function refreshPinnedTooltip() {
-        if (!pinnedTooltipCell) {
-          return;
-        }
-        showTooltipForCell(pinnedTooltipCell);
+        window.hexChartMode?.syncFromMap?.("cr", { preserveChartMode: true, updateChart: false });
       }
 
       function positionTooltip(event) {
@@ -3260,7 +3415,7 @@ function initHexMapUkController(root) {
       }
 
       function renderMap() {
-        if (!hexData || !hexCells.length || !hexBounds || !hexSide) {
+        if (!hexData || !hexCells.length || !hexBounds) {
           return;
         }
         const width = svg.node().clientWidth;
@@ -3296,26 +3451,29 @@ function initHexMapUkController(root) {
         const noDataColor = getComputedStyle(document.documentElement).getPropertyValue("--no-data").trim() || "#efe6d8";
 
         const hexGroup = svg.append("g");
-        hexGroup.selectAll("polygon")
+        hexGroup.selectAll("path")
           .data(hexCells)
-          .join("polygon")
+          .join("path")
           .attr("class", (cell) => {
-            const row = pconLookup.get(cell.pcon_code);
+            const areaCode = resolveCellAreaCode(cell);
+            const row = areaCode ? pconLookup.get(areaCode) : null;
             const value = getMetricValue(row);
             return (colorScale && Number.isFinite(value)) ? "hex has-data" : "hex";
           })
-          .attr("points", (cell) => hexPoints(cell.cx, cell.cy, hexSide)
-            .map((point) => projection(point))
-            .map((point) => `${point[0]},${point[1]}`)
-            .join(" "))
+          .attr("d", (cell) => {
+            const rings = cell.paths || (hexSide ? [hexPoints(cell.cx, cell.cy, hexSide)] : []);
+            return buildPathFromRings(rings, projection);
+          })
           .attr("fill", (cell) => {
-            const row = pconLookup.get(cell.pcon_code);
+            const areaCode = resolveCellAreaCode(cell);
+            const row = areaCode ? pconLookup.get(areaCode) : null;
             const value = getMetricValue(row);
             if (!colorScale || !Number.isFinite(value)) return "var(--no-data)";
             return isCurrentlyLoading ? noDataColor : colorScale(value);
           })
           .attr("data-fill", (cell) => {
-            const row = pconLookup.get(cell.pcon_code);
+            const areaCode = resolveCellAreaCode(cell);
+            const row = areaCode ? pconLookup.get(areaCode) : null;
             const value = getMetricValue(row);
             if (!colorScale || !Number.isFinite(value)) return null;
             return colorScale(value);
@@ -3325,21 +3483,51 @@ function initHexMapUkController(root) {
             setSelectedCell(cell);
           })
           .on("mouseenter", (event, cell) => {
-            if (pinnedTooltipCell) {
-              return;
+            const areaCode = resolveCellAreaCode(cell);
+            const row = areaCode ? pconLookup.get(areaCode) : null;
+            const metricValue = getMetricValue(row);
+            const areaName = resolveCellAreaName(cell) || resolveAreaName(row) || areaCode || "Unknown local authority";
+            const regionLabel = cell.region_name || cell.region_code || "Unknown region";
+            const pollutantLabel = getPollutantLabel(activePollutant);
+            const pollutantUnits = getPollutantUnits(activePollutant);
+            const populationEntry = areaCode ? populationLookup.get(areaCode) : null;
+            const populationValue = normalizeNumber(populationEntry?.population_value);
+            const populationDate = parseDate(populationEntry?.reference_date);
+            const populationYear = populationDate ? populationDate.getFullYear() : null;
+            const populationLabel = populationValue === null
+              ? "Population: n/a"
+              : `Population${populationYear ? ` (${populationYear})` : ""}: ${formatNumber(populationValue)}`;
+            const valueLabel = Number.isFinite(metricValue)
+              ? `${formatValue(metricValue)} ${pollutantUnits}`
+              : `No ${pollutantLabel} data`;
+            const rowsForTooltip = getRowsForActivePollutant(latestRows)
+              .filter((item) => resolveAreaCode(item) === areaCode);
+            const stationEntries = collectStationEntries(rowsForTooltip, areaCode);
+            const networkCounts = countStationsByNetwork(stationEntries);
+            const networkLines = stationEntries.length
+              ? networkCounts.map((entry) =>
+                `<div class="tooltip-line"><span class="tooltip-network-name">${entry.label}</span>: ${formatSensorCount(entry.count)}</div>`
+              )
+              : [`<div class="tooltip-line">${formatSensorCount(0)}</div>`];
+            if (stationEntries.length && networkCounts.length >= 2) {
+              networkLines.push(
+                `<div class="tooltip-line">Total: ${formatSensorCount(stationEntries.length)}</div>`
+              );
             }
-            showTooltipForCell(cell, event);
+            tooltip.innerHTML = `
+              <div class="tooltip-title">${areaName}</div>
+              <div class="tooltip-line">Region: ${regionLabel}</div>
+              <div class="tooltip-line">${populationLabel}</div>
+              <div class="tooltip-line">${currentMetric === "median" ? "Typical" : "Average"}: ${valueLabel}</div>
+              ${networkLines.join("")}
+            `;
+            tooltip.classList.add("visible");
+            positionTooltip(event);
           })
           .on("mousemove", (event) => {
-            if (pinnedTooltipCell) {
-              return;
-            }
             positionTooltip(event);
           })
           .on("mouseleave", () => {
-            if (pinnedTooltipCell) {
-              return;
-            }
             tooltip.classList.remove("visible");
           });
 
@@ -3361,20 +3549,58 @@ function initHexMapUkController(root) {
         updateSelectedHexViewportShift();
       }
 
+      function requestRegionUrlSync(value, push) {
+        if (!urlState.syncCrRegion(value, { push: Boolean(push) })) {
+          throw new Error("Hex Map URL adapter rejected the C&R region.");
+        }
+      }
+
+      function setActiveRegion(nextRegion, { updateUrl = false } = {}) {
+        const normalized = normalizeRegion(nextRegion);
+        if (!normalized) {
+          return;
+        }
+        if (normalized === activeRegion) {
+          if (updateUrl) {
+            requestRegionUrlSync(normalized, true);
+          }
+          return;
+        }
+        activeRegion = normalized;
+        urlState.noteCrRegion(normalized);
+        const crSvgNode = svg.node();
+        if (crSvgNode) {
+          crSvgNode.dataset.region = normalized;
+        }
+        if (mapSelect) {
+          mapSelect.value = normalized;
+        }
+        updateEndpointHint();
+        if (updateUrl) {
+          requestRegionUrlSync(normalized, true);
+        }
+        window.dispatchEvent(new CustomEvent("crregionchange", {
+          detail: { region: activeRegion },
+        }));
+        loadMapData();
+      }
+
       async function loadMapData(options = {}) {
         const force = Boolean(options?.force);
-        if (!force && !isUkMapVisible()) {
+        if (!force && !isCrMapVisible()) {
           return;
         }
         const requestPollutant = activePollutant;
         chartDataStatus = "loading";
         const requestWindow = currentWindow;
+        const requestRegion = activeRegion;
         const requestId = ++latestLoadId;
         const timingId = nextHexMapTimingId();
         const isStale = () =>
           requestId !== latestLoadId
           || requestPollutant !== activePollutant
-          || requestWindow !== currentWindow;
+          || requestWindow !== currentWindow
+          || requestRegion !== activeRegion;
         markHexMapTiming(timingId, "load:start");
         setStatus("Loading...");
         setMapLoading(true);
@@ -3382,117 +3608,124 @@ function initHexMapUkController(root) {
           errorEl.textContent = "";
           errorEl.hidden = true;
         }
-        latestPollutant = null;
         populationLookup = new Map();
-        if (!REST_URL) {
-          chartDataStatus = "failed";
-          if (errorEl) {
-            errorEl.textContent = "Missing cache endpoint base URL. Provide ?cache_base=... if needed.";
-            errorEl.hidden = false;
-          }
-          setStatus("Error");
-          setMapLoading(false);
-          window.hexChartMode?.syncFromMap?.("uk", { preserveChartMode: true, dataStatus: "failed" });
-          return;
-        }
-        if (!cacheSessionUrl) {
-          chartDataStatus = "failed";
-          if (errorEl) {
-            errorEl.textContent = "Missing cache session URL. Provide ?cache_session_url=... if needed.";
-            errorEl.hidden = false;
-          }
-          setStatus("Error");
-          setMapLoading(false);
-          window.hexChartMode?.syncFromMap?.("uk", { preserveChartMode: true, dataStatus: "failed" });
-          return;
-        }
+	        const hasCredentials = Boolean(REST_URL) && Boolean(cacheSessionUrl);
+	        const canLoadData = hasCredentials;
+	        if (!hasCredentials) {
+	          if (errorEl) {
+	            errorEl.textContent = !REST_URL
+	              ? "Missing cache endpoint base URL. Showing boundaries only."
+	              : "Missing cache session URL. Showing boundaries only.";
+	            errorEl.hidden = false;
+	          }
+	        }
         try {
           await fetchNetworkCatalog();
           if (isStale()) {
             return;
           }
-          const pconUrl = new URL(REST_URL);
-          if (activePconVersion) {
-            pconUrl.searchParams.set("pcon_version", activePconVersion);
-          }
-          const pconCacheKey = pconUrl.toString();
-          const pconSince = normalizeIsoTimestamp(pconSinceByKey.get(pconCacheKey));
-          if (pconSince) {
-            pconUrl.searchParams.set("since", pconSince);
-          }
-          const pconEtag = pconEtagByKey.get(pconCacheKey) || null;
-          const pconHeaders = {};
-          if (pconEtag) {
-            pconHeaders["If-None-Match"] = pconEtag;
-          }
-          const latestUrl = new URL(resolveLatestUrl(currentWindow));
-          const latestCacheKey = getLatestCacheKey(requestPollutant, requestWindow);
-          const latestCursorEnabled = !latestUrl.pathname.endsWith("/latest-snapshot");
-          const latestSince = latestCursorEnabled
-            ? (latestSinceByKey.get(latestCacheKey) || null)
-            : null;
-          const latestSinceId = latestCursorEnabled
-            ? normalizeCursorId(latestSinceIdByKey.get(latestCacheKey))
-            : null;
-          const latestEtag = latestEtagByKey.get(latestCacheKey) || null;
-          latestUrl.searchParams.set("pollutant", activePollutant);
-          latestUrl.searchParams.set("window", currentWindow);
-          latestUrl.searchParams.set("scope", "all");
-          latestUrl.searchParams.set("limit", "10000");
-          latestUrl.searchParams.set("caller", "hex_map");
-          if (latestCursorEnabled && latestSince) {
-            latestUrl.searchParams.set("since", latestSince);
-            if (latestSinceId !== null) {
-              latestUrl.searchParams.set("since_id", String(latestSinceId));
+          const hexUrl = getHexUrlForRegion(requestRegion);
+          const hexPromise = fetch(hexUrl);
+          let laPromise = Promise.resolve(null);
+          let laCacheKey = null;
+          let hasMatchingLaState = false;
+          let laRequestSince = null;
+          let latestPromise = Promise.resolve(null);
+          let populationPromise = Promise.resolve(null);
+          if (canLoadData) {
+            const laUrl = new URL(REST_URL);
+            if (activeLaVersion) {
+              laUrl.searchParams.set("la_version", activeLaVersion);
             }
-          }
-          const latestHeaders = {};
-          if (latestEtag) {
-            latestHeaders["If-None-Match"] = latestEtag;
-          }
-          // const populationUrl = POPULATION_URL ? new URL(POPULATION_URL) : null;
-          // if (populationUrl) {
-          //   populationUrl.searchParams.set("geo_type", "PCON");
-          //   if (mapDateKey) {
-          //     populationUrl.searchParams.set("reference_date", mapDateKey);
-          //   }
-          //   populationUrl.searchParams.set("limit", "2000");
-          // }
-          const hexRequest = fetch(HEX_DATA_URL);
-          const pconRequest = fetchCacheApi(pconUrl.toString(), {
-            headers: pconHeaders,
-          });
-          const latestRequest = fetchCacheApi(latestUrl.toString(), {
-            headers: latestHeaders,
-          }).catch(() => null);
-          const latestAllCacheKey = getLatestCacheKey(requestPollutant, "all");
-          let latestAllRequest = Promise.resolve(null);
-          if (requestWindow !== "all") {
-            const latestAllUrl = new URL(resolveLatestUrl("all"));
-            latestAllUrl.searchParams.set("pollutant", activePollutant);
-            latestAllUrl.searchParams.set("window", "all");
-            latestAllUrl.searchParams.set("scope", "all");
-            latestAllUrl.searchParams.set("limit", "10000");
-            latestAllUrl.searchParams.set("caller", "hex_map");
-            const latestAllEtag = latestEtagByKey.get(latestAllCacheKey) || null;
-            const latestAllHeaders = {};
-            if (latestAllEtag) {
-              latestAllHeaders["If-None-Match"] = latestAllEtag;
+            if (requestRegion) {
+              laUrl.searchParams.set("region", requestRegion);
             }
-            latestAllRequest = fetchCacheApi(latestAllUrl.toString(), {
-              headers: latestAllHeaders,
+            laCacheKey = laUrl.toString();
+            hasMatchingLaState = loadedLaCacheKey === laCacheKey;
+            laRequestSince = hasMatchingLaState
+              ? normalizeIsoTimestamp(laSinceByKey.get(laCacheKey))
+              : null;
+            if (laRequestSince) {
+              laUrl.searchParams.set("since", laRequestSince);
+            }
+            const laEtag = hasMatchingLaState
+              ? laEtagByKey.get(laCacheKey) || null
+              : null;
+            const laHeaders = {};
+            if (laEtag) {
+              laHeaders["If-None-Match"] = laEtag;
+            }
+            const latestUrl = new URL(resolveLatestUrl(currentWindow));
+            const latestCacheKey = getLatestCacheKey(requestPollutant, requestWindow, requestRegion);
+            const latestCursorEnabled = !latestUrl.pathname.endsWith("/latest-snapshot");
+            const latestSince = latestCursorEnabled
+              ? (latestSinceByKey.get(latestCacheKey) || null)
+              : null;
+            const latestSinceId = latestCursorEnabled
+              ? normalizeCursorId(latestSinceIdByKey.get(latestCacheKey))
+              : null;
+            const latestEtag = latestEtagByKey.get(latestCacheKey) || null;
+            latestUrl.searchParams.set("pollutant", activePollutant);
+            latestUrl.searchParams.set("window", currentWindow);
+            // Do not apply region filter at uk_aq_latest level for C&R:
+            // some stations have inconsistent region labels, but we always
+            // scope to the selected LA hex codes immediately after fetch.
+            latestUrl.searchParams.set("scope", "all");
+            latestUrl.searchParams.set("limit", "10000");
+            latestUrl.searchParams.set("caller", "hex_map");
+            if (latestCursorEnabled && latestSince) {
+              latestUrl.searchParams.set("since", latestSince);
+              if (latestSinceId !== null) {
+                latestUrl.searchParams.set("since_id", String(latestSinceId));
+              }
+            }
+	            const latestHeaders = {};
+	            if (latestEtag) {
+	              latestHeaders["If-None-Match"] = latestEtag;
+	            }
+            // const populationUrl = POPULATION_URL ? new URL(POPULATION_URL) : null;
+            // if (populationUrl) {
+            //   populationUrl.searchParams.set("geo_type", "LAD");
+            //   if (mapDateKey) {
+            //     populationUrl.searchParams.set("reference_date", mapDateKey);
+            //   }
+            //   populationUrl.searchParams.set("limit", "2000");
+            // }
+	            laPromise = fetchCacheApi(laUrl.toString(), {
+	              headers: laHeaders,
+	            }).catch(() => null);
+            latestPromise = fetchCacheApi(latestUrl.toString(), {
+              headers: latestHeaders,
             }).catch(() => null);
+            const latestAllCacheKey = getLatestCacheKey(requestPollutant, "all", requestRegion);
+            let latestAllPromise = Promise.resolve(null);
+            if (requestWindow !== "all") {
+              const latestAllUrl = new URL(resolveLatestUrl("all"));
+              latestAllUrl.searchParams.set("pollutant", activePollutant);
+              latestAllUrl.searchParams.set("window", "all");
+              latestAllUrl.searchParams.set("scope", "all");
+              latestAllUrl.searchParams.set("limit", "10000");
+              latestAllUrl.searchParams.set("caller", "hex_map");
+              const latestAllEtag = latestEtagByKey.get(latestAllCacheKey) || null;
+              const latestAllHeaders = {};
+              if (latestAllEtag) {
+                latestAllHeaders["If-None-Match"] = latestAllEtag;
+              }
+              latestAllPromise = fetchCacheApi(latestAllUrl.toString(), {
+                headers: latestAllHeaders,
+              }).catch(() => null);
+            }
+            latestPromise = Promise.all([latestPromise, latestAllPromise]).then(([latest, latestAll]) => ({ latest, latestAll }));
+            // populationPromise = populationUrl
+            //   ? fetch(populationUrl.toString(), {
+            //     headers: {
+            //       Authorization: `Bearer ${anonKey}`,
+            //       apikey: anonKey,
+            //     },
+            //   }).catch(() => null)
+            //   : Promise.resolve(null);
           }
-          // const populationRequest = populationUrl
-          //   ? fetch(populationUrl.toString(), {
-          //     headers: {
-          //       Authorization: `Bearer ${anonKey}`,
-          //       apikey: anonKey,
-          //     },
-          //   }).catch(() => null)
-          //   : Promise.resolve(null);
-          const populationRequest = Promise.resolve(null);
-          const hexResponse = await hexRequest;
+          const hexResponse = await hexPromise;
           if (isStale()) {
             return;
           }
@@ -3500,9 +3733,6 @@ function initHexMapUkController(root) {
             throw new Error(`Hex data request failed: ${hexResponse.status}`);
           }
           hexData = await hexResponse.json();
-          areaRegionLookup = hexData?.type === "FeatureCollection"
-            ? buildAreaRegionLookupFromGeojson(hexData)
-            : new Map();
           prepareHexGrid();
           renderMapIfReady();
           markHexMapTiming(timingId, "geometry-ready");
@@ -3512,50 +3742,105 @@ function initHexMapUkController(root) {
               renderMapIfReady();
             }
           });
-          const [pconResponse, latestResponse, latestAllResponse, populationResponse] = await Promise.all([
-            pconRequest,
-            latestRequest,
-            latestAllRequest,
-            populationRequest,
+          const [laResponse, latestResult, populationResponse] = await Promise.all([
+            laPromise,
+            latestPromise,
+            populationPromise,
           ]);
+          const latestResponse = latestResult?.latest || null;
+          const latestAllResponse = latestResult?.latestAll || null;
           if (isStale()) {
             return;
           }
-          if (!pconResponse.ok && pconResponse.status !== 304) {
-            throw new Error(`Constituency request failed: ${pconResponse.status}`);
-          }
-          const pconResponseEtag = pconResponse.headers.get("ETag");
-          if (pconResponseEtag) {
-            pconEtagByKey.set(pconCacheKey, pconResponseEtag);
-          }
-          if (pconResponse.status === 304) {
-            pconRows = basePconRows;
-            pconLookup = new Map(pconRows.map((row) => [row.pcon_code, row]));
-          } else {
-            const payload = await pconResponse.json();
-            const incomingRows = payload?.data || [];
-            const mergedRows = pconSince
-              ? mergePconRows(basePconRows, incomingRows)
-              : incomingRows;
-            basePconRows = mergedRows;
-            basePconLookup = new Map(basePconRows.map((row) => [row.pcon_code, row]));
-            pconRows = basePconRows;
-            pconLookup = new Map(pconRows.map((row) => [row.pcon_code, row]));
-            const nextSince = normalizeIsoTimestamp(payload?.next_since) || pconSince;
-            if (nextSince) {
-              pconSinceByKey.set(pconCacheKey, nextSince);
-            } else {
-              pconSinceByKey.delete(pconCacheKey);
-            }
-            if (lastUpdated) {
-              if (payload?.last_updated) {
-                lastUpdated.textContent = `Latest data ${formatTimestamp(payload.last_updated)}`;
-              } else {
-                lastUpdated.textContent = "Latest data unavailable";
+          pconCodes = new Set(hexCells.map((cell) => resolveCellAreaCode(cell)).filter(Boolean));
+          const laNotModified = Boolean(canLoadData && laResponse && laResponse.status === 304);
+          const laNotModifiedUsable = Boolean(
+            laNotModified
+            && hasMatchingLaState
+            && laCacheKey
+            && loadedLaCacheKey === laCacheKey,
+          );
+          let laOk = Boolean(canLoadData && laResponse && (laResponse.ok || laNotModifiedUsable));
+          let canRetainLaData = false;
+          if (laOk) {
+            try {
+              if (laCacheKey && laResponse) {
+                const responseEtag = laResponse.headers.get("ETag");
+                if (responseEtag) {
+                  laEtagByKey.set(laCacheKey, responseEtag);
+                }
               }
+              if (laResponse && laResponse.status === 304) {
+                pconRows = basePconRows;
+                pconLookup = new Map(pconRows.map((row) => [resolveAreaCode(row), row]));
+              } else {
+                const payload = await laResponse.json();
+                if (isStale()) {
+                  return;
+                }
+                const rawRows = payload?.data || [];
+                const incomingRows = rawRows.map((row) => ({
+                  ...row,
+                  area_code: row?.area_code || row?.la_code || null,
+                  area_name: row?.area_name || row?.la_name || row?.pcon_name || null,
+                  region_name: row?.region_name || row?.region_nation || row?.region || null,
+                })).filter((row) => {
+                  const code = resolveAreaCode(row);
+                  return !pconCodes.size || (code && pconCodes.has(code));
+                });
+                if (laRequestSince && loadedLaCacheKey !== laCacheKey) {
+                  throw new Error("la_incremental_base_state_mismatch");
+                }
+                basePconRows = laRequestSince
+                  ? mergePconRows(basePconRows, incomingRows)
+                  : incomingRows;
+                basePconLookup = new Map(basePconRows.map((row) => [resolveAreaCode(row), row]));
+                pconRows = basePconRows;
+                pconLookup = new Map(pconRows.map((row) => [resolveAreaCode(row), row]));
+                const nextSince = normalizeIsoTimestamp(payload?.next_since) || laRequestSince;
+                if (laCacheKey) {
+                  if (nextSince) {
+                    laSinceByKey.set(laCacheKey, nextSince);
+                  } else {
+                    laSinceByKey.delete(laCacheKey);
+                  }
+                }
+                if (lastUpdated) {
+                  if (payload?.last_updated) {
+                    lastUpdated.textContent = `Latest data ${formatTimestamp(payload.last_updated)}`;
+                  } else {
+                    lastUpdated.textContent = "Latest data unavailable";
+                  }
+                }
+              }
+              loadedLaCacheKey = laCacheKey;
+            } catch (error) {
+              laOk = false;
+              console.error("uk_aq CR local authority response error", error);
             }
           }
-          pconCodes = new Set(hexCells.map((cell) => cell.pcon_code).filter(Boolean));
+          if (!laOk) {
+            canRetainLaData = Boolean(laCacheKey && loadedLaCacheKey === laCacheKey);
+            if (!canRetainLaData) {
+              basePconRows = [];
+              basePconLookup = new Map();
+              loadedLaCacheKey = null;
+              pconRows = [];
+              pconLookup = new Map();
+            }
+          }
+
+          const latestCacheKey = getLatestCacheKey(requestPollutant, requestWindow, requestRegion);
+          const latestRequestUrl = resolveLatestUrl(requestWindow);
+          const latestCursorEnabled = Boolean(canLoadData && latestRequestUrl)
+            && !new URL(latestRequestUrl).pathname.endsWith("/latest-snapshot");
+          const latestSince = latestCursorEnabled
+            ? (latestSinceByKey.get(latestCacheKey) || null)
+            : null;
+          const latestSinceId = latestCursorEnabled
+            ? normalizeCursorId(latestSinceIdByKey.get(latestCacheKey))
+            : null;
+          const latestAllCacheKey = getLatestCacheKey(requestPollutant, "all", requestRegion);
           if (latestResponse) {
             const responseEtag = latestResponse.headers.get("ETag");
             if (responseEtag) {
@@ -3568,11 +3853,15 @@ function initHexMapUkController(root) {
               latestEtagByKey.set(latestAllCacheKey, responseEtag);
             }
           }
+
+          let latestOk = false;
+          try {
             if (latestResponse && latestResponse.status === 304) {
               const cachedLatest = pollutantCache.get(latestCacheKey);
               if (cachedLatest) {
                 baseLatestRows = cachedLatest.latestRows || [];
                 latestPollutant = cachedLatest.latestPollutant || requestPollutant;
+                loadedLatestCacheKey = latestCacheKey;
                 const cachedSince = normalizeIsoTimestamp(cachedLatest.nextSince) || latestSince;
                 const cachedSinceId = normalizeCursorId(cachedLatest.nextSinceId)
                   ?? latestSinceId
@@ -3580,15 +3869,28 @@ function initHexMapUkController(root) {
                 if (cachedSince) {
                   latestSinceByKey.set(latestCacheKey, cachedSince);
                   latestSinceIdByKey.set(latestCacheKey, cachedSinceId);
+                } else {
+                  latestSinceByKey.delete(latestCacheKey);
+                  latestSinceIdByKey.delete(latestCacheKey);
                 }
-              } else {
-                baseLatestRows = [];
-                latestPollutant = requestPollutant;
+                latestOk = true;
+              } else if (
+                loadedLatestCacheKey === latestCacheKey
+                && latestPollutant === requestPollutant
+              ) {
+                latestOk = true;
               }
             } else if (latestResponse && latestResponse.ok) {
               const latestPayload = await latestResponse.json();
+              if (isStale()) {
+                return;
+              }
               const latestRaw = latestPayload?.data || [];
               const cleanedLatest = latestRaw.filter((row) => Number.isFinite(resolveLatestValue(row)));
+              const scopedLatest = cleanedLatest.filter((row) => {
+                const code = resolvePconCode(row);
+                return !pconCodes.size || (code && pconCodes.has(code));
+              });
               const responsePollutant = normalizePollutantKey(latestPayload?.pollutant) || requestPollutant;
               const nextSince = latestCursorEnabled
                 ? (normalizeIsoTimestamp(latestPayload?.next_since) || latestSince)
@@ -3599,59 +3901,138 @@ function initHexMapUkController(root) {
                   ?? 0)
                 : 0;
               const existingLatest = (latestCursorEnabled && latestSince)
-                ? (pollutantCache.get(latestCacheKey)?.latestRows || baseLatestRows)
+                ? (pollutantCache.get(latestCacheKey)?.latestRows || (
+                  loadedLatestCacheKey === latestCacheKey ? baseLatestRows : []
+                ))
                 : [];
               const mergedLatest = (latestCursorEnabled && latestSince)
-                ? mergeLatestRows(existingLatest, cleanedLatest)
-                : cleanedLatest;
-            if (!isStale()) {
-              baseLatestRows = mergedLatest;
-              latestPollutant = responsePollutant;
-              pollutantCache.set(latestCacheKey, {
-                timestamp: Date.now(),
-                latestRows: mergedLatest,
-                latestPollutant,
-                nextSince,
-                nextSinceId,
-              });
-              if (latestCursorEnabled && nextSince) {
-                latestSinceByKey.set(latestCacheKey, nextSince);
-                latestSinceIdByKey.set(latestCacheKey, nextSinceId);
-              } else {
-                latestSinceByKey.delete(latestCacheKey);
-                latestSinceIdByKey.delete(latestCacheKey);
+                ? mergeLatestRows(existingLatest, scopedLatest)
+                : scopedLatest;
+              if (!isStale()) {
+                baseLatestRows = mergedLatest;
+                latestPollutant = responsePollutant;
+                loadedLatestCacheKey = latestCacheKey;
+                pollutantCache.set(latestCacheKey, {
+                  timestamp: Date.now(),
+                  latestRows: mergedLatest,
+                  latestPollutant,
+                  nextSince,
+                  nextSinceId,
+                });
+                if (latestCursorEnabled && nextSince) {
+                  latestSinceByKey.set(latestCacheKey, nextSince);
+                  latestSinceIdByKey.set(latestCacheKey, nextSinceId);
+                } else {
+                  latestSinceByKey.delete(latestCacheKey);
+                  latestSinceIdByKey.delete(latestCacheKey);
+                }
+                latestOk = true;
               }
             }
-          } else if (!isStale()) {
-            baseLatestRows = [];
-            latestPollutant = null;
+          } catch (error) {
+            console.error("uk_aq CR latest snapshot response error", error);
           }
-          if (latestAllResponse && latestAllResponse.status === 304) {
-            const cachedLatestAll = pollutantCache.get(latestAllCacheKey);
-            if (cachedLatestAll) {
-              baseLatestRowsAllWindow = cachedLatestAll.latestRows || [];
-            } else {
-              baseLatestRowsAllWindow = baseLatestRows;
+          if (!latestOk) {
+            const canRetainLatestData = loadedLatestCacheKey === latestCacheKey
+              && latestPollutant === requestPollutant;
+            if (!canRetainLatestData) {
+              const cachedLatest = pollutantCache.get(latestCacheKey);
+              const cachedPollutant = normalizePollutantKey(cachedLatest?.latestPollutant) || requestPollutant;
+              if (cachedLatest && cachedPollutant === requestPollutant) {
+                baseLatestRows = cachedLatest.latestRows || [];
+                latestPollutant = cachedPollutant;
+                loadedLatestCacheKey = latestCacheKey;
+              } else {
+                baseLatestRows = [];
+                latestPollutant = null;
+                loadedLatestCacheKey = null;
+              }
             }
-          } else if (latestAllResponse && latestAllResponse.ok) {
-            const latestAllPayload = await latestAllResponse.json();
-            const latestAllRaw = latestAllPayload?.data || [];
-            const cleanedLatestAll = latestAllRaw.filter((row) => Number.isFinite(resolveLatestValue(row)));
-            baseLatestRowsAllWindow = cleanedLatestAll;
-            pollutantCache.set(latestAllCacheKey, {
-              timestamp: Date.now(),
-              latestRows: cleanedLatestAll,
-              latestPollutant: normalizePollutantKey(latestAllPayload?.pollutant) || requestPollutant,
-              nextSince: null,
-              nextSinceId: 0,
-            });
-            latestSinceByKey.delete(latestAllCacheKey);
-            latestSinceIdByKey.delete(latestAllCacheKey);
-          } else {
+          }
+
+          if (requestWindow === "all") {
             baseLatestRowsAllWindow = baseLatestRows;
+            loadedLatestAllCacheKey = loadedLatestCacheKey === latestAllCacheKey
+              ? latestAllCacheKey
+              : null;
+          } else {
+            let latestAllOk = false;
+            try {
+              if (latestAllResponse && latestAllResponse.status === 304) {
+                const cachedLatestAll = pollutantCache.get(latestAllCacheKey);
+                if (cachedLatestAll) {
+                  baseLatestRowsAllWindow = cachedLatestAll.latestRows || [];
+                  loadedLatestAllCacheKey = latestAllCacheKey;
+                  latestAllOk = true;
+                } else if (loadedLatestAllCacheKey === latestAllCacheKey) {
+                  latestAllOk = true;
+                }
+              } else if (latestAllResponse && latestAllResponse.ok) {
+                const latestAllPayload = await latestAllResponse.json();
+                if (isStale()) {
+                  return;
+                }
+                const latestAllRaw = latestAllPayload?.data || [];
+                const cleanedLatestAll = latestAllRaw.filter((row) => Number.isFinite(resolveLatestValue(row)));
+                const scopedLatestAll = cleanedLatestAll.filter((row) => {
+                  const code = resolvePconCode(row);
+                  return !pconCodes.size || (code && pconCodes.has(code));
+                });
+                baseLatestRowsAllWindow = scopedLatestAll;
+                loadedLatestAllCacheKey = latestAllCacheKey;
+                pollutantCache.set(latestAllCacheKey, {
+                  timestamp: Date.now(),
+                  latestRows: scopedLatestAll,
+                  latestPollutant: normalizePollutantKey(latestAllPayload?.pollutant) || requestPollutant,
+                  nextSince: null,
+                  nextSinceId: 0,
+                });
+                latestSinceByKey.delete(latestAllCacheKey);
+                latestSinceIdByKey.delete(latestAllCacheKey);
+                latestAllOk = true;
+              }
+            } catch (error) {
+              console.error("uk_aq CR all-window latest snapshot response error", error);
+            }
+            if (!latestAllOk && loadedLatestAllCacheKey !== latestAllCacheKey) {
+              const cachedLatestAll = pollutantCache.get(latestAllCacheKey);
+              if (cachedLatestAll) {
+                baseLatestRowsAllWindow = cachedLatestAll.latestRows || [];
+                loadedLatestAllCacheKey = latestAllCacheKey;
+              } else {
+                baseLatestRowsAllWindow = baseLatestRows;
+                loadedLatestAllCacheKey = null;
+              }
+            }
           }
           if (isStale()) {
             return;
+          }
+          if (!laOk) {
+            const hasUsableLatestData = Boolean(
+              (
+                loadedLatestCacheKey === latestCacheKey
+                && latestPollutant === requestPollutant
+                && baseLatestRows.length
+              )
+              || (
+                loadedLatestAllCacheKey === latestAllCacheKey
+                && baseLatestRowsAllWindow.length
+              ),
+            );
+            if (canLoadData && errorEl) {
+              errorEl.textContent = canRetainLaData
+                ? "Local authority data unavailable. Showing last available map data."
+                : hasUsableLatestData
+                  ? "Local authority aggregate data unavailable. Showing available sensor data."
+                  : "Local authority data unavailable. Showing boundaries only.";
+              errorEl.hidden = false;
+            }
+            if (!canRetainLaData && lastUpdated) {
+              lastUpdated.textContent = hasUsableLatestData
+                ? "Showing available sensor data"
+                : "Boundary only (no sensor data yet)";
+            }
           }
           const networkRowsForWindow = getNetworkRowsForWindow();
           const windowNetworkDefs = buildNetworkDefs(networkRowsForWindow);
@@ -3659,8 +4040,8 @@ function initHexMapUkController(root) {
           renderNetworkFiltersIfNeeded(
             windowNetworkDefs,
             coverageByCode,
-            TOTAL_PCON_COUNT,
-            "constituencies",
+            pconCodes.size || 0,
+            AREA_LABEL_PLURAL,
           );
           if (populationResponse && populationResponse.ok) {
             const populationPayload = await populationResponse.json();
@@ -3679,11 +4060,17 @@ function initHexMapUkController(root) {
           } else {
             populationLookup = new Map();
           }
-          chartDataStatus = latestPollutant === requestPollutant ? "ready" : "failed";
-          applyNetworkFilters();
           markHexMapTiming(timingId, "colored-ready");
           measureHexMapTiming(timingId, "load-to-colored-ready", "load:start", "colored-ready");
-          setStatus("Live");
+          if (isStale()) {
+            return;
+          }
+          chartDataStatus = laOk && latestOk && latestPollutant === requestPollutant
+            ? "ready"
+            : "failed";
+          applyNetworkFilters();
+          applyPendingAreaSelection();
+          setStatus(chartDataStatus === "ready" ? "Live" : "Error");
           markHexMapTiming(timingId, "load-complete");
           measureHexMapTiming(timingId, "load-total", "load:start", "load-complete");
         } catch (error) {
@@ -3691,7 +4078,7 @@ function initHexMapUkController(root) {
             return;
           }
           chartDataStatus = "failed";
-          window.hexChartMode?.syncFromMap?.("uk", { preserveChartMode: true, dataStatus: "failed" });
+          window.hexChartMode?.syncFromMap?.("cr", { preserveChartMode: true, dataStatus: "failed" });
           if (maybeRedirectToAccessLogin(error)) {
             if (errorEl) {
               errorEl.textContent = "Cloudflare Access login required. Redirecting...";
@@ -3701,7 +4088,7 @@ function initHexMapUkController(root) {
             return;
           }
           const message = error instanceof Error ? error.message : String(error);
-          console.error("uk_aq UK map load error", error);
+          console.error("uk_aq CR map load error", error);
           if (errorEl) {
             errorEl.textContent = message;
             errorEl.hidden = false;
@@ -3831,9 +4218,27 @@ function initHexMapUkController(root) {
         closeSettingsPanel();
       });
 
+      document.addEventListener("click", (event) => {
+        if (!selectedAreaCode) {
+          return;
+        }
+        const target = event.target;
+        const targetElement = target instanceof Element ? target : target?.parentElement;
+        if (!targetElement || !mapCanvasWrap || !mapCanvasWrap.contains(targetElement)) {
+          return;
+        }
+        if (targetElement && typeof targetElement.closest === "function" && targetElement.closest(".hex")) {
+          return;
+        }
+        if (targetElement && typeof targetElement.closest === "function" && targetElement.closest(".map-inline-sensor-panel, .map-settings-panel, .map-settings, .map-zoom-controls, .map-topbar, .networks-pill-anchor, .networks-pill, .hex-chart-mode-panel")) {
+          return;
+        }
+        setSelectedCell(null);
+      });
+
       window.addEventListener("hexchartselectionchange", (event) => {
         const detail = event.detail || {};
-        if (detail.mapKey && detail.mapKey !== "uk") {
+        if (detail.mapKey && detail.mapKey !== "cr") {
           return;
         }
         syncInlinePanelTitleInteractivity();
@@ -3842,33 +4247,6 @@ function initHexMapUkController(root) {
         }
         updateDetailsPanel();
       });
-
-      document.addEventListener("click", (event) => {
-        if (!selectedPconCode) {
-          return;
-        }
-        const target = event.target;
-        const targetElement = target instanceof Element ? target : target?.parentElement;
-        if (!targetElement || !mapCanvasWrap || !mapCanvasWrap.contains(targetElement)) {
-          return;
-        }
-        if (targetElement && typeof targetElement.closest === "function" && targetElement.closest("polygon.hex")) {
-          return;
-        }
-        if (targetElement && typeof targetElement.closest === "function" && targetElement.closest(".map-inline-sensor-panel, .map-settings-panel, .map-settings, .map-zoom-controls, .map-topbar, .mobile-map-controls, .networks-pill-anchor, .networks-pill, .hex-chart-mode-panel")) {
-          return;
-        }
-        setSelectedCell(null);
-      });
-
-      pollutantButtons.forEach((button) => {
-        button.addEventListener("click", () => {
-          setActivePollutant(button.dataset.pollutant);
-        });
-      });
-      if (pollutantSelector) {
-        pollutantSelector.addEventListener("keydown", handlePollutantKeydown);
-      }
 
       sortHeaderButtons.forEach((button) => {
         button.addEventListener("click", (event) => {
@@ -3889,32 +4267,17 @@ function initHexMapUkController(root) {
       });
       syncSortHeaders();
 
-      const sensorShareBars = SensorShareBars(sensorShareList, []);
-      const networkSummaryCardsComponent = NetworkSummaryCards({
-        coverageEl: networkSummaryCoverage,
-        sensorsEl: networkSummarySensors,
-        freshnessEl: networkSummaryFreshness,
-      }, {
-        pconCovered: 0,
-        pconTotal: pconCodes.size || TOTAL_PCON_COUNT,
-        totalSensors: 0,
-        avgSensorsPerPcon: null,
-        newestReadingISO: null,
-        oldestReadingISO: null,
-        shareData: [],
-      });
-
-      document.getElementById("refresh").addEventListener("click", () => {
-        if (window.hexChartMode?.isActive?.("uk")) {
+      byId("refresh").addEventListener("click", () => {
+        if (window.hexChartMode?.isActive?.("cr")) {
           window.hexChartMode.refresh?.();
           return;
         }
         loadMapData();
       });
-      document.addEventListener("visibilitychange", syncUkPollingOnVisibility);
-      if (ukRoot && typeof MutationObserver !== "undefined") {
-        const ukVisibilityObserver = new MutationObserver(syncUkPollingOnVisibility);
-        ukVisibilityObserver.observe(ukRoot, { attributes: true, attributeFilter: ["hidden"] });
+      document.addEventListener("visibilitychange", syncCrPollingOnVisibility);
+      if (root && typeof MutationObserver !== "undefined") {
+        const crVisibilityObserver = new MutationObserver(syncCrPollingOnVisibility);
+        crVisibilityObserver.observe(root, { attributes: true, attributeFilter: ["hidden"] });
       }
       window.addEventListener("resize", () => {
         if (statusEl.textContent === "Live") {
@@ -3926,20 +4289,40 @@ function initHexMapUkController(root) {
         }
       });
       applyMetricState();
-      syncPollutantButtons();
       updatePollutantLabels();
       currentWindow = normalizeWindowKey(coordinator.getMapSettings().window || currentWindow);
-      syncWindowInputs();
-      syncSettingsPanelWidth();
-      syncColorScaleInputs();
-      updateLegendScaleDescription();
-      syncUkPollingOnVisibility();
+	      syncWindowInputs();
+	      syncSettingsPanelWidth();
+	      syncColorScaleInputs();
+	      updateLegendScaleDescription();
+	      syncCrPollingOnVisibility();
 
-      function buildConstituencySearchRecords() {
+      function buildLocalAuthoritySearchRecords() {
         const records = [];
         const seenCodes = new Set();
+        if (hexData?.type === "FeatureCollection") {
+          const features = Array.isArray(hexData?.features) ? hexData.features : [];
+          features.forEach((feature, index) => {
+            const props = feature?.properties || {};
+            const rawCode = typeof props.la_code === "string" ? props.la_code.trim() : "";
+            const rawName = typeof props.la_name === "string" ? props.la_name.trim() : "";
+            const regionName = resolveLaRegionName(rawCode, rawName, props.region_nation);
+            const code = (rawCode || `LA-${index}`).toUpperCase();
+            if (!code || seenCodes.has(code)) {
+              return;
+            }
+            seenCodes.add(code);
+            records.push({
+              code,
+              name: rawName || code,
+              region_name: regionName || null,
+            });
+          });
+          return records;
+        }
         hexCells.forEach((cell) => {
-          const rawCode = typeof cell?.pcon_code === "string" ? cell.pcon_code.trim() : "";
+          const cellCode = resolveCellAreaCode(cell);
+          const rawCode = typeof cellCode === "string" ? cellCode.trim() : "";
           if (!rawCode) {
             return;
           }
@@ -3948,13 +4331,10 @@ function initHexMapUkController(root) {
             return;
           }
           seenCodes.add(code);
-          const row = pconLookup.get(rawCode) || pconLookup.get(code) || null;
-          const name = cell?.pcon_name || row?.pcon_name || rawCode;
-          const region = cell?.region_name || row?.region_name || "";
           records.push({
             code,
-            name,
-            region,
+            name: resolveCellAreaName(cell) || code,
+            region_name: cell?.region_name || null,
           });
         });
         return records;
@@ -3966,13 +4346,13 @@ function initHexMapUkController(root) {
           : (scopedLatestRows.length ? scopedLatestRows : baseLatestRowsAllWindow.length ? baseLatestRowsAllWindow : baseLatestRows);
         const recordsByKey = new Map();
         rowsForSearch.forEach((row, index) => {
-          const stationId = String(resolveStationKey(row) || `uk:${index}`);
+          const stationId = String(resolveStationKey(row) || `cr:${index}`);
           const stationName = resolveStationName(row);
           const networkName = resolvePrimaryNetworkLabel(row) || null;
+          const areaRaw = resolveAreaCode(row);
           const pconRaw = resolvePconCode(row);
-          const laRaw = resolveLaCode(row);
+          const laCode = typeof areaRaw === "string" ? areaRaw.trim().toUpperCase() : null;
           const pconCode = typeof pconRaw === "string" ? pconRaw.trim().toUpperCase() : null;
-          const laCode = typeof laRaw === "string" ? laRaw.trim().toUpperCase() : null;
           const { lat, lon } = resolveCoordinatePair(row);
           const key = `${stationId}::${networkName || ""}`;
           const existing = recordsByKey.get(key);
@@ -4004,23 +4384,55 @@ function initHexMapUkController(root) {
         return Array.from(recordsByKey.values());
       }
 
-      function ensureUkSearchDataLoaded() {
-        if (hexCells.length) {
+      function hasCrSearchData() {
+        if (hexData?.type === "FeatureCollection") {
+          return Array.isArray(hexData.features) && hexData.features.length > 0;
+        }
+        return hexCells.length > 0;
+      }
+
+      function ensureCrSearchDataLoaded() {
+        if (hasCrSearchData()) {
           return Promise.resolve(true);
         }
-        if (ukSearchPreloadPromise) {
-          return ukSearchPreloadPromise;
+        if (crSearchPreloadPromise) {
+          return crSearchPreloadPromise;
         }
-        ukSearchPreloadPromise = loadMapData({ force: true })
-          .then(() => Boolean(hexCells.length))
+        crSearchPreloadPromise = loadMapData({ force: true })
+          .then(() => hasCrSearchData())
           .catch((error) => {
-            console.warn("uk_aq UK search preload failed", error);
+            console.warn("uk_aq C&R search preload failed", error);
             return false;
           })
           .finally(() => {
-            ukSearchPreloadPromise = null;
-        });
-        return ukSearchPreloadPromise;
+            crSearchPreloadPromise = null;
+          });
+        return crSearchPreloadPromise;
+      }
+
+      async function fetchAllRegionsForSearch() {
+        if (!LATEST_SNAPSHOT_URL) return;
+        if (allRegionsFetchState === "fetching") return;
+        allRegionsFetchState = "fetching";
+        const fetchPollutant = activePollutant;
+        try {
+          const url = new URL(resolveLatestUrl(currentWindow));
+          url.searchParams.set("pollutant", fetchPollutant);
+          url.searchParams.set("window", currentWindow);
+          url.searchParams.set("scope", "all");
+          url.searchParams.set("limit", "10000");
+          const response = await fetchCacheApi(url.toString(), {});
+          if (!response || !response.ok) return;
+          const payload = await response.json();
+          const rawRows = (payload?.data || []).filter((row) => Number.isFinite(resolveLatestValue(row)));
+          const windowed = filterRowsByWindow(rawRows);
+          const derived = buildPconRowsFromLatest(windowed);
+          allRegionsMetricLookup = new Map(derived.map((row) => [resolveAreaCode(row), row]));
+          allRegionsFetchPollutant = fetchPollutant;
+          allRegionsFetchState = "done";
+        } catch (e) {
+          allRegionsFetchState = "idle";
+        }
       }
 
       function normalizeTimeseriesId(value) {
@@ -4044,13 +4456,13 @@ function initHexMapUkController(root) {
       }
 
       function buildChartModeEntriesForSelectedArea() {
-        if (!selectedPconCode) {
+        if (!selectedAreaCode) {
           return [];
         }
         const detailSourceRows = scopedLatestRowsAllWindow.length ? scopedLatestRowsAllWindow : scopedLatestRows;
         const scopedRows = getRowsForActivePollutant(detailSourceRows);
         const cutoff = getWindowCutoff();
-        const entries = collectStationEntries(scopedRows, selectedPconCode).map((entry) => ({
+        const entries = collectStationEntries(scopedRows, selectedAreaCode).map((entry) => ({
           ...entry,
           inWindow: isTimestampInWindow(entry.timestamp, cutoff),
         }));
@@ -4074,10 +4486,10 @@ function initHexMapUkController(root) {
         });
       }
 
-      const ukController = Object.freeze({
-        render: () => {
-          if (statusEl.textContent === "Live") {
-            requestAnimationFrame(() => {
+	      const crController = Object.freeze({
+	        render: () => {
+	          if (statusEl.textContent === "Live") {
+	            requestAnimationFrame(() => {
               renderMap();
             });
           }
@@ -4093,24 +4505,25 @@ function initHexMapUkController(root) {
           applyNetworkFilters();
         },
         markBootstrapReady: () => {
-          ukBootstrapReady = true;
-          syncUkPollingOnVisibility();
+          crBootstrapReady = true;
+          syncCrPollingOnVisibility();
         },
         reapplyNetworkFilters: () => {
           applyNetworkFilters();
         },
-        clearPinnedTooltip: () => {
-          pinnedTooltipCell = null;
-        },
-        selectPconByCode: (code) => selectPconByCode(code),
-        getActivePconCode: () => selectedPconCode,
+	        setRegion: (region, options) => {
+	          setActiveRegion(region, options);
+	        },
+	        getRegion: () => activeRegion,
+	        selectAreaByCode: (code, options) => selectAreaByCode(code, options),
+	        getActiveAreaCode: () => selectedAreaCode,
         getChartModeContext: () => {
-          const row = selectedPconCode ? pconLookup.get(selectedPconCode) : null;
-          const areaName = selectedCell?.pcon_name || row?.pcon_name || selectedPconCode || "";
+          const row = selectedAreaCode ? pconLookup.get(selectedAreaCode) : null;
+          const areaName = resolveCellAreaName(selectedCell) || resolveAreaName(row) || selectedAreaCode || "";
           const metricValue = getMetricValue(row);
           return {
-            mapKey: "uk",
-            areaCode: selectedPconCode,
+            mapKey: "cr",
+            areaCode: selectedAreaCode,
             areaName,
             entries: buildChartModeEntriesForSelectedArea(),
             sortKey,
@@ -4126,18 +4539,25 @@ function initHexMapUkController(root) {
           };
         },
         refreshForChartMode: () => loadMapData({ preserveChartMode: true }),
-        ensureSearchDataLoaded: () => ensureUkSearchDataLoaded(),
-        getConstituencySearchRecords: () => buildConstituencySearchRecords(),
-        getSensorSearchRecords: () => buildSensorSearchRecords(),
+	        ensureSearchDataLoaded: () => ensureCrSearchDataLoaded(),
+	        getLocalAuthoritySearchRecords: () => buildLocalAuthoritySearchRecords(),
+	        getSensorSearchRecords: () => buildSensorSearchRecords(),
         getPollutantLabel: () => getPollutantLabel(activePollutant),
-        getColorForPconCode: (pconCode) => {
+        getColorForLaCode: (laCode) => {
           if (!colorScale) return null;
-          const row = pconLookup.get(pconCode);
+          const row = pconLookup.get(laCode) || basePconLookup.get(laCode);
           const value = getMetricValue(row);
           if (!Number.isFinite(value)) return null;
           return colorScale(value);
         },
-        getPconMetricValue: (pconCode) => getMetricValue(basePconLookup.get(pconCode)),
+        getLaMetricValue: (laCode) => getMetricValue(pconLookup.get(laCode)),
+        getUniversalLaMetricValue: (laCode) => getMetricValue(allRegionsMetricLookup.get(laCode) || pconLookup.get(laCode)),
+        ensureAllRegionsFetched: () => {
+          if (allRegionsFetchState === "idle" || allRegionsFetchPollutant !== activePollutant) {
+            allRegionsFetchState = "idle";
+            fetchAllRegionsForSearch();
+          }
+        },
         applyColorScale: (value) => colorScale ? colorScale(value) : null,
         getSensorCurrentColor: (stationId) => {
           if (!colorScale) return null;
@@ -4155,16 +4575,14 @@ function initHexMapUkController(root) {
           if (!Number.isFinite(value)) return null;
           return colorScale(value);
         },
-      });
-      root.ukMap = Object.freeze(Object.fromEntries(
-        Object.keys(ukController)
-          .filter((methodName) => methodName !== "clearPinnedTooltip")
-          .map((methodName) => [
-            methodName,
-            (...args) => ukController[methodName](...args),
-          ]),
+	      });
+      window.crMap = Object.freeze(Object.fromEntries(
+        Object.keys(crController).map((methodName) => [
+          methodName,
+          (...args) => crController[methodName](...args),
+        ]),
       ));
-      coordinator.registerMap("uk", {
+      coordinator.registerMap("cr", {
         setPollutant: (pollutant) => setActivePollutant(pollutant, { coordinated: true }),
         setMapSettings: (settings) => {
           setMetric(settings.metric, { coordinated: true });
@@ -4172,15 +4590,15 @@ function initHexMapUkController(root) {
           setWindow(settings.window, { coordinated: true });
         },
         activate: () => {
-          ukController.render();
-          ukController.restoreNetworks();
-          search?.preloadInactiveMap?.("uk");
-          ukController.markBootstrapReady();
+          crController.render();
+          crController.restoreNetworks();
+          search?.preloadInactiveMap?.("cr");
+          crController.markBootstrapReady();
         },
       });
-      networkController.registerScope("uk", () => applyNetworkFilters());
-      return ukController;
+      networkController.registerScope("cr", () => applyNetworkFilters());
+      return crController;
 }
 
-const ukController = initHexMapUkController(globalThis);
-export default ukController;
+const crController = initHexMapCrController();
+export default crController;

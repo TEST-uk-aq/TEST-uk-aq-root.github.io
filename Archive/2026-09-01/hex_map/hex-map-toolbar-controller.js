@@ -3,7 +3,6 @@ import networkController from "./hex-map-network-controller.js";
 import urlState from "./hex-map-url-state.js";
 import crController from "./hex-map-cr-controller.js";
 import search from "./hex-map-search.js";
-import pageMode from "./hex-map-page-mode.js";
 
 function initHexMapToolbarController(root) {
   "use strict";
@@ -16,8 +15,7 @@ function initHexMapToolbarController(root) {
       || !coordinator?.registerActiveMapPresenter
       || !urlState?.switchToUk
       || !urlState?.switchToCr
-      || !urlState?.setCrRegion
-      || !pageMode?.getMode) {
+      || !urlState?.setCrRegion) {
     throw new Error("Hex Map toolbar dependencies must load before the toolbar controller.");
   }
 
@@ -37,13 +35,11 @@ function initHexMapToolbarController(root) {
   };
   const toolbarTabUk = root.document.getElementById("toolbar-tab-uk");
   const toolbarTabCr = root.document.getElementById("toolbar-tab-cr");
-  const viewControl = toolbar?.querySelector(".segmented--view") || null;
   const regionSection = root.document.getElementById("toolbar-region-section");
   const regionTrigger = root.document.getElementById("toolbar-region-trigger");
   const regionLabel = root.document.getElementById("toolbar-region-label");
   const regionMenu = root.document.getElementById("toolbar-region-menu");
   const popoverWrap = root.document.getElementById("toolbar-popover-wrap");
-  const pollutantSelector = root.document.getElementById("pollutant-selector");
   const windowStepper = root.document.getElementById("window-stepper");
   const windowStepperPrev = windowStepper?.querySelector("[data-window-step='prev']");
   const windowStepperNext = windowStepper?.querySelector("[data-window-step='next']");
@@ -60,35 +56,6 @@ function initHexMapToolbarController(root) {
   const reduceMotionQuery = typeof root.matchMedia === "function"
     ? root.matchMedia("(prefers-reduced-motion: reduce)")
     : null;
-  const mobileLayoutQuery = typeof root.matchMedia === "function"
-    ? root.matchMedia("(max-width: 767px)")
-    : null;
-  const mobileMounts = {
-    uk: {
-      left: panelUk?.querySelector("[data-mobile-map-controls-left]") || null,
-      right: panelUk?.querySelector("[data-mobile-map-controls-right]") || null,
-      status: panelUk?.querySelector("[data-mobile-map-status-row]") || null,
-    },
-    cr: {
-      left: panelCr?.querySelector("[data-mobile-map-controls-left]") || null,
-      right: panelCr?.querySelector("[data-mobile-map-controls-right]") || null,
-      status: panelCr?.querySelector("[data-mobile-map-status-row]") || null,
-    },
-  };
-  const networkAnchors = {
-    uk: root.document.getElementById("uk-networks-pill-anchor"),
-    cr: root.document.getElementById("cr-networks-pill-anchor"),
-  };
-  const relocationNodes = [viewControl, regionSection, pollutantSelector, windowStepper]
-    .filter(Boolean);
-  const originalMarkers = new Map();
-
-  [...relocationNodes, ...Object.values(networkAnchors).filter(Boolean)].forEach((node) => {
-    if (!node.parentNode || originalMarkers.has(node)) return;
-    const marker = root.document.createComment(`uk-aq-original-host:${node.id || node.className}`);
-    node.parentNode.insertBefore(marker, node);
-    originalMarkers.set(node, marker);
-  });
 
   let mounted = false;
   let regionPopoverOpen = false;
@@ -207,48 +174,7 @@ function initHexMapToolbarController(root) {
     });
   }
 
-  function isMobileMapMode() {
-    return Boolean(mobileLayoutQuery?.matches && pageMode.getMode() === "map");
-  }
-
-  function restoreNode(node) {
-    const marker = originalMarkers.get(node);
-    if (!node || !marker?.parentNode) return false;
-    if (node.previousSibling === marker) return true;
-    marker.parentNode.insertBefore(node, marker.nextSibling);
-    return true;
-  }
-
-  function restoreDistributedControls() {
-    relocationNodes.forEach(restoreNode);
-    Object.values(networkAnchors).forEach(restoreNode);
-  }
-
-  function renderMobileViewAccessibility(mapKey, mobileMapMode) {
-    const isUk = mapKey === "uk";
-    const activeButton = isUk ? toolbarTabUk : toolbarTabCr;
-    const inactiveButton = isUk ? toolbarTabCr : toolbarTabUk;
-
-    if (mobileMapMode) {
-      activeButton?.setAttribute(
-        "aria-label",
-        isUk
-          ? "View: United Kingdom constituencies. Switch to Countries and Regions local authorities."
-          : "View: Countries and Regions local authorities. Switch to United Kingdom constituencies.",
-      );
-      activeButton?.setAttribute("tabindex", "0");
-      inactiveButton?.removeAttribute("aria-label");
-      inactiveButton?.setAttribute("tabindex", "-1");
-      return;
-    }
-
-    [toolbarTabUk, toolbarTabCr].forEach((button) => {
-      button?.removeAttribute("aria-label");
-      button?.removeAttribute("tabindex");
-    });
-  }
-
-  function relocateStatusRefreshForMap(mapKey, mobileStatusHost = null) {
+  function relocateStatusRefreshForMap(mapKey) {
     const isUk = mapKey === "uk";
     const statusSlot = root.document.getElementById("toolbar-status-slot");
     const refreshSlot = root.document.getElementById("toolbar-refresh-slot");
@@ -268,45 +194,12 @@ function initHexMapToolbarController(root) {
         inactiveTopbar.insertBefore(inactiveRefresh, inactiveTopbar.firstChild?.nextSibling || null);
       }
     }
-    const activeStatusHost = mobileStatusHost || statusSlot;
-    const activeRefreshHost = mobileStatusHost || refreshSlot;
-    if (activeStatusHost && activeStatus && activeStatus.parentElement !== activeStatusHost) {
-      activeStatusHost.appendChild(activeStatus);
+    if (statusSlot && activeStatus && activeStatus.parentElement !== statusSlot) {
+      statusSlot.appendChild(activeStatus);
     }
-    if (activeRefreshHost && activeRefresh && activeRefresh.parentElement !== activeRefreshHost) {
-      activeRefreshHost.appendChild(activeRefresh);
+    if (refreshSlot && activeRefresh && activeRefresh.parentElement !== refreshSlot) {
+      refreshSlot.appendChild(activeRefresh);
     }
-  }
-
-  function syncResponsivePresentation(mapKey = coordinator.getActiveMap()) {
-    const normalizedMapKey = mapKey === "cr" ? "cr" : "uk";
-    const mobileMapMode = isMobileMapMode();
-    const mounts = mobileMounts[normalizedMapKey];
-
-    if (!mobileMapMode || !mounts?.left || !mounts?.right || !mounts?.status) {
-      restoreDistributedControls();
-      relocateStatusRefreshForMap(normalizedMapKey);
-      root.document.body.classList.remove("mobile-map-controls-active");
-      renderMobileViewAccessibility(normalizedMapKey, false);
-      return false;
-    }
-
-    const inactiveMapKey = normalizedMapKey === "uk" ? "cr" : "uk";
-    restoreNode(networkAnchors[inactiveMapKey]);
-    [viewControl, regionSection, windowStepper].forEach((node) => {
-      if (node && node.parentElement !== mounts.left) mounts.left.appendChild(node);
-    });
-    relocateStatusRefreshForMap(normalizedMapKey, mounts.status);
-    const activeNetworkAnchor = networkAnchors[normalizedMapKey];
-    if (activeNetworkAnchor && activeNetworkAnchor.parentElement !== mounts.right) {
-      mounts.right.appendChild(activeNetworkAnchor);
-    }
-    if (pollutantSelector && pollutantSelector.parentElement !== mounts.right) {
-      mounts.right.appendChild(pollutantSelector);
-    }
-    root.document.body.classList.add("mobile-map-controls-active");
-    renderMobileViewAccessibility(normalizedMapKey, true);
-    return true;
   }
 
   function presentActiveMap(mapKey) {
@@ -331,7 +224,7 @@ function initHexMapToolbarController(root) {
     toolbarTabCr?.classList.toggle("active", !isUk);
     regionSection?.classList.toggle("visible", !isUk);
     networkController?.syncPanelForActiveScope?.();
-    syncResponsivePresentation(mapKey);
+    relocateStatusRefreshForMap(mapKey);
     if (!isUk) renderRegion();
   }
 
@@ -352,16 +245,6 @@ function initHexMapToolbarController(root) {
 
   function navigateToCr() {
     urlState.switchToCr(null, { updateUrl: true, push: true });
-  }
-
-  function handleToolbarViewClick(targetMapKey) {
-    if (isMobileMapMode()) {
-      if (coordinator.getActiveMap() === "uk") navigateToCr();
-      else navigateToUk();
-      return;
-    }
-    if (targetMapKey === "cr") navigateToCr();
-    else navigateToUk();
   }
 
   function handleWindowStepperClick(event) {
@@ -385,29 +268,13 @@ function initHexMapToolbarController(root) {
     coordinator.registerActiveMapPresenter(presentActiveMap);
     tabUk?.addEventListener("click", navigateToUk);
     tabCr?.addEventListener("click", navigateToCr);
-    toolbarTabUk?.addEventListener("click", () => handleToolbarViewClick("uk"));
-    toolbarTabCr?.addEventListener("click", () => handleToolbarViewClick("cr"));
+    toolbarTabUk?.addEventListener("click", navigateToUk);
+    toolbarTabCr?.addEventListener("click", navigateToCr);
     windowStepper?.addEventListener("click", handleWindowStepperClick);
     root.addEventListener("mapsettingschange", (event) => {
       if (event.detail?.window) renderWindowStepper();
     });
     root.addEventListener("crregionchange", renderRegion);
-    root.addEventListener("hexpagemodechange", () => {
-      syncResponsivePresentation(coordinator.getActiveMap());
-    });
-
-    if (mobileLayoutQuery) {
-      const handleMobileLayoutChange = () => {
-        closeRegionPopover();
-        networkController?.closePanel?.();
-        syncResponsivePresentation(coordinator.getActiveMap());
-      };
-      if (typeof mobileLayoutQuery.addEventListener === "function") {
-        mobileLayoutQuery.addEventListener("change", handleMobileLayoutChange);
-      } else if (typeof mobileLayoutQuery.addListener === "function") {
-        mobileLayoutQuery.addListener(handleMobileLayoutChange);
-      }
-    }
 
     if (reduceMotionQuery) {
       const handleMotionChange = (event) => {
@@ -444,7 +311,6 @@ function initHexMapToolbarController(root) {
     renderRegionPopover();
     renderRegion();
     renderWindowStepper({ force: true });
-    syncResponsivePresentation(coordinator.getActiveMap());
     return true;
   }
 
@@ -454,7 +320,6 @@ function initHexMapToolbarController(root) {
     renderActiveMap,
     renderRegion,
     renderWindowStepper,
-    syncResponsivePresentation,
     closeRegionPopover,
   });
 

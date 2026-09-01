@@ -4947,6 +4947,15 @@
           min-height: 44px;
         }
 
+        .hex-map-page .networks-pill {
+          min-width: 0;
+          gap: 5px;
+          padding: 5px 9px;
+          border-radius: 999px;
+          font-size: 0.875rem;
+          justify-content: center;
+        }
+
         .hex-map-page .map-floating-tools {
           bottom: 98px;
         }
@@ -4964,38 +4973,74 @@
           bottom: 60px;
           right: 10px;
           left: auto;
-          width: min(286px, calc(100% - 78px));
+          width: min(310px, calc(100% - 78px));
           max-width: calc(100% - 78px);
           box-sizing: border-box;
           transform: none;
-          grid-template-columns: minmax(0, 1fr);
-          justify-items: center;
-          row-gap: 5px;
-          border-radius: 14px;
+          grid-template-columns: minmax(0, 1fr) max-content;
+          grid-template-areas:
+            "pollutant aggregation"
+            "scale scale";
+          justify-content: end;
+          justify-items: end;
+          column-gap: 6px;
+          row-gap: 4px;
+          padding: 0;
+          border: 0;
+          border-radius: 0;
+          background: transparent;
+          box-shadow: none;
           white-space: normal;
         }
 
-        .hex-map-page .legend-pill > span:first-child,
+        .hex-map-page .legend-pill > span:first-child {
+          grid-area: pollutant;
+          width: auto;
+          min-height: 0;
+          justify-self: end;
+          justify-content: flex-end;
+          font-size: 0.78rem;
+          font-weight: 500;
+          line-height: 1.2;
+          text-align: right;
+          white-space: nowrap;
+        }
+
         .hex-map-page .legend-pill > #legend-label,
         .hex-map-page .legend-pill > #cr-legend-label {
-          justify-content: center;
-          text-align: center;
+          grid-area: aggregation;
+          width: auto;
+          min-height: 0;
+          justify-self: start;
+          justify-content: flex-start;
+          font-size: 0.78rem;
+          font-weight: 500;
+          line-height: 1.2;
+          text-align: left;
+          white-space: nowrap;
+        }
+
+        .hex-map-page .legend-pill > #legend-label::before,
+        .hex-map-page .legend-pill > #cr-legend-label::before {
+          content: "·";
+          margin-right: 6px;
         }
 
         .hex-map-page .legend-pill .legend-scale {
+          grid-area: scale;
           display: grid;
-          grid-template-columns: max-content minmax(0, 180px) max-content;
+          grid-template-columns: max-content minmax(0, 190px) max-content;
           column-gap: 8px;
           width: 100%;
           max-width: 100%;
           min-width: 0;
-          justify-content: center;
+          justify-content: end;
         }
 
         .hex-map-page .legend-pill .legend-bar-wrap {
           width: 100%;
           min-width: 0;
-          max-width: 180px;
+          max-width: 190px;
         }
 
         .hex-map-page .legend-pill .legend-value {

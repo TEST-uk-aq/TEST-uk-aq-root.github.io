@@ -4843,12 +4843,12 @@
         }
 
         .hex-map-page main > .tab-panel {
-          order: 2;
+          order: 3;
         }
 
         .hex-map-page main > .ukaq-beta-notice-mount {
-          order: 3;
-          margin-top: 18px;
+          order: 2;
+          margin: 0 0 16px;
         }
 
         .hex-map-page .page-title {
@@ -4935,7 +4935,7 @@
         .hex-map-page .map-topbar {
           top: auto;
           right: 10px;
-          bottom: 98px;
+          bottom: 8px;
           left: auto;
           width: auto;
         }
@@ -4961,7 +4961,11 @@
         }
 
         .hex-map-page .legend-pill {
-          width: calc(100% - 16px);
+          bottom: 60px;
+          left: calc(50% + 28px);
+          width: fit-content;
+          max-width: calc(100% - 80px);
+          box-sizing: border-box;
           grid-template-columns: minmax(0, 1fr);
           justify-items: center;
           row-gap: 5px;
@@ -4977,12 +4981,17 @@
         }
 
         .hex-map-page .legend-pill .legend-scale {
-          width: 100%;
+          width: auto;
+          max-width: 100%;
           justify-content: center;
         }
 
         .hex-map-page .legend-pill .legend-bar-wrap {
-          width: min(200px, 48vw);
+          width: min(180px, 38vw);
+        }
+
+        .hex-map-page .map-canvas-wrap.hex-selected .legend-pill {
+          bottom: calc(var(--sensor-panel-height, 280px) + 60px);
         }
 
         .hex-map-page .map-dashboard-card #uk-toolbar-slot,

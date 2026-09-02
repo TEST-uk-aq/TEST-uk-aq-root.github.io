@@ -5255,13 +5255,13 @@
 
         body.hex-map-page.mobile-map-controls-active .mobile-map-controls--left {
           left: 10px;
-          width: min(152px, calc(100% - 164px));
+          width: min(152px, calc(100% - 158px));
           align-items: flex-start;
         }
 
         body.hex-map-page.mobile-map-controls-active .mobile-map-controls--right {
           right: 10px;
-          width: 140px;
+          width: 134px;
           align-items: flex-end;
         }
 
@@ -5568,9 +5568,9 @@
         .hex-map-page .mobile-map-controls--left .window-stepper {
           display: grid;
           width: 100%;
-          height: 56px;
+          height: 58px;
           min-width: 0;
-          grid-template-rows: 12px 44px;
+          grid-template-rows: 14px 44px;
           align-items: end;
         }
 
@@ -5579,8 +5579,8 @@
           width: auto;
           margin: 0;
           padding-left: 2px;
-          font-size: 0.62rem;
-          line-height: 12px;
+          font-size: 0.68rem;
+          line-height: 14px;
           letter-spacing: 0;
           text-align: left;
           text-transform: none;
@@ -5600,12 +5600,18 @@
         .hex-map-page .mobile-map-controls--left .window-stepper-value-box {
           width: 100%;
           min-width: 0;
-          height: 32px;
+          height: 34px;
           border-radius: 7px;
         }
 
         .hex-map-page .mobile-map-controls--left .window-stepper-value {
           padding-top: 0;
+          font-size: 0.74rem;
+          font-weight: 700;
+          letter-spacing: -0.01em;
+        }
+
+        .hex-map-page .mobile-map-controls--left .window-stepper[data-window="all"] .window-stepper-value {
           font-size: 0.7rem;
         }
 

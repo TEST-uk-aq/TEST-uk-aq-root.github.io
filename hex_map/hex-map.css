@@ -4892,8 +4892,8 @@
         .hex-map-page .map-dashboard-card .map-canvas-wrap {
           grid-column: 1;
           grid-row: 1;
-          --map-canvas-min-height: clamp(560px, calc(100vh - 48px), 840px);
-          --map-footer-safe: 152px;
+          --map-canvas-min-height: clamp(472px, calc(100vh - 136px), 752px);
+          --map-footer-safe: 64px;
           --sensor-panel-height: 280px;
           --sensor-panel-header-height: 68px;
           min-height: var(--map-canvas-min-height);
@@ -4904,14 +4904,18 @@
 
         @supports (height: 100svh) {
           .hex-map-page .map-dashboard-card .map-canvas-wrap {
-            --map-canvas-min-height: clamp(560px, calc(100svh - 48px), 840px);
+            --map-canvas-min-height: clamp(472px, calc(100svh - 136px), 752px);
           }
         }
 
         @supports (height: 100dvh) {
           .hex-map-page .map-dashboard-card .map-canvas-wrap {
-            --map-canvas-min-height: clamp(560px, calc(100dvh - 48px), 840px);
+            --map-canvas-min-height: clamp(472px, calc(100dvh - 136px), 752px);
           }
+        }
+
+        .hex-map-page .map-dashboard-card .map-canvas-wrap.hex-selected {
+          min-height: max(560px, var(--map-canvas-min-height));
         }
 
         .hex-map-page .map-svg-viewport {
@@ -4961,11 +4965,11 @@
         }
 
         .hex-map-page .map-floating-tools {
-          bottom: 98px;
+          bottom: 8px;
         }
 
         .hex-map-page .map-zoom-controls {
-          bottom: 150px;
+          bottom: 60px;
           width: 44px;
         }
 
@@ -4974,7 +4978,7 @@
         }
 
         .hex-map-page .legend-pill {
-          bottom: 54px;
+          bottom: 8px;
           right: auto;
           left: 50%;
           width: min(310px, calc(100% - 20px));
@@ -5139,7 +5143,7 @@
 
         .hex-map-page .map-settings-panel {
           right: 8px;
-          bottom: 150px;
+          bottom: 60px;
           left: 8px;
           width: auto;
           max-height: min(70dvh, 520px);
@@ -5284,11 +5288,12 @@
         }
 
         .hex-map-page .mobile-map-status-row .status-pill {
-          flex: 1 1 auto;
+          flex: 0 1 auto;
           min-width: 0;
-          min-height: 44px;
+          min-height: 0;
+          align-self: center;
           gap: 4px;
-          padding: 4px 6px;
+          padding: 4px 8px;
           overflow: hidden;
         }
 
@@ -5307,10 +5312,17 @@
 
         .hex-map-page .mobile-map-status-row .btn-refresh {
           flex: 0 0 68px;
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
+          box-sizing: border-box;
+          height: 44px;
           min-width: 68px;
           min-height: 44px;
-          padding: 5px 7px;
+          padding: 0 8px;
           font-size: 0.8rem;
+          line-height: 1;
+          white-space: nowrap;
         }
 
         .hex-map-page .mobile-map-controls--right > .networks-pill-anchor,
@@ -5413,8 +5425,9 @@
         }
 
         .hex-map-page .mobile-map-controls--left .segmented--view {
-          display: block;
-          width: 100%;
+          display: inline-block;
+          width: fit-content;
+          max-width: 100%;
           min-width: 0;
           height: 44px;
           box-sizing: border-box;
@@ -5433,7 +5446,7 @@
           position: relative;
           isolation: isolate;
           display: grid;
-          width: 100%;
+          width: 78px;
           min-width: 0;
           height: 44px;
           min-height: 44px;
@@ -5448,6 +5461,10 @@
           background: transparent;
           cursor: pointer;
           text-align: left;
+        }
+
+        .hex-map-page .mobile-map-controls--left #toolbar-tab-cr.active {
+          width: 112px;
         }
 
         .hex-map-page .mobile-map-controls--left .segmented--view button.active::before {

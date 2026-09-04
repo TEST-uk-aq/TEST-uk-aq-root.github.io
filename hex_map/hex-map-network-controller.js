@@ -196,6 +196,10 @@ function initHexMapNetworkController(root) {
       }));
   }
 
+  function effectiveSelectedEntries() {
+    return selectedEntries().filter((entry) => supportsPollutant(entry.code) !== false);
+  }
+
   function persistSelection() {
     const persistedSelection = selectedCodes === null
       ? { selected: null, allSelected: true }
@@ -431,19 +435,32 @@ function initHexMapNetworkController(root) {
     return list ? Array.from(list.querySelectorAll("input[data-network]")) : [];
   }
 
+  function getEffectiveSelectableInputs(inputs = getInputs()) {
+    return inputs.filter((input) => !input.disabled);
+  }
+
+  function getEffectiveSelectedInputs(inputs = getInputs()) {
+    return getEffectiveSelectableInputs(inputs).filter((input) => input.checked);
+  }
+
   function syncSelectionUi() {
     const inputs = getInputs();
     inputs.forEach((input) => {
       input.checked = selectedCodes === null || selectedCodes.has(normalizeCode(input.dataset.network));
       input.closest(".network-option")?.classList.toggle("is-unselected", !input.checked);
     });
-    const selectedCount = inputs.filter((input) => input.checked).length;
-    if (selectAllButton) selectAllButton.disabled = !inputs.length || selectedCount === inputs.length;
-    if (keepOneButton) keepOneButton.disabled = !inputs.length || selectedCount <= 1;
-    updateDropdownState(inputs.length, selectedCount);
+    const selectableInputs = getEffectiveSelectableInputs(inputs);
+    const selectedInputs = getEffectiveSelectedInputs(inputs);
+    if (selectAllButton) {
+      selectAllButton.disabled = !selectableInputs.length || selectedInputs.length === selectableInputs.length;
+    }
+    if (keepOneButton) keepOneButton.disabled = selectedInputs.length <= 1;
+    updateDropdownState(inputs);
   }
 
-  function updateDropdownState(total = getInputs().length, selected = getInputs().filter((input) => input.checked).length) {
+  function updateDropdownState(inputs = getInputs()) {
+    const total = inputs.length;
+    const selected = getEffectiveSelectedInputs(inputs).length;
     if (dropdownCount) dropdownCount.textContent = `${selected} / ${total}`;
     const pillText = total === 0 ? "Networks: —" : selected === total ? "Networks: All" : `Networks: ${selected} / ${total}`;
     pills.forEach((pill) => {
@@ -474,12 +491,26 @@ function initHexMapNetworkController(root) {
     setSelection(next, { source: "checkbox" });
   });
 
-  selectAllButton?.addEventListener("click", () => setSelection(null, { source: "select-all" }));
+  selectAllButton?.addEventListener("click", () => {
+    const next = selectedCodes === null
+      ? new Set(getCatalog().map((definition) => normalizeCode(definition.code)))
+      : new Set(selectedCodes);
+    getEffectiveSelectableInputs().forEach((input) => next.add(normalizeCode(input.dataset.network)));
+    setSelection(next, { source: "select-all" });
+  });
   keepOneButton?.addEventListener("click", () => {
-    const definitions = scopes.get(activeScope)?.definitions || getCatalog();
-    const selected = definitions.map((definition) => normalizeCode(definition.code))
-      .filter((code) => selectedCodes === null || selectedCodes.has(code));
-    if (selected.length > 1) setSelection(new Set([selected[0]]), { source: "keep-one" });
+    const inputs = getInputs();
+    const selectedInputs = getEffectiveSelectedInputs(inputs);
+    if (selectedInputs.length <= 1) return;
+    const selectableCodes = new Set(
+      getEffectiveSelectableInputs(inputs).map((input) => normalizeCode(input.dataset.network)),
+    );
+    const storedCodes = selectedCodes === null
+      ? getCatalog().map((definition) => normalizeCode(definition.code))
+      : Array.from(selectedCodes);
+    const next = new Set(storedCodes.filter((code) => !selectableCodes.has(code)));
+    next.add(normalizeCode(selectedInputs[0].dataset.network));
+    setSelection(next, { source: "keep-one" });
   });
 
   function isPillVisible(pill) {
@@ -703,6 +734,7 @@ function initHexMapNetworkController(root) {
     getCatalogByCodeMap,
     getSelection: selectionSnapshot,
     getSelectedEntries: selectedEntries,
+    getEffectiveSelectedEntries: effectiveSelectedEntries,
     getPollutantCapability: capabilitySnapshot,
     supportsPollutant,
     updatePollutantCapability,

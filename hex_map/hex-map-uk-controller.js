@@ -3009,7 +3009,7 @@ function initHexMapUkController(root) {
       }
 
       function getCheckedNetworkEntries() {
-        return networkController.getSelectedEntries();
+        return networkController.getEffectiveSelectedEntries();
       }
 
       function selectionIncludesMatcher(entries, matchers) {

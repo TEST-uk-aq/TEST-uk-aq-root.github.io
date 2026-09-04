@@ -21,8 +21,8 @@ function initHexMapPollutantAvailability(root) {
       .filter(([mapKey]) => mapKey === "uk" || mapKey === "cr"),
   );
   const mapStates = new Map([
-    ["uk", { hasSuccessfulLoad: false, hasError: false }],
-    ["cr", { hasSuccessfulLoad: false, hasError: false }],
+    ["uk", { hasSuccessfulLoad: false, isLoading: true, hasError: false }],
+    ["cr", { hasSuccessfulLoad: false, isLoading: true, hasError: false }],
   ]);
   const renderedKeys = new Map();
   let mounted = false;
@@ -65,7 +65,8 @@ function initHexMapPollutantAvailability(root) {
   function renderOverlay(mapKey) {
     const overlay = overlays.get(mapKey);
     const mapState = mapStates.get(mapKey);
-    if (!overlay || !mapState?.hasSuccessfulLoad || mapState.hasError || pageMode.isChartMode(mapKey)) {
+    if (!overlay || !mapState?.hasSuccessfulLoad || mapState.isLoading
+        || mapState.hasError || pageMode.isChartMode(mapKey)) {
       hideOverlay(mapKey);
       return;
     }
@@ -109,10 +110,17 @@ function initHexMapPollutantAvailability(root) {
     const state = mapStates.get(mapKey);
     if (!state) return;
     const status = String(event.detail?.status || "").trim().toLowerCase();
-    if (status === "live") {
+    if (status.startsWith("loading")) {
+      state.hasSuccessfulLoad = false;
+      state.isLoading = true;
+      state.hasError = false;
+    } else if (status === "live") {
       state.hasSuccessfulLoad = true;
+      state.isLoading = false;
       state.hasError = false;
     } else if (status === "error") {
+      state.hasSuccessfulLoad = false;
+      state.isLoading = false;
       state.hasError = true;
     }
     renderOverlay(mapKey);

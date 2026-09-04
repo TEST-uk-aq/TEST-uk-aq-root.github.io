@@ -3225,7 +3225,7 @@ function initHexMapCrController() {
       }
 
       function getCheckedNetworkEntries() {
-        return networkController.getSelectedEntries();
+        return networkController.getEffectiveSelectedEntries();
       }
 
       function selectionIncludesMatcher(entries, matchers) {

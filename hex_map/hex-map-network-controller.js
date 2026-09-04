@@ -1,4 +1,6 @@
 import networkCatalog from "../shared/data/network-catalog-module.js";
+import networkDomain from "../shared/domain/networks-module.js";
+import pollutantDomain from "../shared/domain/pollutants-module.js";
 
 function initHexMapNetworkController(root) {
   "use strict";
@@ -6,8 +8,8 @@ function initHexMapNetworkController(root) {
   if (!root?.document || !document.body.classList.contains("hex-map-page")) return;
 
   const catalogClient = networkCatalog;
-  if (!catalogClient?.load) {
-    throw new Error("The shared UK AQ network catalogue loader must load before the Hex network controller.");
+  if (!catalogClient?.load || !networkDomain?.resolveCode || !pollutantDomain?.normalize) {
+    throw new Error("The shared UK AQ network and pollutant modules must load before the Hex network controller.");
   }
 
   const list = document.getElementById("network-list");
@@ -28,6 +30,8 @@ function initHexMapNetworkController(root) {
   let catalogLoad = null;
   let selectedCodes = initialSelection;
   let activeScope = "uk";
+  let activePollutant = null;
+  const capabilityByPollutant = new Map();
   let renderedKey = "";
   let panelPinned = false;
   let panelAnchorPill = null;
@@ -140,6 +144,46 @@ function initHexMapNetworkController(root) {
     return selectedCodes === null ? null : new Set(selectedCodes);
   }
 
+  function capabilitySnapshot(pollutant = activePollutant) {
+    const key = pollutantDomain.normalize(pollutant);
+    const capability = key ? capabilityByPollutant.get(key) : null;
+    return Object.freeze({
+      pollutant: key,
+      status: capability ? "ready" : "unknown",
+      supportedCodes: new Set(capability?.supportedCodes || []),
+    });
+  }
+
+  function supportsPollutant(code, pollutant = activePollutant) {
+    const capability = capabilitySnapshot(pollutant);
+    if (capability.status !== "ready") return null;
+    return capability.supportedCodes.has(normalizeCode(code));
+  }
+
+  function updatePollutantCapability(pollutant, rows) {
+    const key = pollutantDomain.normalize(pollutant);
+    if (!key || !Array.isArray(rows)) return false;
+    const supportedCodes = new Set(rows
+      .map((row) => normalizeCode(networkDomain.resolveCode(row)))
+      .filter(Boolean));
+    const fingerprint = Array.from(supportedCodes).sort().join("|");
+    if (capabilityByPollutant.get(key)?.fingerprint === fingerprint) return false;
+    capabilityByPollutant.set(key, { supportedCodes, fingerprint });
+    if (key === activePollutant) renderActiveScope({ force: true });
+    root.dispatchEvent(new CustomEvent("pollutantcapabilitychange", {
+      detail: { pollutant: key, capability: capabilitySnapshot(key) },
+    }));
+    return true;
+  }
+
+  function setActivePollutant(value) {
+    const next = pollutantDomain.normalize(value);
+    if (!next || next === activePollutant) return false;
+    activePollutant = next;
+    renderActiveScope({ force: true });
+    return true;
+  }
+
   function selectedEntries() {
     const definitions = getCatalog();
     const selected = selectionSnapshot();
@@ -148,6 +192,7 @@ function initHexMapNetworkController(root) {
       .map((definition) => ({
         code: normalizeCode(definition.code),
         label: String(definition.label || "").toLowerCase(),
+        displayLabel: String(definition.label || "").trim(),
       }));
   }
 
@@ -232,11 +277,15 @@ function initHexMapNetworkController(root) {
 
   function presentationKey(presentation) {
     if (!presentation?.definitions?.length) return `${activeScope}:empty`;
+    const capability = capabilitySnapshot();
+    const capabilityKey = capability.status === "ready"
+      ? Array.from(capability.supportedCodes).sort().join(",")
+      : capability.status;
     return `${activeScope}:` + presentation.definitions.map((definition) => {
       const code = normalizeCode(definition.code);
       const covered = presentation.coverageByCode.get(code)?.size || 0;
       return `${code}:${definition.label}:${definition.count}:${covered}:${presentation.coverageTotal}`;
-    }).join("|");
+    }).join("|") + `:${activePollutant || "none"}:${capabilityKey}`;
   }
 
   function renderActiveScope(options = {}) {
@@ -260,6 +309,8 @@ function initHexMapNetworkController(root) {
     presentation.definitions.forEach((definition) => {
       const code = normalizeCode(definition.code);
       const count = Number(definition.count) || 0;
+      const pollutantLabel = pollutantDomain.get(activePollutant)?.typographicLabel || activePollutant || "this pollutant";
+      const isUnsupported = supportsPollutant(code) === false;
       const sharePercent = totalSensors ? Math.max(0, Math.min(100, (count / totalSensors) * 100)) : 0;
       const coverageCount = presentation.coverageByCode.get(code)?.size || 0;
       const coveragePercent = presentation.coverageTotal > 0
@@ -267,10 +318,15 @@ function initHexMapNetworkController(root) {
         : 0;
       const label = document.createElement("label");
       label.className = "checkbox network-option";
+      label.classList.toggle("is-pollutant-unavailable", isUnsupported);
       const input = document.createElement("input");
       input.type = "checkbox";
       input.dataset.network = code;
       input.checked = selectedCodes === null || selectedCodes.has(code);
+      input.disabled = isUnsupported;
+      if (isUnsupported) {
+        input.setAttribute("aria-label", `${definition.label} does not monitor ${pollutantLabel}`);
+      }
       const mainRow = document.createElement("span");
       mainRow.className = "network-option-main";
       const leftGroup = document.createElement("span");
@@ -290,9 +346,12 @@ function initHexMapNetworkController(root) {
       leftGroup.append(input, nameWrap);
       const countText = document.createElement("span");
       countText.className = "network-count";
-      if (count > 0) countText.textContent = count.toLocaleString();
+      if (isUnsupported) countText.textContent = "N/A";
+      else countText.textContent = count.toLocaleString();
       mainRow.append(leftGroup, countText);
-      label.title = `${definition.label}\n${count.toLocaleString()} active sensors\n${Math.round(sharePercent)}% of sensors across all available networks`;
+      label.title = isUnsupported
+        ? `${definition.label} does not monitor ${pollutantLabel}`
+        : `${definition.label}\n${count.toLocaleString()} active sensors\n${Math.round(sharePercent)}% of sensors across all available networks`;
 
       const shareBar = document.createElement("span");
       shareBar.className = "network-share-bar";
@@ -302,6 +361,7 @@ function initHexMapNetworkController(root) {
       shareBar.setAttribute("aria-valuemax", "100");
       shareBar.setAttribute("aria-valuenow", String(Math.round(sharePercent)));
       shareBar.setAttribute("aria-valuetext", `${Math.round(sharePercent)}% of active sensors`);
+      shareBar.hidden = isUnsupported;
       const shareFill = document.createElement("span");
       shareFill.className = "network-share-fill";
       shareFill.style.width = `${sharePercent.toFixed(1)}%`;
@@ -309,11 +369,15 @@ function initHexMapNetworkController(root) {
 
       const coverageText = document.createElement("span");
       coverageText.className = "network-option-coverage";
-      coverageText.textContent = `${coveragePercent}% coverage`;
-      coverageText.setAttribute(
-        "aria-label",
-        `${definition.label} coverage ${coveragePercent}% (${coverageCount} of ${presentation.coverageTotal} ${presentation.coverageAreaLabel})`,
-      );
+      if (isUnsupported) {
+        coverageText.textContent = `Does not monitor ${pollutantLabel}`;
+      } else {
+        coverageText.textContent = `${coveragePercent}% coverage`;
+        coverageText.setAttribute(
+          "aria-label",
+          `${definition.label} coverage ${coveragePercent}% (${coverageCount} of ${presentation.coverageTotal} ${presentation.coverageAreaLabel})`,
+        );
+      }
       label.append(mainRow, shareBar, coverageText);
       appendLogo(label, definition);
       fragment.appendChild(label);
@@ -639,6 +703,10 @@ function initHexMapNetworkController(root) {
     getCatalogByCodeMap,
     getSelection: selectionSnapshot,
     getSelectedEntries: selectedEntries,
+    getPollutantCapability: capabilitySnapshot,
+    supportsPollutant,
+    updatePollutantCapability,
+    setActivePollutant,
     setSelection,
     registerScope,
     updateScope,

@@ -5,8 +5,10 @@ import toolbar from "./hex-map-toolbar-controller.js";
 import urlState from "./hex-map-url-state.js";
 import search from "./hex-map-search.js";
 import zoomPan from "./hex-map-zoom-pan.js";
+import pollutantAvailability from "./hex-map-pollutant-availability.js";
 
 toolbar.mount();
+pollutantAvailability.mount();
 urlState.bootstrap();
 search.mount();
 zoomPan.mount();

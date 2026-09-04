@@ -501,6 +501,9 @@ function initHexMapUkController(root) {
           const isLive = value === "Live";
           statusIndicator.dataset.state = isLive ? "live" : "idle";
         }
+        root.dispatchEvent(new CustomEvent("hexmapstatuschange", {
+          detail: { mapKey: "uk", status: String(value || "").toLowerCase() },
+        }));
       }
 
       if (endpointHint) {
@@ -3607,6 +3610,9 @@ function initHexMapUkController(root) {
             if (!isStale()) {
               baseLatestRows = mergedLatest;
               latestPollutant = responsePollutant;
+              if (requestWindow === "all") {
+                networkController.updatePollutantCapability(requestPollutant, cleanedLatest);
+              }
               pollutantCache.set(latestCacheKey, {
                 timestamp: Date.now(),
                 latestRows: mergedLatest,
@@ -3637,6 +3643,7 @@ function initHexMapUkController(root) {
             const latestAllPayload = await latestAllResponse.json();
             const latestAllRaw = latestAllPayload?.data || [];
             const cleanedLatestAll = latestAllRaw.filter((row) => Number.isFinite(resolveLatestValue(row)));
+            networkController.updatePollutantCapability(requestPollutant, cleanedLatestAll);
             baseLatestRowsAllWindow = cleanedLatestAll;
             pollutantCache.set(latestAllCacheKey, {
               timestamp: Date.now(),

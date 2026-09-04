@@ -269,6 +269,21 @@
                 <div class="map-svg-viewport">
                   <svg id="hex-map" role="img" aria-label="Hex cartogram of PM2.5 by constituency"></svg>
                 </div>
+                <div
+                  class="map-pollutant-unavailable"
+                  data-pollutant-unavailable-overlay
+                  data-map-kind="uk"
+                  role="status"
+                  aria-live="polite"
+                  aria-atomic="true"
+                  hidden
+                >
+                  <p class="map-pollutant-unavailable-message">
+                    <span data-pollutant-unavailable-lead></span>
+                    <span data-pollutant-unavailable-names hidden></span>
+                    <span data-pollutant-unavailable-action></span>
+                  </p>
+                </div>
                 <div class="map-settings-panel" id="map-settings-panel" role="dialog" aria-label="Sensor data settings">
                   <div class="map-settings-header">
                     <span class="map-settings-title">Sensor Data</span>
@@ -869,6 +884,21 @@
                   </section>
                   <div class="map-svg-viewport">
                     <svg id="cr-hex-map" role="img" aria-label="Hex cartogram of PM2.5 by local authority" data-region="London"></svg>
+                  </div>
+                  <div
+                    class="map-pollutant-unavailable"
+                    data-pollutant-unavailable-overlay
+                    data-map-kind="cr"
+                    role="status"
+                    aria-live="polite"
+                    aria-atomic="true"
+                    hidden
+                  >
+                    <p class="map-pollutant-unavailable-message">
+                      <span data-pollutant-unavailable-lead></span>
+                      <span data-pollutant-unavailable-names hidden></span>
+                      <span data-pollutant-unavailable-action></span>
+                    </p>
                   </div>
                   <div class="map-settings-panel" id="cr-map-settings-panel" role="dialog" aria-label="Sensor data settings">
                     <div class="map-settings-header">

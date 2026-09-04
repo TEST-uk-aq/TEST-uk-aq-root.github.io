@@ -581,6 +581,9 @@ function initHexMapCrController() {
           const isLive = value === "Live";
           statusIndicator.dataset.state = isLive ? "live" : "idle";
         }
+        window.dispatchEvent(new CustomEvent("hexmapstatuschange", {
+          detail: { mapKey: "cr", status: String(value || "").toLowerCase() },
+        }));
       }
 
       function updateEndpointHint() {
@@ -3911,6 +3914,9 @@ function initHexMapCrController() {
               if (!isStale()) {
                 baseLatestRows = mergedLatest;
                 latestPollutant = responsePollutant;
+                if (requestWindow === "all") {
+                  networkController.updatePollutantCapability(requestPollutant, cleanedLatest);
+                }
                 loadedLatestCacheKey = latestCacheKey;
                 pollutantCache.set(latestCacheKey, {
                   timestamp: Date.now(),
@@ -3974,6 +3980,7 @@ function initHexMapCrController() {
                 }
                 const latestAllRaw = latestAllPayload?.data || [];
                 const cleanedLatestAll = latestAllRaw.filter((row) => Number.isFinite(resolveLatestValue(row)));
+                networkController.updatePollutantCapability(requestPollutant, cleanedLatestAll);
                 const scopedLatestAll = cleanedLatestAll.filter((row) => {
                   const code = resolvePconCode(row);
                   return !pconCodes.size || (code && pconCodes.has(code));

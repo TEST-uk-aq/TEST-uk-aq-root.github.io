@@ -27,6 +27,7 @@ function initHexMapCoordinator(root) {
       window: "6h",
     },
   };
+  networkController.setActivePollutant(state.pollutant);
 
   function mapSettingsSnapshot() {
     return Object.freeze({ ...state.settings });
@@ -53,6 +54,7 @@ function initHexMapCoordinator(root) {
     const pollutant = pollutantDomain.normalize(value);
     if (!pollutant || pollutant === state.pollutant) return false;
     state.pollutant = pollutant;
+    networkController.setActivePollutant(pollutant);
     if (options.updateUrl !== false) urlState.syncPollutant(pollutant);
 
     orderedMapAdapters(options.source).forEach(([, adapter]) => {

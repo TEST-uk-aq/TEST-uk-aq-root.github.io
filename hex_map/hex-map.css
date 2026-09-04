@@ -1822,6 +1822,39 @@
         accent-color: var(--accent);
       }
 
+      .network-option.is-pollutant-unavailable {
+        cursor: not-allowed;
+        background: var(--ukaq-control-disabled-bg);
+        color: var(--ukaq-control-disabled-text);
+      }
+
+      .network-option.is-pollutant-unavailable:hover,
+      .network-option.is-pollutant-unavailable:focus-within {
+        background: var(--ukaq-control-disabled-bg);
+        border-color: transparent;
+      }
+
+      .network-option.is-pollutant-unavailable input[type="checkbox"] {
+        appearance: none;
+        -webkit-appearance: none;
+        flex: 0 0 15px;
+        margin: 3px 3px 3px 4px;
+        border: 2px solid var(--ink-4);
+        border-radius: 50%;
+        background: linear-gradient(
+          45deg,
+          transparent 40%,
+          var(--ink-4) 41% 59%,
+          transparent 60%
+        );
+        opacity: 1;
+      }
+
+      .network-option.is-pollutant-unavailable .network-count,
+      .network-option.is-pollutant-unavailable.is-unselected .network-count {
+        color: var(--ink-3);
+      }
+
       .network-share-bar {
         display: block;
         width: 100%;
@@ -4061,6 +4094,42 @@
         height: 100%;
       }
 
+      .map-pollutant-unavailable {
+        position: absolute;
+        z-index: 54;
+        top: clamp(150px, 34%, 250px);
+        left: 50%;
+        width: min(calc(100% - 64px), 640px);
+        padding: 26px 32px;
+        transform: translateX(-50%);
+        border: 3px solid var(--accent);
+        border-radius: 14px;
+        background: var(--surface);
+        box-shadow: 0 14px 32px rgba(20, 34, 37, 0.18);
+        color: var(--ink);
+        pointer-events: none;
+      }
+
+      .map-pollutant-unavailable[hidden] {
+        display: none;
+      }
+
+      .map-pollutant-unavailable-message {
+        margin: 0;
+        font-size: clamp(1rem, 1.6vw, 1.25rem);
+        font-weight: 700;
+        line-height: 1.45;
+        text-align: center;
+      }
+
+      .map-pollutant-unavailable-message > span {
+        display: block;
+      }
+
+      .map-pollutant-unavailable-message > [data-pollutant-unavailable-action] {
+        margin-top: 8px;
+      }
+
       .map-wrap.is-initial.is-loading .map-svg-viewport {
         animation: hexMapFadeIn 1s ease forwards;
       }
@@ -4920,6 +4989,20 @@
 
         .hex-map-page .map-svg-viewport {
           inset: 64px 0 var(--map-footer-safe) 0;
+        }
+
+        .hex-map-page .map-pollutant-unavailable {
+          z-index: 54;
+          top: 42%;
+          width: min(calc(100% - 28px), 560px);
+          padding: 18px 16px;
+          border-width: 3px;
+          border-radius: 13px;
+        }
+
+        .hex-map-page .map-pollutant-unavailable-message {
+          font-size: clamp(0.95rem, 4.5vw, 1.1rem);
+          line-height: 1.4;
         }
 
         .hex-map-page .map-floating-search {
